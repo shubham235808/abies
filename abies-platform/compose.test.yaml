@@ -1,0 +1,13 @@
+name: abies-tests
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: abies_test
+      POSTGRES_USER: abies
+      POSTGRES_PASSWORD: test-only-password
+    ports: ["127.0.0.1:55432:5432"]
+    tmpfs: [/var/lib/postgresql/data]
+  redis:
+    image: redis:7-alpine
+    ports: ["127.0.0.1:56379:6379"]

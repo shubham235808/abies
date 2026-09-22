@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: abies-config
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+data:
+  APP_ORIGIN: https://abies.local
+  COOKIE_SECURE: "true"
+  NODE_ENV: production

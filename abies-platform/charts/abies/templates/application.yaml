@@ -1,0 +1,96 @@
+{{- range $component := list "backend" "frontend" }}
+{{- $isApi := eq $component "backend" }}
+{{- $image := ternary $.Values.images.api $.Values.images.web $isApi }}
+{{- $port := ternary 8000 3000 $isApi }}
+{{- $settings := index $.Values $component }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "abies.fullname" $ }}-{{ $component }}
+  labels:
+    {{- include "abies.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ ternary "1" "2" $isApi | quote }}
+spec:
+  replicas: {{ $settings.replicas }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "abies.selector" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $component }}
+  template:
+    metadata:
+      labels:
+        {{- include "abies.selector" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $component }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") $ | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      {{- if $isApi }}
+      initContainers:
+        - name: migrate
+          image: "{{ $image.repository }}:{{ $image.tag }}"
+          imagePullPolicy: {{ $image.pullPolicy }}
+          command: [node, app/migrate.js]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: {name: {{ $.Values.existingSecret }}, key: DATABASE_URL}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+      {{- end }}
+      containers:
+        - name: {{ $component }}
+          image: "{{ $image.repository }}:{{ $image.tag }}"
+          imagePullPolicy: {{ $image.pullPolicy }}
+          ports: [{containerPort: {{ $port }}, name: http}]
+          {{- if $isApi }}
+          envFrom:
+            - configMapRef: {name: {{ include "abies.fullname" $ }}-config}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: {name: {{ $.Values.existingSecret }}, key: DATABASE_URL}
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef: {name: {{ $.Values.existingSecret }}, key: REDIS_URL}
+          {{- else }}
+          env:
+            - name: API_INTERNAL_URL
+              value: "http://{{ include "abies.fullname" $ }}-backend:8000"
+            - {name: HOSTNAME, value: "0.0.0.0"}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            {{- if $isApi }}
+            readOnlyRootFilesystem: true
+            {{- end }}
+            capabilities: {drop: [ALL]}
+          startupProbe:
+            httpGet: {path: {{ ternary "/api/health/ready" "/" $isApi }}, port: http}
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet: {path: {{ ternary "/api/health/ready" "/" $isApi }}, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: {{ ternary "/api/health/live" "/" $isApi }}, port: http}
+            periodSeconds: 15
+          resources:
+            {{- toYaml $settings.resources | nindent 12 }}
+{{- end }}

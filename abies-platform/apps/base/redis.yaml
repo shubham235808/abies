@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: redis }
+  template:
+    metadata:
+      labels: { app: redis }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command:
+            [
+              sh,
+              -c,
+              'exec redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"',
+            ]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: abies-secrets, key: REDIS_PASSWORD }
+          ports: [{ containerPort: 6379 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts: [{ name: data, mountPath: /data }]
+          readinessProbe:
+            exec:
+              {
+                command:
+                  [
+                    sh,
+                    -c,
+                    'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping | grep -q PONG',
+                  ],
+              }
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              {
+                command:
+                  [
+                    sh,
+                    -c,
+                    'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping | grep -q PONG',
+                  ],
+              }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: redis-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  selector: { app: redis }
+  ports: [{ port: 6379, targetPort: 6379 }]

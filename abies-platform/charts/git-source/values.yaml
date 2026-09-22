@@ -1,0 +1,5 @@
+image:
+  repository: 127.0.0.1:5000/abies-git
+  tag: local
+repositoryPath: /home/devops/abies.com/abies-platform/.runtime/git
+argocdNamespace: argocd

@@ -1,0 +1,17 @@
+# Server-specific deployment values. Application images are content-addressed.
+fullnameOverride: abies
+existingSecret: abies-secrets
+images:
+  api:
+    repository: 127.0.0.1:5000/abies-api
+    tag: "6f43effa44626894"
+  web:
+    repository: 127.0.0.1:5000/abies-web
+    tag: "6f43effa44626894"
+app:
+  origin: https://192.168.1.160
+  secureCookie: true
+ingress:
+  host: "192.168.1.160"
+  tlsSecretName: abies-tls
+  defaultCertificate: true

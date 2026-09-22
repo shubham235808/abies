@@ -1,0 +1,26 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- range $component := list "backend" "postgres" "redis" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "abies.fullname" $ }}-{{ $component }}
+  labels:
+    {{- include "abies.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "abies.selector" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $component }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "abies.selector" $ | nindent 14 }}
+              app.kubernetes.io/component: {{ ternary "frontend" "backend" (eq $component "backend") }}
+      ports:
+        - protocol: TCP
+          port: {{ index (dict "backend" 8000 "postgres" 5432 "redis" 6379) $component }}
+{{- end }}
+{{- end }}
