@@ -148,3 +148,9 @@ sudo journalctl -u k3s -n 100 --no-pager
 `sg` comes from `util-linux-extra`; the bootstrap now installs it explicitly. Existing installations can either start a fresh login to activate Docker group membership, install that package, or use the deployment script’s Kubernetes build-worker fallback. No Docker socket permissions are relaxed.
 
 The K3s-linked kubectl can print harmless warnings when it probes `/etc/rancher/k3s/config.yaml.d` as a non-root user. The scripts prefer a standalone kubectl under `.runtime/bin`, so the root-only K3s configuration stays private.
+
+### Application administrator and staff panels
+
+The Abies application administrator is separate from the ArgoCD administrator. Sign in to the main website as `admin@abies.local`; its generated password is in the private `.runtime/admin-account.json` file. Change it under **My profile** after first login. Read [STAFF.md](STAFF.md) for creating staff accounts, linking doctors and assigning deliveries.
+
+Database migrations run automatically before the upgraded backend starts. Existing catalogs and transactional data are retained; migration versions are recorded in `schema_migrations`. Pre-upgrade database backups are kept privately under `.runtime/backups/` on this server.

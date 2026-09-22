@@ -1,4 +1,10 @@
 "use client";
+import {
+  AdminPanel,
+  DoctorPanel,
+  DeliveryPanel,
+  ProfilePanel,
+} from "../components/StaffPanels";
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Activity,
@@ -75,6 +81,7 @@ type Prescription = {
 type Order = {
   id: string;
   total: number;
+  fulfillment_status: string;
   status: string;
   created_at: string;
   items: { name: string; quantity: number }[];
@@ -236,19 +243,19 @@ export default function Page() {
     [service, setService] = useState<Service | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]),
     [prescriptions, setPrescriptions] = useState<Prescription[]>([]),
-    [orders, setOrders] = useState<Order[]>([]),
-    [assigned, setAssigned] = useState<Booking[]>([]);
+    [orders, setOrders] = useState<Order[]>([]);
   const [practitioner, setPractitioner] = useState(""),
     [date, setDate] = useState(""),
     [slot, setSlot] = useState(""),
     [slots, setSlots] = useState<string[]>([]),
     [slotLoading, setSlotLoading] = useState(false),
     [mode, setMode] = useState(""),
-    [address, setAddress] = useState("");
+    [address, setAddress] = useState(""),
+    [reason, setReason] = useState(""),
+    [sharedRx, setSharedRx] = useState("");
   const [rx, setRx] = useState(""),
     [video, setVideo] = useState<Booking | null>(null),
-    [joined, setJoined] = useState(false),
-    [issue, setIssue] = useState<Booking | null>(null);
+    [joined, setJoined] = useState(false);
   const checkoutKey = useRef<string | null>(null),
     cartReady = useRef(false);
   const refresh = useCallback(async () => {
@@ -299,15 +306,11 @@ export default function Page() {
   useEffect(() => {
     if (user) {
       refresh().catch((e) => setError(e.message));
-      if (user.role === "clinician")
-        api<Booking[]>("/clinician/bookings")
-          .then(setAssigned)
-          .catch((e) => setError(e.message));
     } else {
       setBookings([]);
       setOrders([]);
       setPrescriptions([]);
-      setAssigned([]);
+
       setRx("");
     }
   }, [user, refresh]);
@@ -356,6 +359,8 @@ export default function Page() {
       setNotice("Sign in to book your care.");
       return;
     }
+    setReason("");
+    setSharedRx("");
     setService(s);
     setPractitioner(
       catalog.practitioners.find((p) => p.category === s.category)?.id || "",
@@ -472,13 +477,40 @@ export default function Page() {
             <ShieldCheck size={19} />
             Prescriptions & orders
           </button>
+          {user && (
+            <button
+              onClick={() => navigate("profile")}
+              className={view === "profile" ? "active" : ""}
+            >
+              <User size={19} />
+              My profile
+            </button>
+          )}
+          {user?.role === "admin" && (
+            <button
+              onClick={() => navigate("admin")}
+              className={view === "admin" ? "active" : ""}
+            >
+              <ShieldCheck size={19} />
+              Administration
+            </button>
+          )}
+          {user?.role === "delivery" && (
+            <button
+              onClick={() => navigate("delivery")}
+              className={view === "delivery" ? "active" : ""}
+            >
+              <Package size={19} />
+              Delivery workspace
+            </button>
+          )}
           {user?.role === "clinician" && (
             <button
               onClick={() => navigate("clinician")}
               className={view === "clinician" ? "active" : ""}
             >
               <Stethoscope size={19} />
-              Clinician workspace
+              Doctor workspace
             </button>
           )}
         </nav>
@@ -522,7 +554,10 @@ export default function Page() {
                     {
                       bookings: "My appointments",
                       records: "Health records",
-                      clinician: "Clinician workspace",
+                      clinician: "Doctor workspace",
+                      admin: "Administration",
+                      delivery: "Delivery workspace",
+                      profile: "My profile",
                     } as Record<string, string>
                   )[view]}
             </strong>
@@ -570,7 +605,7 @@ export default function Page() {
           </div>
         </header>
         <main>
-          {!auth && !service && !cartOpen && !video && !issue && feedback}
+          {!auth && !service && !cartOpen && !video && feedback}
           {view === "home" && (
             <>
               <div className="welcome">
@@ -1168,7 +1203,7 @@ export default function Page() {
                           <div>
                             <strong>{money(o.total)}</strong>
                             <p className="subtle">
-                              {o.status.replaceAll("_", " ")}
+                              {o.fulfillment_status.replaceAll("_", " ")}
                             </p>
                           </div>
                         </article>
@@ -1180,36 +1215,29 @@ export default function Page() {
             </>
           )}
           {view === "clinician" && user?.role === "clinician" && (
-            <>
-              <div className="page-heading">
-                <div>
-                  <h1>Clinician workspace</h1>
-                  <p>Assigned patients and prescription management.</p>
-                </div>
-              </div>
-              {assigned.length ? (
-                assigned.map((b) => (
-                  <article className="record-card" key={b.id}>
-                    <div className="record-main">
-                      <h3>{b.patient_name}</h3>
-                      <p>
-                        {b.service_name} · {when(b.starts_at)}
-                      </p>
-                      <span>{b.status}</span>
-                    </div>
-                    {b.status === "confirmed" && (
-                      <button className="primary" onClick={() => setIssue(b)}>
-                        Write prescription
-                      </button>
-                    )}
-                  </article>
-                ))
-              ) : (
-                <div className="empty">
-                  No appointments are assigned to your practitioner account.
-                </div>
-              )}
-            </>
+            <DoctorPanel />
+          )}
+          {view === "admin" && user?.role === "admin" && (
+            <AdminPanel
+              accountId={user.id}
+              onCatalogChange={async () =>
+                setCatalog(await api<Catalog>("/catalog"))
+              }
+            />
+          )}
+          {view === "delivery" && user?.role === "delivery" && (
+            <DeliveryPanel />
+          )}
+          {view === "profile" && user && (
+            <ProfilePanel
+              onUpdate={(name) => setUser({ ...user, name })}
+              onSignOut={() => {
+                setUser(null);
+                navigate("home");
+                setNotice("Password changed. Please sign in again.");
+                setAuth(true);
+              }}
+            />
           )}
           <footer className="page-footer">
             <span>© {new Date().getFullYear()} Abies. Care, naturally.</span>
@@ -1309,6 +1337,8 @@ export default function Page() {
               e.preventDefault();
               act(async () => {
                 await api("/bookings", "POST", {
+                  reason,
+                  prescriptionId: sharedRx || undefined,
                   serviceId: service.id,
                   practitionerId: practitioner,
                   startsAt: slot,
@@ -1366,6 +1396,29 @@ export default function Page() {
                 />
               </label>
             </div>
+            <label>
+              Reason for visit (optional)
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                maxLength={2000}
+                placeholder="Tell your practitioner what you would like help with"
+              />
+            </label>
+            <label>
+              Share a prescription with your practitioner (optional)
+              <select
+                value={sharedRx}
+                onChange={(e) => setSharedRx(e.target.value)}
+              >
+                <option value="">Do not share a prescription</option>
+                {prescriptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.filename || "Prescription"} · {when(p.created_at)}
+                  </option>
+                ))}
+              </select>
+            </label>
             <fieldset>
               <legend>Available times · UTC</legend>
               <div className="slot-grid">
@@ -1598,42 +1651,6 @@ export default function Page() {
             {joined ? "Leave demo room" : "Enter demo room"}
             <Video size={17} />
           </button>
-        </Modal>
-      )}
-      {issue && (
-        <Modal title="Issue a prescription" onClose={() => setIssue(null)}>
-          {feedback}
-          <p className="modal-intro">
-            Patient: {issue.patient_name} · {issue.service_name}
-          </p>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const f = new FormData(e.currentTarget);
-              act(async () => {
-                await api("/clinician/prescriptions", "POST", {
-                  bookingId: issue.id,
-                  notes: f.get("notes"),
-                });
-                setIssue(null);
-                setNotice("Prescription added to the patient’s records.");
-              });
-            }}
-          >
-            <label>
-              Prescription and instructions
-              <textarea
-                name="notes"
-                required
-                minLength={10}
-                maxLength={10000}
-                rows={8}
-              />
-            </label>
-            <button className="primary full" disabled={busy}>
-              {busy ? "Saving…" : "Issue prescription"}
-            </button>
-          </form>
         </Modal>
       )}
     </div>

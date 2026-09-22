@@ -10,6 +10,8 @@ export const registration = z.object({
 });
 export const login = registration.omit({ name: true });
 export const booking = z.object({
+  reason: z.string().trim().max(2000).optional(),
+  prescriptionId: uuid.optional(),
   serviceId: z.string().max(80),
   practitionerId: z.string().max(80),
   startsAt: z.iso.datetime(),

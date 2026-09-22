@@ -109,6 +109,7 @@ ingress:
 PYCODE
 helm lint charts/abies -f environments/server/values.yaml
 bash scripts/publish-local.sh
+abies_expected_revision=$(git -C .runtime/source rev-parse HEAD)
 helm upgrade --install abies-git charts/git-source -n gitops --create-namespace \
   --set-string "image.tag=$abies_tag" --set-string "repositoryPath=$abies_root/.runtime/git" --wait --timeout 5m
 helm repo add argo https://argoproj.github.io/argo-helm --force-update
@@ -121,8 +122,12 @@ kubectl apply -f apps/argocd/application.yaml
 kubectl -n argocd annotate application abies-platform argocd.argoproj.io/refresh=hard --overwrite
 abies_ready=false
 for ((abies_attempt=0; abies_attempt<120; abies_attempt++)); do
-  abies_state=$(kubectl -n argocd get application abies-platform -o jsonpath='{.status.sync.status}/{.status.health.status}')
-  if [[ "$abies_state" == 'Synced/Healthy' ]]; then abies_ready=true; break; fi
+  abies_state=$(kubectl -n argocd get application abies-platform -o jsonpath='{.status.sync.status}/{.status.health.status}/{.status.sync.revision}')
+  if [[ "$abies_state" == "Synced/Healthy/$abies_expected_revision" ]]; then
+    abies_api_image=$(kubectl -n abies get deployment abies-backend -o jsonpath='{.spec.template.spec.containers[0].image}')
+    abies_web_image=$(kubectl -n abies get deployment abies-frontend -o jsonpath='{.spec.template.spec.containers[0].image}')
+    if [[ "$abies_api_image" == "127.0.0.1:5000/abies-api:$abies_tag" && "$abies_web_image" == "127.0.0.1:5000/abies-web:$abies_tag" ]]; then abies_ready=true; break; fi
+  fi
   printf 'Waiting for ArgoCD: %s\n' "$abies_state"
   sleep 5
 done

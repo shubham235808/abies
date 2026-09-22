@@ -4,10 +4,10 @@ existingSecret: abies-secrets
 images:
   api:
     repository: 127.0.0.1:5000/abies-api
-    tag: "6f43effa44626894"
+    tag: "47fca6c228daa8a1"
   web:
     repository: 127.0.0.1:5000/abies-web
-    tag: "6f43effa44626894"
+    tag: "47fca6c228daa8a1"
 app:
   origin: https://192.168.1.160
   secureCookie: true

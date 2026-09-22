@@ -1,3 +1,4 @@
+import { registerStaff } from "./staff.js";
 import express from "express";
 import helmet from "helmet";
 import multer from "multer";
@@ -56,9 +57,12 @@ export function createApp({ pool, redis, config }) {
     const token = getToken(req),
       id = token && (await redis.get(sessionKey(token)));
     if (!id) throw fail(401, "Please sign in to continue");
+    const sessionVersion = Number(
+      (await redis.get(sessionKey(token) + ":version")) || 1,
+    );
     const { rows } = await pool.query(
-      "SELECT id,name,email,role FROM users WHERE id=$1",
-      [id],
+      "SELECT id,name,email,role FROM users WHERE id=$1 AND active AND session_version=$2",
+      [id, sessionVersion],
     );
     if (!rows[0]) throw fail(401, "Session expired");
     req.user = rows[0];
@@ -78,7 +82,13 @@ export function createApp({ pool, redis, config }) {
     const old = getToken(req);
     if (old) await redis.del(sessionKey(old));
     const token = randomBytes(32).toString("hex");
-    await redis.set(sessionKey(token), user.id, { EX: 86400 });
+    await redis
+      .multi()
+      .set(sessionKey(token), user.id, { EX: 86400 })
+      .set(sessionKey(token) + ":version", String(user.session_version), {
+        EX: 86400,
+      })
+      .exec();
     res.cookie(cookieName, token, {
       httpOnly: true,
       secure: config.secureCookie,
@@ -109,7 +119,7 @@ export function createApp({ pool, redis, config }) {
       data.email,
     ]);
     if (
-      !rows[0] ||
+      !rows[0]?.active ||
       !(await checkPassword(data.password, rows[0].password_hash))
     )
       throw fail(401, "Invalid email or password");
@@ -128,11 +138,11 @@ export function createApp({ pool, redis, config }) {
   });
   app.get("/api/auth/me", auth, (req, res) => res.json(publicUser(req.user)));
   app.get("/api/catalog", async (req, res) => {
-    const cached = await redis.get("catalog:v1");
+    const cached = await redis.get("catalog:v2");
     if (cached) return res.json(JSON.parse(cached));
     const [services, practitioners, products] = await Promise.all(
       ["services", "practitioners", "products"].map((t) =>
-        pool.query(`SELECT * FROM ${t} ORDER BY id`),
+        pool.query(`SELECT * FROM ${t} WHERE active ORDER BY id`),
       ),
     );
     const catalog = {
@@ -140,7 +150,7 @@ export function createApp({ pool, redis, config }) {
       practitioners: practitioners.rows.map(({ user_id, ...p }) => p),
       products: products.rows,
     };
-    await redis.set("catalog:v1", JSON.stringify(catalog), { EX: 60 });
+    await redis.set("catalog:v2", JSON.stringify(catalog), { EX: 60 });
     res.json(catalog);
   });
   app.get("/api/slots", async (req, res) => {
@@ -169,33 +179,65 @@ export function createApp({ pool, redis, config }) {
         400,
         "Choose an available hourly slot within the next 60 days (09:00–17:00 UTC)",
       );
-    const {
-      rows: [s],
-    } = await pool.query("SELECT * FROM services WHERE id=$1", [b.serviceId]);
-    const {
-      rows: [p],
-    } = await pool.query("SELECT * FROM practitioners WHERE id=$1", [
-      b.practitionerId,
-    ]);
-    if (!s || !p || s.category !== p.category || !s.modes.includes(b.mode))
-      throw fail(400, "Invalid service, practitioner or session mode");
-    if (b.mode === "home" && (!b.address || b.address.trim().length < 10))
-      throw fail(400, "Enter a full home visit address");
-    const id = randomUUID();
-    const { rows } = await pool.query(
-      "INSERT INTO bookings(id,user_id,service_id,practitioner_id,starts_at,mode,address,price) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
-      [
-        id,
-        req.user.id,
-        s.id,
-        p.id,
-        b.startsAt,
-        b.mode,
-        b.address || null,
-        s.price,
-      ],
-    );
-    res.status(201).json(rows[0]);
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const {
+        rows: [s],
+      } = await client.query(
+        "SELECT * FROM services WHERE id=$1 AND active FOR SHARE",
+        [b.serviceId],
+      );
+      const {
+        rows: [p],
+      } = await client.query(
+        "SELECT * FROM practitioners WHERE id=$1 AND active FOR SHARE",
+        [b.practitionerId],
+      );
+      if (!s || !p || s.category !== p.category || !s.modes.includes(b.mode))
+        throw fail(
+          400,
+          "Invalid or inactive service, practitioner or session mode",
+        );
+      if (b.mode === "home" && (!b.address || b.address.trim().length < 10))
+        throw fail(400, "Enter a full home visit address");
+      if (
+        b.prescriptionId &&
+        !(
+          await client.query(
+            "SELECT id FROM prescriptions WHERE id=$1 AND user_id=$2",
+            [b.prescriptionId, req.user.id],
+          )
+        ).rowCount
+      )
+        throw fail(400, "Choose one of your prescriptions");
+      const {
+        rows: [row],
+      } = await client.query(
+        "INSERT INTO bookings(id,user_id,service_id,practitioner_id,starts_at,mode,address,price,reason,prescription_id,assigned_clinician_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *",
+        [
+          randomUUID(),
+          req.user.id,
+          s.id,
+          p.id,
+          b.startsAt,
+          b.mode,
+          b.address || null,
+          s.price,
+          b.reason || "",
+          b.prescriptionId || null,
+          p.user_id,
+        ],
+      );
+      await client.query("COMMIT");
+      res.status(201).json(row);
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
   });
   app.get("/api/bookings", auth, async (req, res) => {
     const { rows } = await pool.query(
@@ -275,7 +317,7 @@ export function createApp({ pool, redis, config }) {
   });
   app.get("/api/clinician/bookings", auth, clinician, async (req, res) => {
     const { rows } = await pool.query(
-      "SELECT b.*,u.name AS patient_name,s.name AS service_name FROM bookings b JOIN practitioners p ON p.id=b.practitioner_id JOIN users u ON u.id=b.user_id JOIN services s ON s.id=b.service_id WHERE p.user_id=$1 ORDER BY starts_at DESC",
+      "SELECT b.id,b.starts_at,b.mode,b.status,b.price,u.name AS patient_name,s.name AS service_name FROM bookings b JOIN practitioners p ON p.id=b.practitioner_id JOIN users u ON u.id=b.user_id JOIN services s ON s.id=b.service_id WHERE COALESCE(b.assigned_clinician_id,p.user_id)=$1 ORDER BY starts_at DESC",
       [req.user.id],
     );
     res.json(rows);
@@ -294,7 +336,7 @@ export function createApp({ pool, redis, config }) {
       const {
         rows: [b],
       } = await pool.query(
-        "SELECT b.* FROM bookings b JOIN practitioners p ON p.id=b.practitioner_id WHERE b.id=$1 AND p.user_id=$2 AND b.status='confirmed'",
+        "SELECT b.* FROM bookings b JOIN practitioners p ON p.id=b.practitioner_id WHERE b.id=$1 AND COALESCE(b.assigned_clinician_id,p.user_id)=$2 AND b.status IN ('confirmed','completed')",
         [data.bookingId, req.user.id],
       );
       if (!b) throw fail(404, "Assigned booking not found");
@@ -340,7 +382,7 @@ export function createApp({ pool, redis, config }) {
           "SELECT * FROM products WHERE id=$1 FOR UPDATE",
           [item.productId],
         );
-        if (!p || p.stock < item.quantity)
+        if (!p || !p.active || p.stock < item.quantity)
           throw fail(409, "A product is unavailable or has insufficient stock");
         total += p.price * item.quantity;
         rx ||= p.prescription_required;
@@ -359,7 +401,7 @@ export function createApp({ pool, redis, config }) {
       const {
         rows: [order],
       } = await client.query(
-        "INSERT INTO orders(id,user_id,total,address,prescription_id,status,idempotency_key) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",
+        "INSERT INTO orders(id,user_id,total,address,prescription_id,status,idempotency_key,fulfillment_status,review_status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",
         [
           id,
           req.user.id,
@@ -368,13 +410,15 @@ export function createApp({ pool, redis, config }) {
           data.prescriptionId || null,
           rx ? "demo_awaiting_prescription_review" : "demo_order_placed",
           data.idempotencyKey,
+          rx ? "pending_review" : "ready",
+          rx ? "pending" : "not_required",
         ],
       );
       for (const l of lines) {
-        await client.query("UPDATE products SET stock=stock-$1 WHERE id=$2", [
-          l.quantity,
-          l.productId,
-        ]);
+        await client.query(
+          "UPDATE products SET stock=stock-$1,version=version+1 WHERE id=$2",
+          [l.quantity, l.productId],
+        );
         await client.query("INSERT INTO order_items VALUES($1,$2,$3,$4,$5)", [
           id,
           l.productId,
@@ -404,23 +448,20 @@ export function createApp({ pool, redis, config }) {
       ).rows;
     res.json(rows);
   });
+  registerStaff(app, { pool, redis, auth, limit });
   app.use("/api", (req, res, next) => next(fail(404, "Endpoint not found")));
   app.use((err, req, res, next) => {
     if (err instanceof z.ZodError)
-      return res
-        .status(400)
-        .json({
-          error: err.issues
-            .map((i) => `${i.path.join(".")}: ${i.message}`)
-            .join("; "),
-        });
+      return res.status(400).json({
+        error: err.issues
+          .map((i) => `${i.path.join(".")}: ${i.message}`)
+          .join("; "),
+      });
     if (err.code === "23505")
-      return res
-        .status(409)
-        .json({
-          error:
-            "That email or appointment slot is already in use. Refresh and try again.",
-        });
+      return res.status(409).json({
+        error:
+          "That email or appointment slot is already in use. Refresh and try again.",
+      });
     if (err instanceof multer.MulterError)
       return res
         .status(400)
@@ -434,14 +475,12 @@ export function createApp({ pool, redis, config }) {
           code: err.code || "INTERNAL",
         }),
       );
-    res
-      .status(status)
-      .json({
-        error:
-          status >= 500
-            ? "Service temporarily unavailable. Please try again."
-            : err.message,
-      });
+    res.status(status).json({
+      error:
+        status >= 500
+          ? "Service temporarily unavailable. Please try again."
+          : err.message,
+    });
   });
   return app;
 }

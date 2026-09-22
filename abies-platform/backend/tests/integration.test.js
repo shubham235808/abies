@@ -1,3 +1,5 @@
+import { staffCases } from "./staff-cases.js";
+import { migrate } from "../app/migrations.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -21,9 +23,7 @@ test("PostgreSQL + Redis API integration", { skip: !enabled }, async (t) => {
     await pool.end();
     await redis.quit();
   });
-  await pool.query(
-    await readFile(new URL("../../db/001_init.sql", import.meta.url), "utf8"),
-  );
+  await migrate(pool);
   // Reset only the explicitly named test database. Never use application credentials here.
   await pool.query(
     "TRUNCATE audit_events,order_items,orders,prescriptions,bookings,practitioners,users,products,services RESTART IDENTITY CASCADE",
@@ -104,7 +104,7 @@ test("PostgreSQL + Redis API integration", { skip: !enabled }, async (t) => {
       const c = (await alice.get("/api/catalog").expect(200)).body;
       assert.equal(new Set(c.services.map((s) => s.category)).size, 4);
       assert.equal(c.products.length, 5);
-      assert.ok(await redis.get("catalog:v1"));
+      assert.ok(await redis.get("catalog:v2"));
     },
   );
   const day = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -321,4 +321,5 @@ test("PostgreSQL + Redis API integration", { skip: !enabled }, async (t) => {
       await alice.get("/api/auth/me").expect(401);
     },
   );
+  await staffCases(t, { app, pool, redis, origin });
 });

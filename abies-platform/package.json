@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "test:browser": "node scripts/browser-smoke.mjs",
-    "test:helm": "node scripts/test-helm.mjs"
+    "test:helm": "node scripts/test-helm.mjs",
+    "test:staff": "node scripts/staff-browser.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.0",

@@ -48,3 +48,15 @@ The earlier 18 API/unit integration checks also passed using isolated PostgreSQL
 - Application public certificate: `.runtime/tls.crt`. Trust it on your workstation or replace it with a trusted certificate. ArgoCD initially uses its own generated certificate.
 
 This is a single-server deployment with node-local persistence, not HA. Video, payments, products and practitioners remain demonstrations. See README.md for the production clinical/commerce scope and SERVER.md for operations and backups.
+
+## Staff panels upgrade — 2026-09-22
+
+- Added role-scoped administration, doctor and delivery workspaces, patient profiles, consented appointment document sharing, prescription review, delivery tracking, and audited staff operations.
+- All **25 backend/unit/integration tests pass** against isolated PostgreSQL/Redis. Checks include unauthorized role escalation, patient/document ownership, historical doctor assignment, concurrent edit conflicts, inactive catalogs, review-before-dispatch, delivery state transitions, one-time stock restoration and revocation of every session after password changes.
+- The production frontend Docker build and TypeScript checks pass. Helm checks pass for 19 rendered resources, environment substitutions and invalid-value rejection.
+- Live Chromium checks passed the complete staff workflow: account role changes, medicine creation, practitioner linking, assigned patient details, prescription issuance and review, courier assignment, out-for-delivery/delivered updates and patient order tracking. Desktop and mobile screenshots are in ignored `test-results/`; test staff permissions and active catalog fixtures are cleaned up afterward. Demo orders and audit history remain.
+- The original live patient browser suite also passes across all five service modules, prescription upload/download, checkout and mobile navigation. No browser runtime errors were detected.
+- A private PostgreSQL dump was captured before migration in `.runtime/backups/`. All four SQL migrations were applied successfully to the existing populated database. Existing data was retained.
+- The separate application account `admin@abies.local` was created. Its generated credential file `.runtime/admin-account.json` has mode 600 and is excluded from Git/images. It is independent of ArgoCD's `admin` account.
+- Backend/frontend each have two ready replicas; PostgreSQL and Redis are ready. ArgoCD reports Synced/Healthy. Deployment readiness now checks the published Git revision and expected container images to avoid accepting stale readiness from the previous release.
+- Source updates are published to the configured GitHub repository; deployment snapshots continue to be published to the internal GitOps repository.

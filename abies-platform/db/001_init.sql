@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, actor_id uuid REFERENCES users(id),
  action text NOT NULL, resource_id uuid NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
 );
-INSERT INTO services VALUES
+INSERT INTO services(id,category,name,description,price,duration,modes) VALUES
  ('doctor','doctor','Ayurveda consultation','A dedicated conversation about your wellbeing, habits and care goals.',70000,30,ARRAY['video','clinic']),
  ('abhyanga','panchkarma','Abhyanga therapy','A traditional warm oil therapy session with a qualified practitioner.',180000,60,ARRAY['clinic']),
  ('shirodhara','panchkarma','Shirodhara consultation','Discuss suitability and plan your personalised therapy programme.',90000,30,ARRAY['clinic']),
@@ -59,7 +59,7 @@ INSERT INTO practitioners(id,name,specialty,category) VALUES
  ('collection','Lab collection team','Diagnostics • sample team','diagnostics'),
  ('rohan','Rohan Kapoor','Physiotherapy • sample practitioner','physio')
  ON CONFLICT DO NOTHING;
-INSERT INTO products VALUES
+INSERT INTO products(id,name,subtitle,category,price,stock,prescription_required,color) VALUES
  ('ashwagandha','Ashwagandha','60 tablets · sample product','Daily wellness',34900,80,false,'purple'),
  ('triphala','Triphala','60 tablets · sample product','Everyday balance',24900,100,false,'orange'),
  ('brahmi','Brahmi','60 tablets · sample product','Mindful living',29900,60,false,'blue'),

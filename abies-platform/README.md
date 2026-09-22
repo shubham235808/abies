@@ -155,3 +155,7 @@ Before handling real patients or commerce: replace sample catalog/identities wit
 ## Design and deployment references
 
 The container strategy follows [Next.js standalone deployment](https://nextjs.org/docs/app/api-reference/config/next-config-js/output). GitOps configuration follows [ArgoCD Application specification](https://argo-cd.readthedocs.io/en/stable/user-guide/application-specification/) and [automated sync policy](https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/).
+
+### Staff administration
+
+Administrators can manage medicines, practitioners, service packages, staff access, prescription review and delivery assignments. Doctors have an assigned-patient workspace; delivery staff have a restricted delivery workspace. See [STAFF.md](STAFF.md) for account setup, permissions and workflows.

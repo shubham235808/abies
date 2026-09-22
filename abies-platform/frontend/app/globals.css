@@ -1908,3 +1908,353 @@ legend {
     scroll-behavior: auto !important;
   }
 }
+
+/* Staff workspaces */
+.staff {
+  min-width: 0;
+}
+.staff-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin: 24px 0;
+}
+.staff-stats > div {
+  border: 1px solid #eadfe7;
+  background: white;
+  border-radius: 16px;
+  padding: 18px;
+}
+.staff-stats span {
+  display: block;
+  color: #716274;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.staff-stats strong {
+  display: block;
+  color: #931a75;
+  font-size: 28px;
+  margin-top: 7px;
+}
+.staff-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0;
+}
+.staff-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 15px;
+  border-radius: 10px;
+  background: white;
+  border: 1px solid #eadfe7;
+  font-size: 13px;
+}
+.staff-tabs button.selected {
+  color: white;
+  background: #931a75;
+  border-color: #931a75;
+}
+.staff-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 20px 0;
+}
+.staff-search {
+  display: block;
+  max-width: 430px;
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 12px 0;
+}
+.staff input:not([type="checkbox"]),
+.staff select,
+.staff textarea,
+.staff-dialog input:not([type="checkbox"]),
+.staff-dialog select,
+.staff-dialog textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  background: white;
+  border: 1px solid #d9ced6;
+  border-radius: 9px;
+  padding: 11px 12px;
+  margin-top: 7px;
+  color: #352537;
+  font: inherit;
+}
+.staff textarea,
+.staff-dialog textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.staff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
+  gap: 18px;
+  margin: 18px 0;
+}
+.staff-card {
+  background: white;
+  border: 1px solid #eadfe7;
+  border-radius: 17px;
+  padding: 22px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.staff-card h3 {
+  font-size: 17px;
+  margin: 12px 0 7px;
+  color: #492640;
+}
+.staff-card p {
+  font-size: 14px;
+  color: #716274;
+  line-height: 1.65;
+  margin: 8px 0;
+}
+.staff-card small {
+  color: #716274;
+  font-size: 12px;
+}
+.staff-card-top,
+.staff-row,
+.staff-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.staff-row {
+  margin: 12px 0;
+}
+.staff-row > div:first-child {
+  flex: 1;
+  min-width: 180px;
+}
+.staff-eyebrow {
+  color: #931a75;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.staff-badge {
+  display: inline-block;
+  font-size: 11px;
+  border-radius: 20px;
+  padding: 5px 10px;
+  color: #931a75;
+  background: #f7e9f3;
+  text-transform: capitalize;
+}
+.staff-badge.good {
+  background: #e9f5ef;
+  color: #21704d;
+}
+.staff-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
+  margin: 16px 0;
+}
+.staff-meta strong {
+  color: #931a75;
+}
+.staff-note {
+  background: #edf7fc;
+  border-left: 3px solid #0088ce;
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 18px 0;
+}
+.staff-feedback {
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: #e9f5ef;
+  color: #21704d;
+  margin: 14px 0;
+  font-size: 14px;
+}
+.staff-feedback.error {
+  background: #fff0ee;
+  color: #a42c21;
+}
+.staff-table {
+  overflow-x: auto;
+  background: white;
+  border: 1px solid #eadfe7;
+  border-radius: 15px;
+}
+.staff table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.staff th,
+.staff td {
+  padding: 15px;
+  border-bottom: 1px solid #f0e8ed;
+}
+.staff th {
+  background: #faf6f9;
+  color: #716274;
+}
+.staff td small {
+  display: block;
+  margin-top: 5px;
+}
+.staff-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(620px, calc(100% - 28px));
+  max-height: 90dvh;
+  overflow: auto;
+  border: 0;
+  border-radius: 20px;
+  padding: 26px;
+  color: #352537;
+  box-shadow: 0 30px 100px #35253744;
+}
+.staff-dialog::backdrop {
+  background: #29172588;
+  backdrop-filter: blur(4px);
+}
+.staff-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.staff-dialog header h2 {
+  font-size: 22px;
+  color: #931a75;
+}
+.staff-dialog header button {
+  padding: 8px;
+}
+.staff-dialog form,
+.staff-card form {
+  display: grid;
+  gap: 16px;
+  margin: 18px 0;
+}
+.staff-dialog label,
+.staff-card form label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.staff-check {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  margin: 8px 0;
+}
+.staff-check input {
+  width: 17px;
+  height: 17px;
+  accent-color: #931a75;
+}
+.staff-dialog fieldset {
+  border: 1px solid #eadfe7;
+  padding: 12px;
+  border-radius: 9px;
+}
+.staff-dialog legend {
+  font-size: 12px;
+  padding: 0 5px;
+}
+.staff-dialog ul {
+  margin: 16px 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+.staff-dialog > p {
+  margin: 10px 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.staff-dialog .outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.staff-pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.staff-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 20px 0;
+  padding: 18px;
+  background: #faf6f9;
+  border-radius: 12px;
+}
+.staff-details dt {
+  font-size: 11px;
+  color: #716274;
+  margin-bottom: 4px;
+}
+.staff-details dd {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.staff-section-title {
+  margin: 24px 0 12px;
+}
+.staff-event {
+  border-left: 2px solid #e6007e;
+  padding: 8px 14px;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.staff-event small {
+  display: block;
+  margin: 5px 0;
+  color: #716274;
+}
+.staff button:disabled,
+.staff-dialog button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+@media (max-width: 650px) {
+  .staff-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .staff-search {
+    max-width: none;
+  }
+  .staff-tabs button {
+    padding: 9px 11px;
+    font-size: 12px;
+  }
+  .staff-dialog {
+    padding: 20px;
+  }
+  .staff-details {
+    grid-template-columns: 1fr;
+  }
+  .staff-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
