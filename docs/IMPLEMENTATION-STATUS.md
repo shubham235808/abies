@@ -81,8 +81,84 @@ Built and **verified working** (not just written — see Verification below):
    needed when the corresponding module (Phase 4+) wires up that adapter,
    not before.
 
+## 2026-09-23 — Session 1 (continued): Phase 1 complete (auth core)
+
+Built and **verified working** end-to-end, both via direct service-layer
+integration tests and real HTTP requests against `next dev`:
+
+- `src/server/session.ts` — HTTP-only cookie session: opaque token, hashed
+  in the DB, Redis-cached lookups (60s TTL, invalidated on
+  rotate/revoke/MFA-verify), sliding-expiry rotation past the halfway point
+  of session life. Deviates from Sprint 2/3's JWT+refresh-body pair per
+  D3/D6 — session state never leaves the server except as an opaque cookie
+  value.
+- `src/server/rbac.ts` — `requireSession` (validates + rotates),
+  `requireRole`, `requireAdminMfa`, `applyRotatedCookie`. Every
+  authenticated route handler goes through this; nothing trusts a
+  client-supplied identity.
+- `src/modules/auth/auth.service.ts` — `requestOtp`/`verifyOtp`/
+  `verifyAdminMfa`/`logout`, porting Sprint 3's exact rules (mobile
+  normalization, HMAC OTP hash, cooldown, max attempts, role-gated
+  provisioning, dev-bypass hard-disabled in production, admin MFA gate).
+  Route handlers: `POST /api/auth/otp/{request,verify}`,
+  `POST /api/auth/mfa/verify`, `POST /api/auth/logout`, `GET /api/auth/me`.
+- `src/modules/consent/consent.service.ts` — active-artifact listing
+  (public), per-user consent history, explicit accept/withdraw for opt-in
+  artifacts (required artifacts stay auto-accept-on-login only, per
+  `docs/SECURITY-MODEL.md`). Routes under `/api/consent/*`.
+- `src/lib/errors.ts` — shared `AppError` hierarchy + Zod-aware
+  `errorResponse()` so every route handler maps failures to HTTP the same
+  way.
+- 9 new integration tests (`tests/integration/{auth,consent}.test.ts`)
+  against real Postgres + Redis: registration, terms-required rejection,
+  OTP lockout after max attempts, resend cooldown, role-mismatch rejection,
+  admin MFA start/wrong-code/correct-code, session revocation on logout,
+  consent accept/withdraw. All pass; user/session rows are cleaned up in
+  `afterAll`.
+- Manually verified the full flow over real HTTP against `next dev`
+  (not just the test suite): OTP request → verify → cookie issued →
+  authenticated `/api/auth/me` → 401 without the cookie → consent
+  listing (public + per-user) → logout → 401 again. Also verified the
+  admin path: `mfaRequired: true` on login, `mfaVerified: false` until
+  `/api/auth/mfa/verify`, wrong code rejected, correct dev code accepted.
+  Also confirmed `next start` (which forces `NODE_ENV=production`)
+  correctly suppresses `devOtp` in the response, proving the
+  production dev-bypass guard actually engages, not just in theory.
+- Dropped `import 'server-only'` from `session.ts`, `rbac.ts`,
+  `auth.service.ts`, `consent.service.ts` — that package only resolves to
+  its no-op stub under Next's bundler-specific `react-server` condition;
+  under plain Vitest/Node it always throws, which would have made direct
+  service-layer testing impossible. Traded a compile-time "don't import
+  this from a Client Component" guard for testability; the practical risk
+  is low since nothing in `src/app/**/page.tsx` or any `'use client'` file
+  imports these modules.
+- Discovered Next 16 auto-generates `AGENTS.md`/`CLAUDE.md` on `next dev`,
+  pointing at `node_modules/next/dist/docs/` — genuinely useful since the
+  installed Next/Prisma/Tailwind/ESLint majors are newer than training
+  data; consulted it while building the route handlers (confirms the
+  `params: Promise<...>` and async `cookies()` patterns already in use).
+- **Notable environment finding:** this dev machine's own LAN IP is
+  `192.168.1.160` — the exact host pattern the build brief names as the
+  target ESXi VM. Worth confirming with the user whether this machine *is*
+  the deployment target before Phase 12.
+
+## Open items (not blocking further phases)
+
+1. VM SSH details (host/user/key) — needed before Phase 12 deployment. See
+   the `192.168.1.160` note above; may already be answered.
+2. Which specific integration credentials (Razorpay / SMS / WhatsApp /
+   video) are available, and for which environment (sandbox vs. live) —
+   needed when the corresponding module (Phase 4+) wires up that adapter.
+3. No production MFA provider is wired up yet (by design — Phase 1 only
+   ports the dev-bypass path, hard-disabled outside `NODE_ENV=production`
+   exactly like Sprint 3). Picking a real TOTP/SMS provider is a decision
+   for whoever owns the admin operations budget, needed before Phase 12's
+   security hardening pass, not before.
+
 ## Next up
 
-Phase 1: auth (OTP + HTTP-only cookie session), RBAC, admin MFA, consent,
-audit, user management — porting the validated Sprint 2/3 behavior per
-`docs/DECISIONS.md` D3 and `docs/SECURITY-MODEL.md`.
+Phase 2: patient profile + family member management (extends the schema
+per `docs/DOMAIN-MODEL.md` §2, builds on the session/RBAC layer just
+shipped). Phase 3 (doctor onboarding/verification/discovery) follows —
+its domain logic is already fully specified in `docs/DECISIONS.md` D3
+since the Sprint 3 behavior is being ported, not designed fresh.
