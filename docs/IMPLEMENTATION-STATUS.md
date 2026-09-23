@@ -347,6 +347,67 @@ desktop and captured console/pageerror output) against `next dev`, then a
 full `lint`/`typecheck`/`vitest`/`next build` pass, then the Docker image
 rebuilt and re-verified healthy and serving the new pages.
 
+## 2026-09-23 — Session 1 (continued): the public website
+
+Completed the "website" half of "develop proper website and application
+both" — the brief's full public-site route list now exists.
+
+- **Real, working pages**: `/doctors` (live search against the Phase 3
+  discovery API — text/city/specialty/language filters that update the URL,
+  server-rendered results) and `/doctors/[slug]` (full public profile:
+  bio, registration, clinics, availability). Both driven by real seeded and
+  test data, not mocks.
+- **Honest content pages** (no fake interactivity per the brief's policy):
+  `/about`, `/diagnostics`, `/medicines`, `/panchakarma`, `/partners`,
+  `/support` — real descriptive copy drawn from the Enhanced Blueprint,
+  each with a plain "this isn't bookable/connected yet" notice where the
+  backing module doesn't exist yet (Phases 7–10).
+- **`/privacy` and `/terms`**: deliberately did not draft binding legal
+  text — the brief's own blueprint says clinical/legal claims need real
+  review. Instead these render the actual active `ConsentArtifact` rows
+  from the database (key/version/required), with an explicit "pending
+  legal review" notice. Real data, honestly framed, not fabricated legal
+  copy.
+- **`/contact`**: same honesty principle — no fake contact form or
+  invented email address that would go nowhere; states plainly that the
+  support console isn't connected yet.
+- Added `SiteHeader` nav links and a `SiteFooter` (Platform/Company/Legal
+  columns) tying all the new pages together; updated the homepage hero to
+  replace the outdated "sign-in coming soon" badge with real CTAs to
+  `/doctors` and `/login` now that both work, keeping only appointment
+  booking honestly labeled "coming soon".
+
+### Two more real bugs found via testing, not inspection
+
+1. **Every portal page showed two stacked headers.** The root layout
+   rendered `SiteHeader` unconditionally for all routes, and `PortalShell`
+   renders its own header — both fired on `/patient`, `/doctor`, `/admin`.
+   Caught in a screenshot, not by reading the code. Fixed by moving
+   `SiteHeader` out of the root layout into `(public)/layout.tsx` and
+   `(auth)/layout.tsx` specifically, matching Next's route-group layout
+   model, and confirmed fixed with another screenshot.
+2. **The Docker build failed outright** (not just noisy logs) the first
+   time `/privacy`, `/terms`, `/doctors` and `/doctors/[slug]` existed —
+   `next build`'s static-generation phase tried to prerender them at build
+   time, and they call Prisma directly (no `cookies()`/`headers()` call to
+   implicitly signal "dynamic" the way the portal pages do), so the
+   isolated build stage's `ECONNREFUSED` to a nonexistent `postgres` host
+   killed the build. Fixed with `export const dynamic = 'force-dynamic'`
+   on all four — which is also the semantically correct choice regardless,
+   since live search results and consent-artifact versions must never be
+   baked into a static build.
+
+Also moved the homepage from `src/app/page.tsx` into
+`src/app/(public)/page.tsx` for consistency with the rest of the public
+site route group (route groups don't affect the URL, `/` is unchanged).
+
+Verified with a full Playwright walkthrough (home, doctor search + filter,
+doctor profile, about, privacy, panchakarma, and a portal page to confirm
+the header fix) against `next dev`, then `lint`/`typecheck`/`vitest`/
+`next build` locally, then — critically, since this is what caught the
+build-time DB bug — a full Docker image rebuild, which now succeeds and
+serves all pages correctly.
+
 ## Next up
 
 Phase 4: appointment scheduling (slot locking to prevent double-booking),

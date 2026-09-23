@@ -1,7 +1,9 @@
 // Public homepage. Per the build brief's No-Fake-Functionality policy: no
 // call-to-action here pretends to do something the backend doesn't yet
-// support (login/booking/discovery ship in later phases — see
-// docs/IMPLEMENTATION-PLAN.md). Content only, until those are real.
+// support. Sign-in and doctor discovery are real as of Phase 1/3 — their
+// CTAs link to working pages; appointment booking still doesn't exist, so
+// that stays an honest "coming soon" rather than a dead button.
+import Link from 'next/link';
 
 type Accent = 'purple' | 'magenta' | 'blue' | 'orange';
 
@@ -99,9 +101,23 @@ export default function HomePage() {
             set of disconnected bookings.
           </p>
 
-          <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-brand-magenta-200 bg-white px-4 py-2 text-sm text-brand-neutral-600 shadow-sm">
-            <span className="h-2 w-2 rounded-full bg-brand-orange-500" />
-            Patient and doctor sign-in — Coming soon
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <Link
+              href="/doctors"
+              className="rounded-lg bg-brand-purple-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-purple-700"
+            >
+              Find a doctor
+            </Link>
+            <Link
+              href="/login"
+              className="rounded-lg border border-brand-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-brand-neutral-700 hover:bg-brand-neutral-50"
+            >
+              Sign in
+            </Link>
+            <div className="inline-flex items-center gap-2 rounded-full border border-brand-neutral-200 bg-white px-3 py-1.5 text-xs text-brand-neutral-500">
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-orange-500" />
+              Appointment booking — coming soon
+            </div>
           </div>
         </div>
       </div>
