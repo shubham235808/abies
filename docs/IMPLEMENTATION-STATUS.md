@@ -155,10 +155,41 @@ integration tests and real HTTP requests against `next dev`:
    for whoever owns the admin operations budget, needed before Phase 12's
    security hardening pass, not before.
 
+## 2026-09-23 — Session 1 (continued): Phase 2 complete (patient profile + family)
+
+The Phase 0 schema already had the extended `PatientProfile`/`FamilyMember`
+fields from `docs/DOMAIN-MODEL.md` §2, so no migration was needed — Phase 2
+was purely the module layer:
+
+- `src/modules/patients/patients.schemas.ts` — Zod validation for profile
+  updates and family member CRUD (`FamilyRelation`: PARENT/SPOUSE/CHILD/
+  DEPENDENT/OTHER).
+- `src/modules/patients/patients.service.ts` — `getMyProfile`,
+  `updateMyProfile` (also updates `User.email` when provided, since email
+  lives on the account not the profile), family member add/update/remove.
+  Ownership is enforced by scoping every family-member lookup through the
+  caller's own `PatientProfile` — never by trusting the member id alone.
+  Profile updates are audited with the changed field *names* only, never
+  values (allergies/medical history are PHI-adjacent).
+- Routes: `GET/PATCH /api/patients/me`,
+  `GET/POST /api/patients/me/family`,
+  `PATCH/DELETE /api/patients/me/family/[id]` — all behind
+  `requireRole(ctx, 'PATIENT')`.
+- 4 new integration tests: profile starts empty from OTP registration and
+  updates correctly, audit log captures field names but never the PHI
+  values themselves, family CRUD round-trip, and — the one that mattered
+  most — a second patient account cannot read/update/delete another
+  patient's family member (`NotFoundError`, not silently succeeding).
+- Verified over real HTTP against `next dev`: full profile PATCH, family
+  member POST/GET/PATCH/DELETE round-trip, and confirmed an authenticated
+  ADMIN session gets a real 403 (not a silent pass-through) hitting a
+  PATIENT-only route.
+- Docker stack rebuilt and re-verified healthy with the new routes.
+
 ## Next up
 
-Phase 2: patient profile + family member management (extends the schema
-per `docs/DOMAIN-MODEL.md` §2, builds on the session/RBAC layer just
-shipped). Phase 3 (doctor onboarding/verification/discovery) follows —
-its domain logic is already fully specified in `docs/DECISIONS.md` D3
-since the Sprint 3 behavior is being ported, not designed fresh.
+Phase 3: doctor onboarding, verification, clinics, availability, public
+discovery. Its domain logic is already fully specified in
+`docs/DECISIONS.md` D3 since the Sprint 3 behavior is being ported, not
+designed fresh — should move faster than Phase 2 despite being larger in
+surface area.
