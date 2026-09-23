@@ -186,10 +186,66 @@ was purely the module layer:
   PATIENT-only route.
 - Docker stack rebuilt and re-verified healthy with the new routes.
 
+## 2026-09-23 — Session 1 (continued): Phase 3 complete (doctor network)
+
+- `src/modules/doctors/doctors.service.ts` — doctor-owned profile/document/
+  clinic/availability management, porting Sprint 3's exact rules: slug
+  generation from name (falls back to `doctor-<id6>` until named), edit-lock
+  outside DRAFT/REJECTED, re-editing a REJECTED profile resets it to DRAFT
+  and clears the rejection reason, availability mode gated by the profile's
+  enabled `consultationModes`, the full submission checklist, and the public
+  trust rule (`APPROVED AND isDiscoverable` only). Document uploads now go
+  through `src/lib/storage.ts` into real MinIO (Sprint 3 wrote to local
+  disk) — validated MIME/size, UUID-prefixed object keys scoped per doctor,
+  signed download URLs only, nothing public.
+- `src/modules/doctors/admin-doctors.service.ts` — verification queue,
+  detail, start-review/approve/reject/suspend, document review. Approval
+  still hard-requires both the registration certificate and degree
+  certificate to be individually `VERIFIED` first. Every transition writes
+  both a `DoctorVerificationAction` row and a general `AuditEvent`.
+- Routes: doctor portal under `/api/doctors/me/*` (profile, documents
+  incl. multipart upload via `request.formData()`, clinics, availability,
+  submit), admin under `/api/admin/doctors/*` (all gated by
+  `requireAdminMfa`, matching Sprint 3's blanket MFA requirement on the
+  whole admin-doctors surface — broader than this doc's earlier "privileged
+  actions only" framing, D3 precedence wins), public under
+  `/api/public/doctors/*` (search, facets, profile by slug).
+- **Real bug found and fixed, not inherited silently:** Sprint 3's search
+  matched the *entire* query string against one field at a time
+  (`firstName contains q` OR `lastName contains q` OR ...), so a natural
+  two-word query like "Arjun Nair" never matched anything — neither field
+  alone contains the full two-word string. Fixed by splitting the query
+  into words and requiring each word to match at least one field
+  (AND-of-ORs). Caught by an integration test, not by inspection — worth
+  remembering when porting the rest of Sprint 3's search-style endpoints
+  later (medicines, diagnostics, panchakarma catalogues will have the same
+  shape).
+- 6 new integration tests: incomplete-submission rejection, edit-lock +
+  reject-resets-to-draft, availability mode-gating, clinic ownership
+  scoping, the dual-document-verified-before-approve gate (including the
+  "one of two verified still fails" case), and the full
+  discoverable-on-approve / hidden-on-suspend visibility cycle (this is the
+  test that caught the search bug above).
+- Full manual HTTP walkthrough against `next dev`: doctor fills profile →
+  adds clinic + availability → uploads two real PDF files (verified they
+  land in MinIO and a signed URL actually serves the file content back) →
+  submits → admin queue shows it → start-review → approve blocked until
+  both documents verified → approve succeeds → public search finds it by
+  full name and by city → public profile by slug → facets include it →
+  confirmed a PATIENT session gets a real 403 on doctor-only routes.
+- Docker stack rebuilt and re-verified healthy with all 34 routes.
+- Noted, not investigated further: `@prisma/adapter-pg` (via `pg`) emits an
+  "already executing a query" deprecation warning during some test runs.
+  Confirmed the adapter uses a real `pg.Pool` internally (not a bare
+  `Client`), so this looks cosmetic rather than a correctness issue — no
+  test flakiness observed across multiple runs — but worth a closer look if
+  it ever correlates with an actual failure.
+
 ## Next up
 
-Phase 3: doctor onboarding, verification, clinics, availability, public
-discovery. Its domain logic is already fully specified in
-`docs/DECISIONS.md` D3 since the Sprint 3 behavior is being ported, not
-designed fresh — should move faster than Phase 2 despite being larger in
-surface area.
+Phase 4: appointment scheduling (slot locking to prevent double-booking),
+payments (Razorpay adapter, server-side signature verification), and
+notifications (SMS/email/WhatsApp adapters). This is genuinely new design
+per `docs/DOMAIN-MODEL.md` §4 and §11 — Sprint 2/3 explicitly stopped short
+of appointments ("intentionally left for Sprint 4"), so there's no
+validated baseline to port here, unlike Phases 1–3.
