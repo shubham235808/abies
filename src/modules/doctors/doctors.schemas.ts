@@ -54,7 +54,13 @@ export const createAvailabilitySchema = z.object({
   endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:MM 24-hour time'),
   slotMinutes: z.number().int().min(5).max(240).optional(),
   mode: consultationModeSchema,
-  clinicId: z.string().min(1).optional(),
+  // No clinicId here: DoctorAvailability has no such column (ported as-is
+  // from the validated Sprint 3 schema, docs/DECISIONS.md D3, which also
+  // didn't link a slot to a specific clinic). A doctor with multiple
+  // clinics can't yet say which one a CLINIC-mode slot is at — tracked as
+  // a follow-up for whichever phase adds appointment-slot generation,
+  // where it actually matters. Do not add this field back without a
+  // matching Prisma migration.
   active: z.boolean().optional(),
 });
 

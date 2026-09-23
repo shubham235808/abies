@@ -268,6 +268,85 @@ sampled from `ABIES_Agent_Knowledge_Pack/05_Brand/ABIES_logo.jpg`.
   mobile (390px) viewports against the rebuilt Docker container — not just
   "the code should render this."
 
+## 2026-09-23 — Session 1 (continued): real UI for the public site and portals
+
+User asked to build out the actual website/application UI, not just APIs.
+Built the full authenticated front-end for everything Phases 1–3 already
+support, on top of the brand redesign from the previous entry.
+
+- **Design system** (`src/components/ui/`): Button, Input/Textarea/Select/
+  Label/FieldError, Card, Badge (incl. a `VerificationBadge` mapping the
+  doctor status enum to a tone), Alert — all driven by the real brand
+  tokens, no ad hoc colors per page.
+- **Auth client infra**: `src/lib/api-client.ts` (typed fetch wrapper,
+  `ApiError` with Zod issue detail), `src/server/current-user.ts`
+  (`getCurrentSession` for read-only Server Component use, distinct from
+  route handlers' rotating `requireSession`).
+- **`/login`** (`src/app/(auth)/login/page.tsx`): full 3-step OTP + admin-MFA
+  flow against the real Phase 1 API, React Hook Form + Zod throughout, dev
+  OTP shown inline in non-production. Redirects by role to the right portal.
+- **`src/components/layouts/portal-shell.tsx`**: shared authenticated shell
+  (server-side role + MFA gate, sidebar nav on desktop / horizontal scroll
+  nav on mobile, sign-out). Every portal layout is a two-line wrapper
+  around it.
+- **Patient portal**: dashboard (real profile/family data + honestly-labeled
+  "coming soon" cards for appointments/care-plan/diagnostics/medicines),
+  profile edit form, family member CRUD.
+- **Doctor portal**: overview (status, completion %, verification history),
+  profile edit form (locked outside DRAFT/REJECTED, matching the backend
+  rule), document upload/list/delete (real MinIO round-trip through the
+  browser), clinics CRUD, availability CRUD (mode-gated to what's enabled
+  on the profile), submit-for-verification.
+- **Admin portal**: verification queue with status tabs, full review panel
+  (approve/reject/suspend/start-review, per-document verify/reject with
+  signed-URL "View", verification history) — gated by `requireMfa` on the
+  portal shell in addition to the API's own `requireAdminMfa`, and a
+  standalone `/login/mfa` page to resume an admin session that never
+  finished its MFA step.
+
+### Real bugs found via actual browser testing, not just unit tests
+
+Ran full Playwright walkthroughs (patient, doctor, admin) against the real
+Docker stack, not just `npx tsc`/lint — this is what surfaced all four of
+these, none of which the test suite or type system caught on their own:
+
+1. **`isoDate` Zod schema rejected empty-string dates from HTML `<input
+   type="date">`**, silently blocking `zodResolver` from ever calling the
+   submit handler (react-hook-form swallows the validation failure — no
+   network request, no visible error unless the specific field renders
+   one). Root-caused and fixed in the shared schema
+   (`src/modules/patients/patients.schemas.ts`), not papered over per-form,
+   since every optional-date form shares it.
+2. **`session!.userId` non-null assertions crashed 8 Server Component
+   pages** the one time the page's own independent `getCurrentSession()`
+   call raced against the layout's — the layout and page each make their
+   own session lookup; a layout-level auth check is not a guarantee for
+   the page. Fixed by adding `requireSessionOrRedirect()` and using it
+   everywhere instead of asserting.
+3. **`/admin` 404'd** — the admin portal had a layout and nav pointing at
+   `/admin/doctors`, but no `/admin/page.tsx`, so the MFA-complete redirect
+   target landed nowhere. Added an index redirect.
+4. Investigated a persistent Next.js dev-overlay "1 Issue" badge down to a
+   React hydration-mismatch warning on a checkbox's `caret-color` style;
+   confirmed `caret` appears nowhere in the codebase and the warning never
+   reproduced on an isolated single-page visit, only after many scripted
+   Playwright `.check()`/`.fill()` interactions in one session — logged as
+   a browser-automation artifact, not an app defect, rather than chased
+   further or silently ignored.
+
+Also removed the speculative `clinicId` field from the availability Zod
+schema before building UI around it — it had no backing Prisma column
+(TypeScript didn't catch the mismatch because object-spread into Prisma's
+`.create()` call bypasses excess-property checking). Matches the validated
+Sprint 3 baseline, which also never linked a slot to a specific clinic;
+tracked as a real follow-up for whenever appointment-slot generation needs
+to know which physical location a CLINIC-mode slot is at.
+
+All of the above verified with real Playwright walkthroughs (screenshots at
+desktop and captured console/pageerror output) against `next dev`, then a
+full `lint`/`typecheck`/`vitest`/`next build` pass, then the Docker image
+rebuilt and re-verified healthy and serving the new pages.
+
 ## Next up
 
 Phase 4: appointment scheduling (slot locking to prevent double-booking),

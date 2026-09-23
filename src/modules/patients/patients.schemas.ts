@@ -1,8 +1,18 @@
 import { z } from 'zod';
 
+// HTML <input type="date"> submits '' when left blank, not undefined — a
+// bare `.optional()` string schema still runs the refine against that ''
+// and rejects it, which silently blocks react-hook-form's zodResolver from
+// ever calling the submit handler (no error shown unless the field itself
+// renders one). Accept '' as "not provided" and normalize it to undefined
+// on output — kept as .refine()+.transform() rather than .preprocess() so
+// the schema's input type stays `string | undefined`, matching the form
+// field type zodResolver expects (preprocess widens it to `unknown` and
+// breaks the resolver's generic inference).
 const isoDate = z
   .string()
-  .refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid date')
+  .refine((v) => v === '' || !Number.isNaN(Date.parse(v)), 'Invalid date')
+  .transform((v) => (v === '' ? undefined : v))
   .optional();
 
 export const updatePatientProfileSchema = z.object({
