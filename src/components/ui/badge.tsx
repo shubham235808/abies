@@ -39,3 +39,16 @@ export function VerificationBadge({ status }: { status: string }) {
     </Badge>
   );
 }
+
+const APPOINTMENT_STATUS_TONE: Record<string, Tone> = {
+  PENDING_PAYMENT: 'orange',
+  CONFIRMED: 'success',
+  CANCELLED: 'danger',
+  RESCHEDULED: 'blue',
+  COMPLETED: 'purple',
+  NO_SHOW: 'danger',
+};
+
+export function AppointmentStatusBadge({ status }: { status: string }) {
+  return <Badge tone={APPOINTMENT_STATUS_TONE[status] ?? 'neutral'}>{status.replace(/_/g, ' ')}</Badge>;
+}

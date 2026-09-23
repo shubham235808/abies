@@ -3,6 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { NotFoundError } from '@/lib/errors';
 import { publicProfile } from '@/modules/doctors/doctors.service';
+import { getCurrentSession } from '@/server/current-user';
+import { BookingWidget } from './booking-widget';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -21,6 +23,7 @@ export default async function DoctorProfilePage({ params }: { params: Promise<{ 
     if (err instanceof NotFoundError) notFound();
     throw err;
   }
+  const session = await getCurrentSession();
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
@@ -93,9 +96,14 @@ export default async function DoctorProfilePage({ params }: { params: Promise<{ 
         </div>
       )}
 
-      <div className="mt-10 rounded-card border border-brand-neutral-200 bg-brand-neutral-50 px-4 py-3 text-sm text-brand-neutral-600">
-        Appointment booking — Coming soon.
-      </div>
+      <BookingWidget
+        doctorProfileId={doctor.id}
+        doctorName={doctor.name}
+        modes={doctor.consultationModes}
+        videoFee={doctor.videoFee}
+        clinicFee={doctor.clinicFee}
+        viewerRole={session?.user.role ?? null}
+      />
     </main>
   );
 }

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { VerificationBadge } from '@/components/ui/badge';
+import { listMineAsDoctor } from '@/modules/appointments/appointments.service';
 import { getMe } from '@/modules/doctors/doctors.service';
 import { requireSessionOrRedirect } from '@/server/current-user';
 import { SubmitButton } from './submit-button';
@@ -9,6 +10,10 @@ export default async function DoctorOverviewPage() {
   const session = await requireSessionOrRedirect();
   const { profile, completion } = await getMe(session.userId);
   const editable = profile.verificationStatus === 'DRAFT' || profile.verificationStatus === 'REJECTED';
+  const upcomingAppointments =
+    profile.verificationStatus === 'APPROVED'
+      ? (await listMineAsDoctor(session.userId)).filter((a) => a.status === 'CONFIRMED' || a.status === 'PENDING_PAYMENT').length
+      : 0;
 
   return (
     <div>
@@ -87,6 +92,15 @@ export default async function DoctorOverviewPage() {
             Manage →
           </Link>
         </Card>
+        {profile.verificationStatus === 'APPROVED' && (
+          <Card>
+            <CardTitle className="text-base">Appointments ({upcomingAppointments} upcoming)</CardTitle>
+            <CardDescription>Patients who&apos;ve booked against your availability.</CardDescription>
+            <Link href="/doctor/appointments" className="mt-3 inline-block text-sm font-medium text-brand-purple-600">
+              View →
+            </Link>
+          </Card>
+        )}
       </div>
 
       {editable && (

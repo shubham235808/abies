@@ -236,13 +236,25 @@ export async function removeClinic(userId: string, id: string) {
   if (!result.count) throw new NotFoundError('Clinic not found');
 }
 
+async function ownedClinicId(doctorProfileId: string, clinicId: string): Promise<string> {
+  const clinic = await prisma.doctorClinic.findFirst({ where: { id: clinicId, doctorProfileId } });
+  if (!clinic) throw new BadRequestError('Clinic not found');
+  return clinic.id;
+}
+
 export async function addAvailability(userId: string, dto: CreateAvailabilityInput) {
   if (dto.startTime >= dto.endTime) throw new BadRequestError('End time must be after start time');
   const profile = await ensureProfile(userId);
   if (!profile.consultationModes.includes(dto.mode)) {
     throw new BadRequestError(`Enable ${dto.mode} consultation mode on your profile first`);
   }
-  return prisma.doctorAvailability.create({ data: { doctorProfileId: profile.id, ...dto } });
+  if (dto.mode === 'CLINIC') {
+    if (!dto.clinicId) throw new BadRequestError('Select a clinic for a clinic-mode availability window');
+    await ownedClinicId(profile.id, dto.clinicId);
+  }
+  return prisma.doctorAvailability.create({
+    data: { ...dto, doctorProfileId: profile.id, clinicId: dto.mode === 'CLINIC' ? dto.clinicId : undefined },
+  });
 }
 
 export async function updateAvailability(userId: string, id: string, dto: UpdateAvailabilityInput) {
@@ -252,10 +264,17 @@ export async function updateAvailability(userId: string, id: string, dto: Update
   const start = dto.startTime ?? slot.startTime;
   const end = dto.endTime ?? slot.endTime;
   if (start >= end) throw new BadRequestError('End time must be after start time');
+  const mode = dto.mode ?? slot.mode;
   if (dto.mode && !profile.consultationModes.includes(dto.mode)) {
     throw new BadRequestError(`Enable ${dto.mode} consultation mode on your profile first`);
   }
-  return prisma.doctorAvailability.update({ where: { id }, data: dto });
+  if (mode === 'CLINIC') {
+    const clinicId = dto.clinicId ?? slot.clinicId;
+    if (!clinicId) throw new BadRequestError('Select a clinic for a clinic-mode availability window');
+    await ownedClinicId(profile.id, clinicId);
+    return prisma.doctorAvailability.update({ where: { id }, data: { ...dto, clinicId } });
+  }
+  return prisma.doctorAvailability.update({ where: { id }, data: { ...dto, clinicId: null } });
 }
 
 export async function removeAvailability(userId: string, id: string) {

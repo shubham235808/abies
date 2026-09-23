@@ -408,11 +408,99 @@ the header fix) against `next dev`, then `lint`/`typecheck`/`vitest`/
 build-time DB bug — a full Docker image rebuild, which now succeeds and
 serves all pages correctly.
 
+## Phase 4 — Appointments, payments, notifications
+
+Net-new design per `docs/DOMAIN-MODEL.md` §4/§11/§13 — no Sprint 2/3
+baseline to port here. Schema: `AppointmentSlot`, `Appointment`, `Payment`,
+`Notification` (two migrations — `phase4_appointments_payments_notifications`,
+then `fix_appointment_slot_not_unique`, see bug #1 below). Also added
+`DoctorAvailability.clinicId` (required for CLINIC-mode windows), closing
+a gap flagged in a Phase 3 code comment ("tracked as a follow-up for
+whichever phase adds appointment-slot generation").
+
+- **Slot generation is on-demand, not pre-materialized** — computed from
+  `DoctorAvailability` windows for the next N days
+  (`modules/appointments/appointments.service.ts` `listAvailableSlots`),
+  overlaid against whatever `AppointmentSlot` rows already exist for that
+  doctor to exclude `BOOKED` slots and still-`HELD` ones.
+- **Double-booking prevention**: `holdSlot()` claims a slot inside a
+  transaction — create it `HELD` if the row doesn't exist yet, or a
+  conditional `updateMany` (`WHERE status='OPEN' OR (status='HELD' AND
+  heldUntil < now)`) if it does. Postgres's row lock on the `UPDATE` itself
+  is what actually serializes concurrent holds under default READ
+  COMMITTED — no `SELECT ... FOR UPDATE` needed. A 10-minute hold expires
+  lazily (checked at the next hold attempt, not swept by a job).
+- **Payments (Razorpay)**: `src/lib/payments/razorpay.ts` — real adapter
+  using the `razorpay` npm SDK, `verifiedAt` set only via server-side HMAC
+  signature verification (checkout callback) or the webhook path
+  (`/api/payments/webhook/razorpay`), never a bare client callback, per the
+  blueprint's explicit rule. `RAZORPAY_KEY_ID`/`_KEY_SECRET` are blank in
+  this environment (no real account provisioned yet) — `isConfigured()`
+  gates `holdSlot()` and returns an honest 503 rather than faking an order,
+  same "hard fail, don't fake it" rule already used for admin MFA in
+  production. **Booking is code-complete but not live-testable end-to-end
+  until real (even test-mode) Razorpay keys are supplied.**
+- **Notifications**: adapter interface + a `mock` provider (console log)
+  behind `SMS_PROVIDER`/`EMAIL_PROVIDER`/`WHATSAPP_PROVIDER`, matching the
+  placeholders `.env.example` already shipped in Phase 0. `mock` is
+  hard-disabled in production (mirrors the `OTP_DEV_CODE` rule) — no
+  channel silently claims delivery without a real provider configured. No
+  real SMS/email/WhatsApp provider is wired up yet; `IN_APP` is the only
+  channel that's fully real today (the DB row itself is the delivery).
+- **UI**: booking widget on the public doctor profile page (mode picker,
+  date/slot grid, family-member/reason form, Razorpay Checkout.js loaded
+  on demand — not bundled, not loaded for anonymous visitors); real
+  `/patient/appointments` and `/doctor/appointments` lists with cancel;
+  patient/doctor dashboards' "Next appointment" cards are no longer
+  "coming soon" — they show a live upcoming count. Homepage's "Appointment
+  booking — coming soon" badge removed now that it's real.
+- Integration tests (`tests/integration/appointments.test.ts`): double-hold
+  conflict, Razorpay-not-configured refusal, valid/invalid signature
+  verification, cancel-and-rebook. Razorpay's own HTTP call is mocked
+  (there's no way to hit the real gateway without an account); everything
+  else — Postgres transactions, the hold/confirm/cancel state machine — runs
+  for real.
+
+### Two real bugs found via testing, not inspection
+
+1. **`Appointment.slotId` was `@unique`**, which silently made a slot
+   unbookable forever after its first appointment was cancelled — the
+   unique constraint blocked a second `Appointment` row from ever
+   referencing that `AppointmentSlot` again, even though the slot's own
+   `status` had correctly reset to `OPEN`. Caught by an integration test
+   (`cancel → rebook the same slot`) that failed with a Prisma unique
+   constraint error, not by reading the schema. The concurrency guarantee
+   was never supposed to live on this FK — it lives entirely in
+   `AppointmentSlot.status` plus the conditional-update hold logic. Fixed
+   by dropping `@unique` (migration `fix_appointment_slot_not_unique`) and
+   changing `AppointmentSlot.appointment` from a one-to-one to a
+   one-to-many `appointments[]` relation to match.
+2. **`holdSlot()` returned a stale `appointment` object** — captured from
+   `tx.appointment.create()` before the follow-up `tx.appointment.update()`
+   that sets `paymentId`, so the value handed back to the API response (and
+   almost silently to this test suite, via `appointment.paymentId!`) still
+   had `paymentId: null`. Fixed by capturing the `update()`'s return value
+   instead of reusing the pre-update object.
+
+Verified: `tsc --noEmit`, `eslint .`, `vitest run` (27/27, was 21/21 before
+this phase) all clean; `next build` locally (all four new routes correctly
+render `ƒ` dynamic); full Docker image rebuild succeeded; container health
+check and curl smoke tests against the live container
+(`/api/appointments/slots` → 401 unauthenticated, webhook → 400 unsigned);
+a real Playwright walkthrough against `next dev` with a seeded
+approved-doctor + patient account confirmed: anonymous visitors see a
+login prompt instead of the booking widget, a logged-in patient can browse
+real generated slots and reach the honest "payments are not configured"
+error on checkout, and `/patient/appointments` renders. All seed/demo
+accounts created for that walkthrough were deleted afterward — nothing
+fake was left in the dev database.
+
 ## Next up
 
-Phase 4: appointment scheduling (slot locking to prevent double-booking),
-payments (Razorpay adapter, server-side signature verification), and
-notifications (SMS/email/WhatsApp adapters). This is genuinely new design
-per `docs/DOMAIN-MODEL.md` §4 and §11 — Sprint 2/3 explicitly stopped short
-of appointments ("intentionally left for Sprint 4"), so there's no
-validated baseline to port here, unlike Phases 1–3.
+Phase 5: consultations, clinical notes, prescriptions
+(`docs/DOMAIN-MODEL.md` §5) — also net-new, and the natural next step once
+an appointment can be confirmed. Outstanding from earlier phases, still
+unresolved: real Ubuntu ESXi VM SSH details for Phase 12 deployment, and
+real (even test-mode) Razorpay/SMS/email/WhatsApp credentials so Phase 4's
+booking flow can be exercised end-to-end rather than stopping at the
+honest "not configured" message.

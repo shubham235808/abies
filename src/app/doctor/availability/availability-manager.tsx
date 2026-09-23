@@ -19,7 +19,10 @@ type Slot = {
   endTime: string;
   slotMinutes: number;
   mode: 'VIDEO' | 'CLINIC';
+  clinicId?: string | null;
 };
+
+type Clinic = { id: string; name: string; city: string };
 
 type FormValues = z.infer<typeof createAvailabilitySchema>;
 
@@ -28,9 +31,11 @@ const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 export function AvailabilityManager({
   initial,
   enabledModes,
+  clinics,
 }: {
   initial: Slot[];
   enabledModes: ('VIDEO' | 'CLINIC')[];
+  clinics: Clinic[];
 }) {
   const [slots, setSlots] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -40,11 +45,13 @@ export function AvailabilityManager({
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(createAvailabilitySchema),
-    defaultValues: { dayOfWeek: 1, slotMinutes: 30, mode: enabledModes[0] },
+    defaultValues: { dayOfWeek: 1, slotMinutes: 30, mode: enabledModes[0], clinicId: clinics[0]?.id },
   });
+  const selectedMode = watch('mode');
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
@@ -100,6 +107,11 @@ export function AvailabilityManager({
                 <div className="mt-1 flex items-center gap-2">
                   <Badge tone={s.mode === 'VIDEO' ? 'blue' : 'orange'}>{s.mode}</Badge>
                   <span className="text-xs text-brand-neutral-400">{s.slotMinutes} min slots</span>
+                  {s.mode === 'CLINIC' && (
+                    <span className="text-xs text-brand-neutral-400">
+                      {clinics.find((c) => c.id === s.clinicId)?.name ?? 'Clinic removed'}
+                    </span>
+                  )}
                 </div>
               </div>
               <Button variant="ghost" size="sm" onClick={() => handleRemove(s.id)}>
@@ -147,12 +159,28 @@ export function AvailabilityManager({
               <Label htmlFor="slotMinutes">Slot length (minutes)</Label>
               <Input id="slotMinutes" inputMode="numeric" {...register('slotMinutes', { valueAsNumber: true })} />
             </div>
+            {selectedMode === 'CLINIC' && (
+              <div>
+                <Label htmlFor="clinicId">Clinic</Label>
+                <Select id="clinicId" {...register('clinicId')}>
+                  {clinics.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} — {c.city}
+                    </option>
+                  ))}
+                </Select>
+                <FieldError>{errors.clinicId?.message}</FieldError>
+              </div>
+            )}
           </div>
+          {selectedMode === 'CLINIC' && clinics.length === 0 && (
+            <Alert tone="error">Add a clinic first before creating clinic-mode availability.</Alert>
+          )}
           <div className="flex gap-3">
             <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
               Cancel
             </Button>
-            <Button type="submit" loading={isSubmitting}>
+            <Button type="submit" loading={isSubmitting} disabled={selectedMode === 'CLINIC' && clinics.length === 0}>
               Add slot
             </Button>
           </div>

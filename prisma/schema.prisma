@@ -63,6 +63,9 @@ model User {
   sessions       Session[]
   consentRecords ConsentRecord[]
   auditEvents    AuditEvent[]
+  appointments   Appointment[]
+  payments       Payment[]
+  notifications  Notification[]
 
   @@index([role, status])
 }
@@ -217,6 +220,7 @@ model FamilyMember {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   patientProfile   PatientProfile @relation(fields: [patientProfileId], references: [id], onDelete: Cascade)
+  appointments     Appointment[]
 
   @@index([patientProfileId])
 }
@@ -291,6 +295,8 @@ model DoctorProfile {
   clinics                DoctorClinic[]
   availability           DoctorAvailability[]
   verificationActions    DoctorVerificationAction[]
+  appointmentSlots       AppointmentSlot[]
+  appointments           Appointment[]
 
   @@index([verificationStatus, isDiscoverable])
   @@index([lastName, firstName])
@@ -332,6 +338,9 @@ model DoctorClinic {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  availability  DoctorAvailability[]
+  appointmentSlots AppointmentSlot[]
+  appointments  Appointment[]
 
   @@index([doctorProfileId, active])
   @@index([city, state])
@@ -345,12 +354,19 @@ model DoctorAvailability {
   endTime         String
   slotMinutes     Int              @default(30)
   mode            ConsultationMode
+  // Required when mode=CLINIC (enforced in modules/doctors/doctors.service.ts)
+  // — a CLINIC window has to say which of the doctor's clinics it's at so
+  // appointment-slot generation (modules/appointments) knows where the
+  // visit happens. Left off VIDEO windows, which have no location.
+  clinicId        String?
   active          Boolean          @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   doctorProfile   DoctorProfile    @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  clinic          DoctorClinic?    @relation(fields: [clinicId], references: [id], onDelete: SetNull)
 
   @@index([doctorProfileId, dayOfWeek, active])
+  @@index([clinicId])
 }
 
 model DoctorVerificationAction {
@@ -365,4 +381,160 @@ model DoctorVerificationAction {
 
   @@index([doctorProfileId, createdAt])
   @@index([adminUserId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Appointments, Payments, Notifications
+// docs/DOMAIN-MODEL.md §4, §11, §13.
+// ---------------------------------------------------------------------------
+
+enum AppointmentSlotStatus {
+  OPEN
+  HELD
+  BOOKED
+}
+
+enum AppointmentStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  RESCHEDULED
+  COMPLETED
+  NO_SHOW
+}
+
+// A slot row is only materialized the first time a patient tries to hold
+// it (docs/DOMAIN-MODEL.md §4: "generated from DoctorAvailability on
+// demand, not pre-materialized forever"); it does not exist for every open
+// slot a doctor's weekly availability implies. The unique constraint plus
+// hold-creation's conditional UPDATE (modules/appointments/appointments.service.ts)
+// is what actually prevents double-booking — this model just gives that
+// UPDATE a row to lock.
+model AppointmentSlot {
+  id              String                @id @default(cuid())
+  doctorProfileId String
+  clinicId        String?
+  mode            ConsultationMode
+  startsAt        DateTime
+  endsAt          DateTime
+  status          AppointmentSlotStatus @default(OPEN)
+  heldByUserId    String?
+  heldUntil       DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  doctorProfile   DoctorProfile         @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  clinic          DoctorClinic?         @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  appointments    Appointment[]
+
+  @@unique([doctorProfileId, startsAt, mode])
+  @@index([doctorProfileId, status])
+}
+
+model Appointment {
+  id                           String             @id @default(cuid())
+  patientUserId                String
+  careRecipientFamilyMemberId  String?
+  doctorProfileId              String
+  // Not @unique: a cancelled appointment frees its AppointmentSlot back to
+  // OPEN (modules/appointments/appointments.service.ts) so another patient
+  // can book the same calendar slot — one slot can accumulate several
+  // Appointment rows over time (at most one non-cancelled at a time, which
+  // AppointmentSlot.status enforces, not this FK).
+  slotId                       String
+  mode                         ConsultationMode
+  clinicId                     String?
+  scheduledAt                  DateTime
+  durationMinutes              Int
+  status                       AppointmentStatus  @default(PENDING_PAYMENT)
+  reasonForVisit                String?
+  paymentId                    String?            @unique
+  cancelledAt                  DateTime?
+  cancelledBy                  String?
+  cancellationReason           String?
+  createdAt                    DateTime           @default(now())
+  updatedAt                    DateTime           @updatedAt
+  patientUser                  User               @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  careRecipientFamilyMember    FamilyMember?      @relation(fields: [careRecipientFamilyMemberId], references: [id], onDelete: SetNull)
+  doctorProfile                DoctorProfile      @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  slot                         AppointmentSlot    @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  clinic                       DoctorClinic?      @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  payment                      Payment?           @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([patientUserId, status])
+  @@index([doctorProfileId, scheduledAt])
+  @@index([slotId])
+}
+
+enum PaymentPurpose {
+  CONSULTATION
+  DIAGNOSTIC_ORDER
+  MEDICINE_ORDER
+  PANCHAKARMA_BOOKING
+  PACKAGE
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+// amount is in rupees (whole units), matching DoctorProfile.videoFee/clinicFee
+// — the Razorpay adapter (src/lib/payments/razorpay.ts) is the one place
+// that converts to paise, right before the gateway call.
+model Payment {
+  id                String         @id @default(cuid())
+  payerUserId       String
+  purpose           PaymentPurpose
+  purposeEntityId   String
+  amount            Int
+  currency          String         @default("INR")
+  status            PaymentStatus  @default(CREATED)
+  gateway           String         @default("razorpay")
+  gatewayOrderId    String?        @unique
+  gatewayPaymentId  String?        @unique
+  gatewaySignature  String?
+  verifiedAt        DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  payer             User           @relation(fields: [payerUserId], references: [id], onDelete: Cascade)
+  appointment       Appointment?
+
+  @@index([payerUserId, status])
+  @@index([purpose, purposeEntityId])
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  WHATSAPP
+  IN_APP
+  PUSH
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  READ
+}
+
+model Notification {
+  id          String              @id @default(cuid())
+  userId      String
+  channel     NotificationChannel
+  templateKey String
+  payload     Json
+  status      NotificationStatus  @default(QUEUED)
+  providerRef String?
+  error       String?
+  sentAt      DateTime?
+  readAt      DateTime?
+  createdAt   DateTime            @default(now())
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

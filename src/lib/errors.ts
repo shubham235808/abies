@@ -42,6 +42,12 @@ export class ConflictError extends AppError {
   }
 }
 
+export class ServiceUnavailableError extends AppError {
+  constructor(message: string) {
+    super(message, 503);
+  }
+}
+
 export function errorResponse(error: unknown): Response {
   if (error instanceof AppError) {
     return Response.json({ error: error.message }, { status: error.statusCode });

@@ -28,6 +28,26 @@ const envSchema = z.object({
   ALLOW_DOCTOR_SELF_ONBOARDING: z.coerce.boolean().default(true),
   APP_BASE_URL: z.string().url(),
   UPLOAD_MAX_BYTES: z.coerce.number().default(10 * 1024 * 1024),
+
+  // Payments (Razorpay). Left blank in dev/test until real (even test-mode)
+  // keys are supplied — src/lib/payments/razorpay.ts treats that as "not
+  // configured" and the booking flow surfaces that honestly rather than
+  // faking a payment.
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+
+  // Notification adapters, one provider name per channel. 'mock' is the
+  // only implemented provider today (logs to console — src/lib/notifications)
+  // and is hard-disabled in production, same rule as OTP_DEV_CODE above:
+  // no channel silently pretends to deliver in prod without a real
+  // provider wired up.
+  SMS_PROVIDER: z.string().default('mock'),
+  SMS_API_KEY: z.string().optional(),
+  EMAIL_PROVIDER: z.string().default('mock'),
+  EMAIL_API_KEY: z.string().optional(),
+  WHATSAPP_PROVIDER: z.string().default('mock'),
+  WHATSAPP_API_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

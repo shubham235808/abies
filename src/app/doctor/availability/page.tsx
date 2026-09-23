@@ -13,7 +13,11 @@ export default async function DoctorAvailabilityPage() {
         Weekly recurring slots. Only modes enabled on your profile are offered here.
       </p>
       <div className="mt-6">
-        <AvailabilityManager initial={profile.availability} enabledModes={profile.consultationModes} />
+        <AvailabilityManager
+          initial={profile.availability}
+          enabledModes={profile.consultationModes}
+          clinics={profile.clinics.filter((c) => c.active)}
+        />
       </div>
     </div>
   );

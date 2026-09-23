@@ -1,8 +1,9 @@
 // Public homepage. Per the build brief's No-Fake-Functionality policy: no
 // call-to-action here pretends to do something the backend doesn't yet
-// support. Sign-in and doctor discovery are real as of Phase 1/3 — their
-// CTAs link to working pages; appointment booking still doesn't exist, so
-// that stays an honest "coming soon" rather than a dead button.
+// support. Sign-in, doctor discovery and appointment booking (Phase 4) are
+// all real — their CTAs link to working pages. Booking itself still
+// requires Razorpay keys to be configured in this environment; that's
+// surfaced honestly on the doctor profile page, not hidden here.
 import Link from 'next/link';
 
 type Accent = 'purple' | 'magenta' | 'blue' | 'orange';
@@ -114,10 +115,6 @@ export default function HomePage() {
             >
               Sign in
             </Link>
-            <div className="inline-flex items-center gap-2 rounded-full border border-brand-neutral-200 bg-white px-3 py-1.5 text-xs text-brand-neutral-500">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-orange-500" />
-              Appointment booking — coming soon
-            </div>
           </div>
         </div>
       </div>
