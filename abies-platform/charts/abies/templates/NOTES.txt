@@ -1,6 +1,0 @@
-Abies chart rendered for release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
-Website: {{ .Values.app.origin }}
-Existing credentials secret: {{ .Values.existingSecret }}
-Persistent claims are retained on uninstall.
-For a direct Helm release, run: helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
-ArgoCD renders Helm templates and manages resources; it does not create a Helm release.

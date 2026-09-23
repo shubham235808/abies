@@ -1,6 +1,0 @@
-apiVersion: v2
-name: git-source
-description: Read-only on-server Git source for Abies ArgoCD
-type: application
-version: 1.0.0
-appVersion: "1.0.0"

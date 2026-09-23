@@ -1,9 +1,0 @@
-**/node_modules/
-**/.next/
-**/package-lock.json
-test-results/
-*.tsbuildinfo
-
-.runtime/
-**/*.tsbuildinfo
-test-results/

@@ -1,7 +1,0 @@
-apiVersion: v2
-name: abies
-description: Abies Ayurveda care platform with PostgreSQL and Redis
-type: application
-version: 1.0.0
-appVersion: "1.0.0"
-kubeVersion: ">=1.30.0-0"
