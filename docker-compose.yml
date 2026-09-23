@@ -79,7 +79,11 @@ services:
       minio:
         condition: service_healthy
     ports:
-      - "127.0.0.1:3000:3000"
+      # Bound to all interfaces (not just localhost) for LAN access during
+      # development review. docker-compose.prod.yml strips this back to
+      # internal-only (see its !reset ports note) — only Nginx is ever
+      # public in the real deployment target.
+      - "3000:3000"
     networks: [abies]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
