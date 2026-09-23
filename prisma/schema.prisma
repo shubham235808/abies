@@ -1,0 +1,368 @@
+// Phase 0 schema: Identity & Access, Patients, Doctor/Provider Network.
+// See docs/DOMAIN-MODEL.md for the full target model and docs/DECISIONS.md
+// (D3) for which fields are ported verbatim from the validated Sprint 3
+// baseline vs. net-new. Later phases add Appointments, Care Plans,
+// Diagnostics, Medicines, Panchakarma, Payments, Support, etc. in their own
+// reviewable migrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7: connection URL lives in prisma.config.ts (CLI/migrate) and is
+// passed to a driver adapter at PrismaClient construction time (src/lib/db.ts)
+// — no `url` here. See https://pris.ly/d/prisma7-client-config.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Identity & Access
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  PATIENT
+  DOCTOR
+  ADMIN
+  LAB
+  PHARMACY
+  PANCHAKARMA_CENTRE
+  CUSTOMER_SUPPORT
+  TECH_SUPPORT
+  SALES
+  CARE_COORDINATOR
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+  DISABLED
+}
+
+enum StaffDepartment {
+  CUSTOMER_SUPPORT
+  TECH_SUPPORT
+  SALES
+  CARE_COORDINATION
+  ADMIN_OPERATIONS
+}
+
+model User {
+  id             String          @id @default(cuid())
+  mobile         String          @unique
+  email          String?         @unique
+  role           UserRole        @default(PATIENT)
+  status         UserStatus      @default(ACTIVE)
+  mfaEnabled     Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  patientProfile PatientProfile?
+  doctorProfile  DoctorProfile?
+  staffProfile   StaffProfile?
+  sessions       Session[]
+  consentRecords ConsentRecord[]
+  auditEvents    AuditEvent[]
+
+  @@index([role, status])
+}
+
+// Non-patient/non-doctor operational roles (LAB, PHARMACY,
+// PANCHAKARMA_CENTRE, CUSTOMER_SUPPORT, TECH_SUPPORT, SALES,
+// CARE_COORDINATOR). Partner-facing roles link to their organization once
+// the corresponding module (diagnostics/medicines/panchakarma) is built;
+// organizationId stays generic (string) here so this table doesn't need to
+// change shape when those modules land.
+model StaffProfile {
+  id             String           @id @default(cuid())
+  userId         String           @unique
+  department     StaffDepartment?
+  organizationId String?
+  title          String?
+  active         Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([department])
+  @@index([organizationId])
+}
+
+model OtpChallenge {
+  id          String    @id @default(cuid())
+  mobile      String
+  role        UserRole
+  codeHash    String
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([mobile, createdAt])
+}
+
+// Opaque cookie session. The cookie itself carries only a random token;
+// this row is looked up by its hash on every request (see src/server/session.ts).
+// mfaVerified gates privileged admin actions per docs/TARGET-ARCHITECTURE.md.
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  tokenHash        String    @unique
+  mfaVerified      Boolean   @default(false)
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  ip               String?
+  userAgent        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+}
+
+model ConsentArtifact {
+  id        String          @id @default(cuid())
+  key       String
+  version   String
+  title     String
+  bodyUrl   String?
+  required  Boolean         @default(true)
+  active    Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  records   ConsentRecord[]
+
+  @@unique([key, version])
+}
+
+model ConsentRecord {
+  id          String          @id @default(cuid())
+  userId      String
+  artifactId  String
+  acceptedAt  DateTime        @default(now())
+  withdrawnAt DateTime?
+  ip          String?
+  userAgent   String?
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artifact    ConsentArtifact @relation(fields: [artifactId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, artifactId])
+  @@index([userId])
+}
+
+model AuditEvent {
+  id           String   @id @default(cuid())
+  userId       String?
+  sessionId    String?
+  eventType    String
+  resourceType String?
+  resourceId   String?
+  action       String
+  method       String?
+  path         String?
+  statusCode   Int?
+  ip           String?
+  userAgent    String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([eventType, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Patients
+// ---------------------------------------------------------------------------
+
+enum FamilyRelation {
+  PARENT
+  SPOUSE
+  CHILD
+  DEPENDENT
+  OTHER
+}
+
+model PatientProfile {
+  id                String         @id @default(cuid())
+  userId            String         @unique
+  firstName         String?
+  lastName          String?
+  dateOfBirth       DateTime?
+  gender            String?
+  phone             String?
+  address           String?
+  city              String?
+  state             String?
+  pin               String?
+  preferredLanguage String         @default("English")
+  emergencyContact  String?
+  allergies         String[]       @default([])
+  medicalHistory    String?
+  consentPreferences Json?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyMembers     FamilyMember[]
+}
+
+model FamilyMember {
+  id               String         @id @default(cuid())
+  patientProfileId String
+  name             String
+  relation         FamilyRelation
+  dateOfBirth      DateTime?
+  gender           String?
+  mobile           String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  patientProfile   PatientProfile @relation(fields: [patientProfileId], references: [id], onDelete: Cascade)
+
+  @@index([patientProfileId])
+}
+
+// ---------------------------------------------------------------------------
+// Doctor / Provider Network
+// ---------------------------------------------------------------------------
+
+enum DoctorVerificationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum DoctorDocumentType {
+  REGISTRATION_CERTIFICATE
+  DEGREE_CERTIFICATE
+  ID_PROOF
+  PROFILE_PHOTO
+  OTHER
+}
+
+enum DoctorDocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum ConsultationMode {
+  VIDEO
+  CLINIC
+}
+
+model DoctorProfile {
+  id                     String                     @id @default(cuid())
+  userId                 String                     @unique
+  slug                   String                     @unique
+  title                  String                     @default("Dr.")
+  firstName              String?
+  lastName               String?
+  gender                 String?
+  bio                    String?
+  registrationCouncil    String?
+  registrationNumber     String?
+  registrationYear       Int?
+  primaryQualification   String?
+  highestQualification   String?
+  graduationInstitution  String?
+  graduationYear         Int?
+  yearsExperience        Int?
+  specialties            String[]                   @default([])
+  languages              String[]                   @default([])
+  consultationModes      ConsultationMode[]         @default([VIDEO])
+  videoFee               Int?
+  clinicFee              Int?
+  rating                 Float                      @default(0)
+  reviewCount            Int                        @default(0)
+  isAcceptingNewPatients Boolean                    @default(true)
+  verificationStatus     DoctorVerificationStatus   @default(DRAFT)
+  isDiscoverable         Boolean                    @default(false)
+  submittedAt            DateTime?
+  reviewedAt             DateTime?
+  reviewedByUserId       String?
+  rejectionReason        String?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+  user                   User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents              DoctorDocument[]
+  clinics                DoctorClinic[]
+  availability           DoctorAvailability[]
+  verificationActions    DoctorVerificationAction[]
+
+  @@index([verificationStatus, isDiscoverable])
+  @@index([lastName, firstName])
+  @@unique([registrationCouncil, registrationNumber])
+}
+
+model DoctorDocument {
+  id              String               @id @default(cuid())
+  doctorProfileId String
+  type            DoctorDocumentType
+  status          DoctorDocumentStatus @default(PENDING)
+  originalName    String
+  storedName      String
+  mimeType        String
+  sizeBytes       Int
+  storagePath     String
+  reviewNote      String?
+  verifiedAt      DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  doctorProfile   DoctorProfile        @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+
+  @@index([doctorProfileId, type])
+}
+
+model DoctorClinic {
+  id           String        @id @default(cuid())
+  doctorProfileId String
+  name         String
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String
+  postalCode   String
+  phone        String?
+  latitude     Float?
+  longitude    Float?
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+
+  @@index([doctorProfileId, active])
+  @@index([city, state])
+}
+
+model DoctorAvailability {
+  id              String           @id @default(cuid())
+  doctorProfileId String
+  dayOfWeek       Int
+  startTime       String
+  endTime         String
+  slotMinutes     Int              @default(30)
+  mode            ConsultationMode
+  active          Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  doctorProfile   DoctorProfile    @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+
+  @@index([doctorProfileId, dayOfWeek, active])
+}
+
+model DoctorVerificationAction {
+  id              String                     @id @default(cuid())
+  doctorProfileId String
+  adminUserId     String
+  fromStatus      DoctorVerificationStatus?
+  toStatus        DoctorVerificationStatus
+  notes           String?
+  createdAt       DateTime                   @default(now())
+  doctorProfile   DoctorProfile              @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+
+  @@index([doctorProfileId, createdAt])
+  @@index([adminUserId, createdAt])
+}

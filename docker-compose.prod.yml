@@ -1,0 +1,32 @@
+# Production overlay for the Ubuntu ESXi VM target (docs/TARGET-ARCHITECTURE.md).
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Differences from docker-compose.yml:
+#   - postgres/redis/minio/app do NOT publish ports to the host; only Nginx
+#     (run on the host, see infra/nginx/abies.conf) reaches the app, over
+#     the internal Docker network.
+#   - restart policy is "always" for unattended recovery after VM reboot.
+#
+# Compose merges `ports:` across files by concatenation, not replacement, so
+# listing an empty `ports: !reset []` here is required to actually remove
+# docker-compose.yml's dev-only host bindings (Compose Specification's
+# !reset merge tag, supported by the Compose CLI version pinned in
+# docs/TARGET-ARCHITECTURE.md). This is finalized alongside the real
+# deployment script in Phase 12 — treat this file as a stub until then.
+
+services:
+  postgres:
+    restart: always
+    ports: !reset []
+
+  redis:
+    restart: always
+    ports: !reset []
+
+  minio:
+    restart: always
+    ports: !reset []
+
+  app:
+    restart: always
+    ports: !reset []

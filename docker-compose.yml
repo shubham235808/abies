@@ -1,0 +1,97 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: abies-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-abies_ayurveda}
+      POSTGRES_USER: ${POSTGRES_USER:-abies}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - abies_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-abies} -d ${POSTGRES_DB:-abies_ayurveda}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [abies]
+    # Bound to localhost only, for running the Next.js app directly on the
+    # host during development. docker-compose.prod.yml has no equivalent —
+    # in production only the internal Docker network reaches Postgres.
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: abies-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - abies_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [abies]
+    # See postgres's ports note above — localhost-only, dev convenience.
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: abies-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY_ID:-abies-dev}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_ACCESS_KEY:?set STORAGE_SECRET_ACCESS_KEY in .env}
+    volumes:
+      - abies_miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [abies]
+    # Console (9001) and API (9000) stay on the internal network in prod;
+    # exposed to localhost only here for local development convenience.
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: abies-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-abies}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-abies_ayurveda}?schema=public
+      REDIS_URL: redis://redis:6379
+      STORAGE_ENDPOINT: http://minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [abies]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+networks:
+  abies:
+    driver: bridge
+
+volumes:
+  abies_pgdata:
+  abies_redisdata:
+  abies_miniodata:

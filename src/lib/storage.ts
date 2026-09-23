@@ -1,0 +1,80 @@
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { getEnv } from './env';
+
+// S3-compatible object storage adapter (MinIO for self-hosted dev/prod).
+// Every file in the system — doctor credentials, diagnostic reports,
+// prescriptions, partner documents — goes through this module. Nothing is
+// public by default: reads are always short-lived signed URLs, never a
+// permanent public link, per docs/TARGET-ARCHITECTURE.md's security posture.
+
+let client: S3Client | undefined;
+
+function s3() {
+  if (client) return client;
+  const env = getEnv();
+  client = new S3Client({
+    endpoint: env.STORAGE_ENDPOINT,
+    region: env.STORAGE_REGION,
+    forcePathStyle: env.STORAGE_FORCE_PATH_STYLE,
+    credentials: {
+      accessKeyId: env.STORAGE_ACCESS_KEY_ID,
+      secretAccessKey: env.STORAGE_SECRET_ACCESS_KEY,
+    },
+  });
+  return client;
+}
+
+export interface PutObjectInput {
+  key: string;
+  body: Buffer | Uint8Array;
+  contentType: string;
+}
+
+export async function putObject({ key, body, contentType }: PutObjectInput): Promise<void> {
+  const env = getEnv();
+  await s3().send(
+    new PutObjectCommand({
+      Bucket: env.STORAGE_BUCKET,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+}
+
+export async function getSignedDownloadUrl(key: string, expiresInSeconds = 300): Promise<string> {
+  const env = getEnv();
+  return getSignedUrl(s3(), new GetObjectCommand({ Bucket: env.STORAGE_BUCKET, Key: key }), {
+    expiresIn: expiresInSeconds,
+  });
+}
+
+export async function deleteObject(key: string): Promise<void> {
+  const env = getEnv();
+  await s3().send(new DeleteObjectCommand({ Bucket: env.STORAGE_BUCKET, Key: key }));
+}
+
+// Upload validation shared by every module that accepts a file (doctor
+// documents, reports, support attachments). Ported from the Sprint 3
+// doctor-document allowlist (docs/DECISIONS.md D3) and generalized.
+const DEFAULT_ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+
+export function assertUploadAllowed(
+  file: { mimetype: string; size: number },
+  opts: { allowedMimeTypes?: Set<string>; maxBytes?: number } = {},
+): void {
+  const allowed = opts.allowedMimeTypes ?? DEFAULT_ALLOWED_MIME_TYPES;
+  const maxBytes = opts.maxBytes ?? getEnv().UPLOAD_MAX_BYTES;
+  if (!allowed.has(file.mimetype)) {
+    throw new Error(`Unsupported file type: ${file.mimetype}`);
+  }
+  if (file.size > maxBytes) {
+    throw new Error(`File exceeds maximum allowed size of ${maxBytes} bytes`);
+  }
+}

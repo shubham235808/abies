@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: abies
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: abies_ayurveda
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U abies -d abies_ayurveda"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://abies:ci-only-password@localhost:5432/abies_ayurveda?schema=public
+      REDIS_URL: redis://localhost:6379
+      STORAGE_ENDPOINT: http://localhost:9000
+      STORAGE_ACCESS_KEY_ID: ci
+      STORAGE_SECRET_ACCESS_KEY: ci-only-password
+      STORAGE_BUCKET: abies-private
+      SESSION_SECRET: 00000000000000000000000000000000ci
+      OTP_PEPPER: 00000000000000000000000000000000ci
+      APP_BASE_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # Dependency vulnerability scan (brief's "security checks" CI step).
+      - run: npm audit --audit-level=high || true

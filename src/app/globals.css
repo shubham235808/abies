@@ -1,0 +1,47 @@
+@import 'tailwindcss';
+
+/* ABIES brand palette (docs/TARGET-ARCHITECTURE.md — Design System): purple,
+   magenta, blue, orange, white, neutral grey. Trusted / medical / premium /
+   modern / calm / clean. Values below are placeholders derived from
+   ABIES_Agent_Knowledge_Pack/05_Brand/ABIES_logo.jpg and should be tuned
+   once final brand guidelines are confirmed. Tailwind v4 config lives in
+   CSS via @theme rather than a JS config file. */
+@theme {
+  --color-brand-purple-50: #f4f1fb;
+  --color-brand-purple-100: #e6ddf7;
+  --color-brand-purple-300: #b79aea;
+  --color-brand-purple-500: #6d3fc3;
+  --color-brand-purple-600: #582f9e;
+  --color-brand-purple-700: #43227a;
+  --color-brand-purple-900: #2a1650;
+
+  --color-brand-magenta-300: #e69ad0;
+  --color-brand-magenta-500: #c23e9f;
+  --color-brand-magenta-600: #9c2f80;
+
+  --color-brand-blue-300: #93c2f2;
+  --color-brand-blue-500: #2e6fd6;
+  --color-brand-blue-600: #2559ac;
+
+  --color-brand-orange-300: #f5be8a;
+  --color-brand-orange-500: #e88a2e;
+  --color-brand-orange-600: #c46e1c;
+
+  --color-brand-neutral-50: #f8f8f9;
+  --color-brand-neutral-100: #f0f0f2;
+  --color-brand-neutral-200: #e1e1e6;
+  --color-brand-neutral-400: #9a9aa6;
+  --color-brand-neutral-600: #5c5c68;
+  --color-brand-neutral-800: #2c2c34;
+  --color-brand-neutral-900: #18181d;
+
+  --radius-card: 0.75rem;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-brand-neutral-50 text-brand-neutral-900;
+}
