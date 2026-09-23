@@ -241,6 +241,33 @@ was purely the module layer:
   test flakiness observed across multiple runs — but worth a closer look if
   it ever correlates with an actual failure.
 
+## 2026-09-23 — Session 1 (continued): real brand colors, not placeholders
+
+User flagged that the homepage wasn't using the actual ABIES brand colors —
+the Phase 0 palette in `src/app/globals.css` was a guess, never actually
+sampled from `ABIES_Agent_Knowledge_Pack/05_Brand/ABIES_logo.jpg`.
+
+- Installed `python3-pil` (not present) and sampled the logo's dominant
+  colors directly via k-bucket clustering rather than guessing again:
+  magenta `#C4006E`, purple `#7A1783`, blue `#1F86C8`, orange `#F07800`.
+  Generated full 50–900 tint/shade scales by mixing each toward white/
+  near-black (not HSL lightness-push, which turned the saturated magenta/
+  purple muddy) — replaced the placeholder palette in `globals.css`.
+- Cropped a clean, tightly-bounded version of just the mark (not the full
+  lockup) from the source logo for `src/app/icon.png` (Next's auto-favicon
+  convention) and `public/abies-mark.png` (header use).
+- Added `src/components/layouts/site-header.tsx` (logo + wordmark, used
+  from `layout.tsx` — the first shared layout component, matching
+  `docs/TARGET-ARCHITECTURE.md`'s `components/layouts/` convention) and
+  redesigned the homepage to actually use the brand colors meaningfully:
+  gradient hero background, gradient-text accent on the headline, and four
+  pillar cards each carrying one of the mark's four colors on a small icon
+  chip — mirroring the logo's own purple/magenta/blue/orange swirl
+  structure instead of being arbitrary.
+- Verified with a real Playwright screenshot at both desktop (1280px) and
+  mobile (390px) viewports against the rebuilt Docker container — not just
+  "the code should render this."
+
 ## Next up
 
 Phase 4: appointment scheduling (slot locking to prevent double-booking),
