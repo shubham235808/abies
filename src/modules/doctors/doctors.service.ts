@@ -34,12 +34,45 @@ function slugPart(value?: string | null): string {
     .slice(0, 48);
 }
 
+function slugBase(firstName?: string | null, lastName?: string | null, userId?: string): string {
+  return [slugPart(firstName), slugPart(lastName)].filter(Boolean).join('-') || `doctor-${String(userId || '').slice(-6)}`;
+}
+
+// A check-then-act race: two doctors saving the same name at the same
+// moment can both see "asha-rao" as free and both try to claim it. The
+// findUnique loop here is just an optimization for the common case (a
+// clean, human-readable slug without a suffix); the actual safety comes
+// from the DB's unique constraint plus updateMe()'s retry loop below,
+// which falls back to a random suffix (uniqueSlugCandidate) on conflict
+// instead of re-running this same racy check.
 async function uniqueSlug(firstName?: string | null, lastName?: string | null, userId?: string): Promise<string> {
-  const base = [slugPart(firstName), slugPart(lastName)].filter(Boolean).join('-') || `doctor-${String(userId || '').slice(-6)}`;
+  const base = slugBase(firstName, lastName, userId);
   let slug = base;
   let n = 2;
   while (await prisma.doctorProfile.findUnique({ where: { slug } })) slug = `${base}-${n++}`;
   return slug;
+}
+
+function uniqueSlugCandidate(firstName?: string | null, lastName?: string | null, userId?: string): string {
+  return `${slugBase(firstName, lastName, userId)}-${randomUUID().slice(0, 6)}`;
+}
+
+// P2002's `meta` shape differs by Prisma engine. The classic query engine
+// reports `meta.target: string[]` (column names) — but this project uses
+// Prisma 7 driver adapters (docs/DECISIONS.md D7, @prisma/adapter-pg),
+// which instead wrap the raw pg error as
+// `meta.driverAdapterError.cause.constraint.index` (the constraint name,
+// e.g. "DoctorProfile_slug_key"). Checked both so this doesn't silently
+// stop working if the engine mode ever changes back.
+function isUniqueConstraintOn(error: unknown, field: string): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') return false;
+  const meta = error.meta as Record<string, unknown> | undefined;
+  const target = meta?.target;
+  if (Array.isArray(target) && target.includes(field)) return true;
+  if (typeof target === 'string' && target.toLowerCase().includes(field.toLowerCase())) return true;
+  const driverAdapterError = meta?.driverAdapterError as { cause?: { constraint?: { index?: string } } } | undefined;
+  const index = driverAdapterError?.cause?.constraint?.index;
+  return typeof index === 'string' && index.toLowerCase().includes(field.toLowerCase());
 }
 
 function privateInclude() {
@@ -109,9 +142,13 @@ export async function updateMe(userId: string, dto: UpdateProfileInput, auditCtx
     );
   }
 
+  const wantsSlugUpdate = (dto.firstName !== undefined || dto.lastName !== undefined) && profile.slug.startsWith('doctor-');
+  const firstName = dto.firstName ?? profile.firstName;
+  const lastName = dto.lastName ?? profile.lastName;
+
   const data: Prisma.DoctorProfileUpdateInput = { ...dto };
-  if ((dto.firstName !== undefined || dto.lastName !== undefined) && profile.slug.startsWith('doctor-')) {
-    data.slug = await uniqueSlug(dto.firstName ?? profile.firstName, dto.lastName ?? profile.lastName, userId);
+  if (wantsSlugUpdate) {
+    data.slug = await uniqueSlug(firstName, lastName, userId);
   }
   // Re-editing a rejected application resets it to draft (docs/DECISIONS.md D3).
   if (profile.verificationStatus === DoctorVerificationStatus.REJECTED) {
@@ -121,22 +158,34 @@ export async function updateMe(userId: string, dto: UpdateProfileInput, auditCtx
     data.reviewedByUserId = null;
   }
 
-  try {
-    const updated = await prisma.doctorProfile.update({ where: { id: profile.id }, data, include: privateInclude() });
-    await recordAuditEvent(auditCtx, {
-      eventType: 'DOCTOR_PROFILE',
-      action: 'UPDATE',
-      resourceType: 'DoctorProfile',
-      resourceId: profile.id,
-      metadata: { fields: Object.keys(dto) },
-    });
-    return { profile: updated, completion: completion(updated) };
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      throw new BadRequestError('This practitioner registration is already associated with another ABIES account');
+  const maxAttempts = 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const updated = await prisma.doctorProfile.update({ where: { id: profile.id }, data, include: privateInclude() });
+      await recordAuditEvent(auditCtx, {
+        eventType: 'DOCTOR_PROFILE',
+        action: 'UPDATE',
+        resourceType: 'DoctorProfile',
+        resourceId: profile.id,
+        metadata: { fields: Object.keys(dto) },
+      });
+      return { profile: updated, completion: completion(updated) };
+    } catch (error) {
+      // Two profiles saving the same name at the same moment can both pass
+      // uniqueSlug()'s check-then-act pre-check (see its comment) — that's
+      // a real race, not corruption, so retry with a fresh random-suffixed
+      // candidate instead of surfacing a confusing error to whoever loses it.
+      if (wantsSlugUpdate && isUniqueConstraintOn(error, 'slug') && attempt < maxAttempts) {
+        data.slug = uniqueSlugCandidate(firstName, lastName, userId);
+        continue;
+      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new BadRequestError('This practitioner registration is already associated with another ABIES account');
+      }
+      throw error;
     }
-    throw error;
   }
+  throw new Error('Could not allocate a unique profile slug after multiple attempts');
 }
 
 export interface UploadedFile {

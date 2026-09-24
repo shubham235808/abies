@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { resolveJoinInfo } from '@/lib/video';
+import { listForDoctorPatientPair } from '@/modules/care-plans/care-plans.service';
 import { getConsultation, listActiveAssessmentFields, recordJoin } from '@/modules/consultations/consultations.service';
 import { NotFoundError } from '@/lib/errors';
 import { requireSessionOrRedirect } from '@/server/current-user';
@@ -21,6 +22,7 @@ export default async function DoctorConsultationPage({ params }: { params: Promi
     await recordJoin(session.userId, session.user.role, id);
   }
   const fields = await listActiveAssessmentFields();
+  const carePlans = await listForDoctorPatientPair(session.userId, consultation.patientUserId);
 
   const patientName =
     [consultation.patientUser.patientProfile?.firstName, consultation.patientUser.patientProfile?.lastName]
@@ -78,6 +80,8 @@ export default async function DoctorConsultationPage({ params }: { params: Promi
       }}
       assessmentFields={fields.map((f) => ({ key: f.key, label: f.label, fieldType: f.fieldType, options: f.options }))}
       videoJoinMessage={consultation.appointment.mode === 'VIDEO' ? resolveJoinInfo().message : null}
+      patientUserId={consultation.patientUserId}
+      carePlans={carePlans.map((p) => ({ id: p.id, status: p.status, summary: p.summary, createdAt: p.createdAt.toISOString() }))}
     />
   );
 }

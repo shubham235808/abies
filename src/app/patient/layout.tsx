@@ -3,6 +3,7 @@ import { PortalShell } from '@/components/layouts/portal-shell';
 const NAV = [
   { href: '/patient', label: 'Dashboard' },
   { href: '/patient/appointments', label: 'Appointments' },
+  { href: '/patient/care-plans', label: 'Care Plans' },
   { href: '/patient/profile', label: 'Profile' },
   { href: '/patient/family', label: 'Family' },
 ];

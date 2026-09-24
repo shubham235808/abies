@@ -61,7 +61,7 @@ async function approvedVideoDoctor(feeRupees = 500) {
       firstName: 'Asha',
       lastName: 'Rao',
       registrationCouncil: 'Test Council',
-      registrationNumber: `REG-${randomInt(100000, 999999)}`,
+      registrationNumber: `REG-${randomInt(100000000, 999999999)}`,
       primaryQualification: 'BAMS',
       yearsExperience: 8,
       specialties: ['General'],

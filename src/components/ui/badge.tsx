@@ -73,3 +73,28 @@ const PRESCRIPTION_STATUS_TONE: Record<string, Tone> = {
 export function PrescriptionStatusBadge({ status }: { status: string }) {
   return <Badge tone={PRESCRIPTION_STATUS_TONE[status] ?? 'neutral'}>{status}</Badge>;
 }
+
+const CARE_PLAN_STATUS_TONE: Record<string, Tone> = {
+  DRAFT: 'neutral',
+  ACTIVE: 'success',
+  PAUSED: 'orange',
+  COMPLETED: 'purple',
+  CANCELLED: 'danger',
+  SUPERSEDED: 'danger',
+};
+
+export function CarePlanStatusBadge({ status }: { status: string }) {
+  return <Badge tone={CARE_PLAN_STATUS_TONE[status] ?? 'neutral'}>{status}</Badge>;
+}
+
+const CARE_PLAN_ITEM_STATUS_TONE: Record<string, Tone> = {
+  PLANNED: 'neutral',
+  ACTIVE: 'blue',
+  COMPLETED: 'success',
+  MISSED: 'orange',
+  CANCELLED: 'danger',
+};
+
+export function CarePlanItemStatusBadge({ status }: { status: string }) {
+  return <Badge tone={CARE_PLAN_ITEM_STATUS_TONE[status] ?? 'neutral'}>{status}</Badge>;
+}

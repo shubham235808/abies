@@ -59,7 +59,7 @@ async function completeAndSubmitDoctor(userId: string) {
       firstName: 'Meera',
       lastName: 'Iyer',
       registrationCouncil: 'Test Council',
-      registrationNumber: `REG-${randomInt(100000, 999999)}`,
+      registrationNumber: `REG-${randomInt(100000000, 999999999)}`,
       primaryQualification: 'BAMS',
       yearsExperience: 10,
       specialties: ['Digestive Health'],

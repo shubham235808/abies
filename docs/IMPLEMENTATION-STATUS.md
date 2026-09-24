@@ -606,13 +606,93 @@ curl request/verify/me sequence against the rebuilt container: `devOtp`
 now returned, cookie set without `Secure`, and the follow-up authenticated
 request succeeds.
 
+## Phase 6 — Care Plan Engine
+
+Net-new per `docs/DOMAIN-MODEL.md` §6 (one migration,
+`phase6_care_plan_engine`): `CarePlan`, `CarePlanItem`, plus
+`DoctorAvailability`-style enums for status/type/related-entity.
+
+- **State machine, actually enforced**: `DRAFT → ACTIVE → {PAUSED ⇄ ACTIVE,
+  COMPLETED, CANCELLED}`, plus `ACTIVE → SUPERSEDED`; terminal states have
+  no way out. The domain doc lists the six statuses but not a transition
+  diagram, so `ALLOWED_TRANSITIONS` in `care-plans.service.ts` is the
+  actual state machine — covered by an integration test that confirms
+  `DRAFT` can't jump straight to `COMPLETED` and a `COMPLETED` plan can't
+  reopen.
+- **Clinical content vs. patient fulfilment stay genuinely separate**
+  (the brief's explicit rule): `CarePlanItem.status` can only be written
+  by the owning doctor (`updateCarePlanItem`); a patient's "I did this" can
+  only ever touch a distinct `patientMarkedDoneAt` timestamp
+  (`acknowledgeCarePlanItem`), which never appears in any clinician-facing
+  write path. An integration test marks an item done as the patient, then
+  clinically completes the same item as the doctor, and asserts neither
+  write touched the other's field.
+- **A plan requires a genuine doctor-patient relationship**: `createCarePlan`
+  either validates the given `consultationId` belongs to both parties, or
+  (when a plan originates outside a single consultation, which the domain
+  model explicitly allows) requires that a consultation between this
+  doctor and patient exists at all — a doctor can't spin up a plan for a
+  stranger. Verified by a test that asserts a `ForbiddenError` for a
+  patient with no consultation history.
+- **DRAFT plans are the doctor's own workspace**, same pattern as an
+  unfinalized `ClinicalNote` — invisible to `getCarePlan` for a patient
+  caller until the doctor activates it.
+- **UI**: entry point is a "+ New care plan" form directly on the doctor's
+  consultation workspace (prefilled with that consultation's patient),
+  since that's where the doctor-patient relationship is actually
+  established; `/doctor/care-plans` and `/patient/care-plans` list pages
+  exist separately because — unlike Consultations in Phase 5 — a plan
+  isn't 1:1 with anything already navigable (it can span many visits, and
+  a doctor accumulates plans across many patients).
+- Integration tests (`tests/integration/care-plans.test.ts`, 7 cases):
+  relationship requirement, status machine (valid + invalid transitions +
+  cross-doctor ownership refusal), DRAFT visibility, and the clinical/
+  fulfilment separation both ways.
+
+### A real, pre-existing concurrency bug found while widening the test suite
+
+Adding a third test file that reuses the same fixed doctor name ("Asha
+Rao", already used by `appointments.test.ts` and now `consultations.test.ts`)
+made a latent race in `doctors.service.ts`'s `uniqueSlug()` fail reliably
+instead of by chance: it's a classic check-then-act (`findUnique` then
+`update`) — two profiles saving the same name at nearly the same moment
+can both see the candidate slug as free and both try to claim it. This is
+a real production bug, not just test flakiness (two doctors named "Priya
+Sharma" registering around the same time would hit it for real), so it's
+fixed in the actual service, not papered over in the tests:
+`updateMe` now retries with a fresh random-suffixed candidate
+(`uniqueSlugCandidate`) on a slug conflict specifically, up to 5 attempts,
+instead of surfacing a confusing "already associated" error to whoever
+loses the race.
+
+Finding the fix took an extra step: the first attempt at detecting "was
+this P2002 a slug conflict specifically" (checking `error.meta.target`)
+never matched, because this project's Prisma 7 driver-adapter setup
+(`@prisma/adapter-pg`, docs/DECISIONS.md D7) reports a completely
+different `meta` shape for unique-constraint errors than the classic query
+engine does — `meta.driverAdapterError.cause.constraint.index` (the
+Postgres constraint name) instead of `meta.target` (a column-name array).
+`isUniqueConstraintOn()` now checks both shapes. Confirmed fixed by
+running the full suite 8 times back-to-back with zero failures (it had
+been failing roughly half the time before).
+
+Verified: `tsc --noEmit`, `eslint .`, `vitest run` (41/41, stable across 8
+consecutive runs) all clean; `next build` locally (all new routes
+correctly `ƒ` dynamic); full Docker image rebuild; and a full Playwright
+walkthrough against `next dev` using the same bootstrapped-CONFIRMED-
+appointment fixture pattern as Phase 5 — doctor creates a plan from a
+consultation, adds an item, activates it (shares with patient); patient
+sees it and marks the item done; doctor sees the patient's acknowledgement
+without it touching the item's clinical status. All fixture data deleted
+afterward.
+
 ## Next up
 
-Phase 6: the Care Plan Engine (`docs/DOMAIN-MODEL.md` §6) — the central
-orchestration layer that ties a consultation's outcome to ongoing
-diagnostic/medicine/panchakarma/lifestyle items, now that there's a real
-consultation for a plan to originate from. Outstanding from earlier
-phases, still unresolved: real Ubuntu ESXi VM SSH details for Phase 12
-deployment, and real (even test-mode) Razorpay/SMS/email/WhatsApp/video
-credentials so the booking and consultation flows can be exercised fully
-live rather than stopping at honest "not configured" messages.
+Phase 7: Diagnostics (`docs/DOMAIN-MODEL.md` §7-8) — deliberately separate
+from the generic Reports library per the blueprint's explicit rule; the
+first phase to introduce a new external-facing role (LAB) and portal.
+Outstanding from earlier phases, still unresolved: real Ubuntu ESXi VM SSH
+details for Phase 12 deployment, and real (even test-mode) Razorpay/SMS/
+email/WhatsApp/video credentials so the booking and consultation flows can
+be exercised fully live rather than stopping at honest "not configured"
+messages.

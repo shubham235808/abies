@@ -68,6 +68,8 @@ model User {
   prescriptions  Prescription[]
   payments       Payment[]
   notifications  Notification[]
+  carePlans      CarePlan[]
+  carePlanItemsOwned CarePlanItem[]
 
   @@index([role, status])
 }
@@ -223,6 +225,7 @@ model FamilyMember {
   updatedAt        DateTime       @updatedAt
   patientProfile   PatientProfile @relation(fields: [patientProfileId], references: [id], onDelete: Cascade)
   appointments     Appointment[]
+  carePlans        CarePlan[]
 
   @@index([patientProfileId])
 }
@@ -301,6 +304,7 @@ model DoctorProfile {
   appointments           Appointment[]
   consultations          Consultation[]
   prescriptions          Prescription[]
+  carePlans              CarePlan[]
 
   @@index([verificationStatus, isDiscoverable])
   @@index([lastName, firstName])
@@ -580,6 +584,7 @@ model Consultation {
   videoSession            VideoSession?
   clinicalNote            ClinicalNote?
   prescriptions           Prescription[]
+  carePlans               CarePlan[]
 
   @@index([doctorProfileId, status])
   @@index([patientUserId, status])
@@ -692,4 +697,107 @@ model PrescriptionItem {
   prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
 
   @@index([prescriptionId])
+}
+
+// ---------------------------------------------------------------------------
+// Care Plan Engine — central orchestration layer
+// docs/DOMAIN-MODEL.md §6.
+// ---------------------------------------------------------------------------
+
+enum CarePlanStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+  SUPERSEDED
+}
+
+// consultationId is nullable — a plan may originate outside a single
+// consultation (docs/DOMAIN-MODEL.md §6) — but doctorProfileId (the
+// clinical owner) is always required: every plan has an accountable
+// clinician even when it wasn't authored during one specific visit.
+model CarePlan {
+  id                          String         @id @default(cuid())
+  patientUserId               String
+  careRecipientFamilyMemberId String?
+  doctorProfileId             String
+  consultationId              String?
+  startDate                   DateTime
+  targetDate                  DateTime?
+  status                      CarePlanStatus @default(DRAFT)
+  summary                     String?
+  goals                       String[]       @default([])
+  createdAt                   DateTime       @default(now())
+  updatedAt                   DateTime       @updatedAt
+  patientUser                 User           @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  careRecipientFamilyMember   FamilyMember?  @relation(fields: [careRecipientFamilyMemberId], references: [id], onDelete: SetNull)
+  doctorProfile               DoctorProfile  @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  consultation                Consultation?  @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  items                       CarePlanItem[]
+
+  @@index([patientUserId, status])
+  @@index([doctorProfileId, status])
+}
+
+enum CarePlanItemType {
+  CONSULTATION
+  DIAGNOSTIC
+  MEDICINE
+  PANCHAKARMA
+  LIFESTYLE
+  DIET
+  FOLLOW_UP
+  TASK
+  MILESTONE
+}
+
+// Clinician-owned (docs/DOMAIN-MODEL.md §6: only the plan's doctor, or an
+// explicit hand-off, may set this) — kept deliberately separate from
+// patientMarkedDoneAt below, which is the patient's own "I did this"
+// acknowledgement and never changes clinical status on its own.
+enum CarePlanItemStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  MISSED
+  CANCELLED
+}
+
+enum CarePlanRelatedEntityType {
+  CONSULTATION
+  DIAGNOSTIC_ORDER
+  MEDICINE_ORDER
+  PANCHAKARMA_BOOKING
+  TASK
+}
+
+// relatedEntityId has no DB-level FK — it's polymorphic across four
+// different tables depending on relatedEntityType (same pattern as
+// Payment.purposeEntityId). DIAGNOSTIC_ORDER/MEDICINE_ORDER/
+// PANCHAKARMA_BOOKING have no backing table yet (Phases 7-9) — those types
+// are schema-ready but unused until then; CONSULTATION and TASK (no
+// external entity — the item itself is the task) are usable today.
+model CarePlanItem {
+  id                  String                      @id @default(cuid())
+  carePlanId          String
+  type                CarePlanItemType
+  title               String
+  description         String?
+  status              CarePlanItemStatus          @default(PLANNED)
+  startDate           DateTime?
+  dueDate             DateTime?
+  completedDate       DateTime?
+  relatedEntityType   CarePlanRelatedEntityType?
+  relatedEntityId     String?
+  ownerUserId         String?
+  notes               String?
+  patientMarkedDoneAt DateTime?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  carePlan            CarePlan                    @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
+  owner               User?                       @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+
+  @@index([carePlanId])
+  @@index([ownerUserId])
 }

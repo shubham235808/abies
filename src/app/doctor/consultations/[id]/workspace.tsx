@@ -1,15 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import { Alert } from '@/components/ui/alert';
-import { ConsultationStatusBadge, PrescriptionStatusBadge } from '@/components/ui/badge';
+import { CarePlanStatusBadge, ConsultationStatusBadge, PrescriptionStatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api-client';
+import { createCarePlanSchema } from '@/modules/care-plans/care-plans.schemas';
 import { saveClinicalNoteSchema, updateConsultationDetailsSchema } from '@/modules/consultations/consultations.schemas';
 import { PrescriptionEditor, type PrescriptionResult } from './prescription-editor';
 
@@ -40,14 +42,20 @@ type ConsultationDetail = {
 
 const EDITABLE_STATUSES = new Set(['SCHEDULED', 'IN_PROGRESS']);
 
+type CarePlanSummary = { id: string; status: string; summary: string | null; createdAt: string };
+
 export function ConsultationWorkspace({
   consultation: initial,
   assessmentFields,
   videoJoinMessage,
+  patientUserId,
+  carePlans: initialCarePlans,
 }: {
   consultation: ConsultationDetail;
   assessmentFields: AssessmentField[];
   videoJoinMessage: string | null;
+  patientUserId: string;
+  carePlans: CarePlanSummary[];
 }) {
   const [consultation, setConsultation] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +162,86 @@ export function ConsultationWorkspace({
           onChange={(prescriptions) => setConsultation((prev) => ({ ...prev, prescriptions }))}
         />
       </Card>
+
+      <Card className="mt-6">
+        <h2 className="font-semibold text-brand-neutral-900">Care plans</h2>
+        <CarePlansSection consultationId={consultation.id} patientUserId={patientUserId} initial={initialCarePlans} />
+      </Card>
+    </div>
+  );
+}
+
+function CarePlansSection({
+  consultationId,
+  patientUserId,
+  initial,
+}: {
+  consultationId: string;
+  patientUserId: string;
+  initial: CarePlanSummary[];
+}) {
+  const [plans, setPlans] = useState(initial);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    formState: { isSubmitting },
+  } = useForm<z.infer<typeof createCarePlanSchema>>({
+    resolver: zodResolver(createCarePlanSchema),
+    defaultValues: { patientUserId, consultationId, startDate: new Date().toISOString().slice(0, 10) },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    setError(null);
+    try {
+      const { carePlan } = await api.post<{ carePlan: CarePlanSummary }>('/api/care-plans', {
+        ...values,
+        patientUserId,
+        consultationId,
+      });
+      setPlans((prev) => [carePlan, ...prev]);
+      setCreating(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not create a care plan.');
+    }
+  });
+
+  return (
+    <div className="mt-3 space-y-3">
+      {error && <Alert tone="error">{error}</Alert>}
+      {plans.map((p) => (
+        <Link key={p.id} href={`/doctor/care-plans/${p.id}`} className="flex items-center justify-between rounded-card border border-brand-neutral-200 p-3 hover:border-brand-purple-300">
+          <span className="text-sm text-brand-neutral-700">{p.summary || 'Untitled care plan'}</span>
+          <CarePlanStatusBadge status={p.status} />
+        </Link>
+      ))}
+      {plans.length === 0 && !creating && <p className="text-sm text-brand-neutral-500">No care plans for this patient yet.</p>}
+
+      {creating ? (
+        <form onSubmit={onSubmit} className="space-y-3 rounded-card border border-brand-neutral-200 p-4">
+          <div>
+            <Label htmlFor="summary">Summary</Label>
+            <Textarea id="summary" rows={2} {...register('summary')} placeholder="e.g. 8-week digestive reset plan" />
+          </div>
+          <div className="max-w-xs">
+            <Label htmlFor="startDate">Start date</Label>
+            <Input id="startDate" type="date" {...register('startDate')} />
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={() => setCreating(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" loading={isSubmitting}>
+              Create draft
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <Button variant="secondary" size="sm" onClick={() => setCreating(true)}>
+          + New care plan
+        </Button>
+      )}
     </div>
   );
 }
