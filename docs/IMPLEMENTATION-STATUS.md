@@ -688,11 +688,99 @@ afterward.
 
 ## Next up
 
-Phase 7: Diagnostics (`docs/DOMAIN-MODEL.md` §7-8) — deliberately separate
-from the generic Reports library per the blueprint's explicit rule; the
-first phase to introduce a new external-facing role (LAB) and portal.
-Outstanding from earlier phases, still unresolved: real Ubuntu ESXi VM SSH
-details for Phase 12 deployment, and real (even test-mode) Razorpay/SMS/
-email/WhatsApp/video credentials so the booking and consultation flows can
-be exercised fully live rather than stopping at honest "not configured"
+## Phase 7 — Diagnostics, Reports, Lab portal
+
+Net-new per `docs/DOMAIN-MODEL.md` §7-8 (one migration,
+`phase7_diagnostics_and_reports`): `DiagnosticLab`, `DiagnosticTest`,
+`DiagnosticRecommendation`, `DiagnosticOrder`, `DiagnosticOrderItem`,
+`SampleCollection`, `DiagnosticReport`, and `Report` (the generic document
+library, §8 — deliberately a separate concept from diagnostic booking per
+the blueprint's explicit rule). First phase to add a new portal + role:
+**LAB**.
+
+**Scope decisions, made explicit rather than silently assumed:**
+- One `DiagnosticLab` per LAB-role `User` — the same 1:1 shape as
+  `DoctorProfile`. A real multi-staff-per-lab-org model would need its own
+  permissions layer; `StaffProfile.organizationId` is already reserved for
+  that per its Phase 0 comment, but building it out is out of scope here.
+- Lab verification mirrors the doctor flow's state machine but is lighter:
+  no per-document upload/review subsystem — a lab's license numbers are
+  identifiers an admin can verify externally, not scans needing individual
+  review.
+- No `DiagnosticPackage` yet — every order line item is a single test.
+  `testId`/`packageId` were already both nullable on recommendations and
+  order items in the original domain model specifically so this can land
+  without a schema change later.
+- Booking has no slot-locking (unlike appointments) — a lab isn't a single
+  practitioner with finite calendar capacity, so there's nothing to race
+  over; `scheduledAt` is just a plain patient-chosen time.
+- LAB self-onboarding required extending the same gate doctors use
+  (`ALLOW_DOCTOR_SELF_ONBOARDING` → generalized alongside a new
+  `ALLOW_LAB_SELF_ONBOARDING`) — and turned up a second copy of the same
+  role-check in `verifyOtp` that would have silently blocked LAB signups
+  even after the first fix; both are now consistent.
+
+**Recommendation → booking → fulfilment, exactly as designed:**
+`DiagnosticRecommendation` (doctor's clinical intent, `testId` optional)
+is distinct from `DiagnosticOrder` (the patient's actual paid booking) —
+a patient can also self-initiate a booking with no recommendation at all,
+per the blueprint's explicit allowance. Booking reuses the Razorpay
+adapter and Payment model from Phase 4 wholesale (`purpose:
+DIAGNOSTIC_ORDER`, already anticipated in the Phase 4 enum) — the shared
+webhook route now inspects `Payment.purpose` and dispatches to the right
+module's finalizer instead of assuming every payment is a consultation.
+
+### Two real bugs found via testing, not inspection
+
+1. **`DiagnosticOrder.recommendationId` was almost `@unique`** — caught
+   before it shipped, not after, by directly applying the lesson from
+   Phase 4's `Appointment.slotId` bug (documented above): a cancelled
+   order must not permanently block rebooking the same recommendation, so
+   it's a plain indexed FK with "at most one active order per
+   recommendation" enforced in the service layer instead.
+2. **A real integration test failure, not a test bug**: booking a second
+   order against an already-`BOOKED` recommendation raised "Recommendation
+   not found" instead of "already has an active order" — because the
+   existence lookup itself filtered on `status: 'RECOMMENDED'`, so a
+   `BOOKED` recommendation (which very much exists) looked identical to a
+   nonexistent one. Fixed by separating "does this recommendation exist"
+   from "is it in a bookable state" into two checks with distinct error
+   messages.
+3. **A real UI bug found only by driving the actual lab fulfilment flow in
+   a browser**: after releasing a diagnostic report, the lab's order page
+   kept showing the release form indefinitely instead of the "report
+   released" confirmation. Root cause: `OrderActions` held `status` and
+   `report` in local `useState`, and two of its three action handlers
+   called `router.refresh()` afterward expecting that to somehow flow new
+   values back into that local state — but a re-rendered Server Component
+   parent does not reset an already-mounted Client Component's `useState`
+   from new props. Fixed by dropping `router.refresh()` entirely from
+   this component and having every action set its local state directly
+   from its own response, consistent with how the other two handlers
+   (sample-collected, processing) already worked correctly.
+
+Verified: `tsc --noEmit`, `eslint .`, `vitest run` (51/51, stable across 3
+consecutive runs — was 41/41 before this phase) all clean; `next build`
+locally (all ~30 new routes correctly `ƒ` dynamic); full Docker image
+rebuild; and a full Playwright walkthrough against `next dev` covering
+every role in sequence — lab self-registration → profile → catalogue →
+submission, admin approval, doctor recommendation from a live
+consultation, the patient seeing that recommendation and hitting the
+honest "payments not configured" message on the public catalogue's
+booking widget, and (via the same bootstrapped-paid-order fixture pattern
+used in Phases 5/6, since there's still no real Razorpay account here) the
+full lab fulfilment sequence — collect → process → release a critical
+report — through to the patient seeing it in both Diagnostics and
+Reports. All fixture data deleted afterward.
+
+## Next up
+
+Phase 8: Medicines + pharmacy portal (`docs/DOMAIN-MODEL.md` §9,
+`docs/IMPLEMENTATION-PLAN.md` row 8) — the next Payment purpose already
+anticipated in the enum (`MEDICINE_ORDER`), and the second new
+partner-facing role/portal after LAB this phase. Outstanding from earlier
+phases, still unresolved: real Ubuntu ESXi VM SSH details for Phase 12
+deployment, and real (even test-mode) Razorpay/SMS/email/WhatsApp/video
+credentials so the booking, consultation, and diagnostics flows can be
+exercised fully live rather than stopping at honest "not configured"
 messages.

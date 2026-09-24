@@ -14,18 +14,20 @@ import { api, ApiError } from '@/lib/api-client';
 const ROLE_OPTIONS = [
   { value: 'PATIENT', label: 'Patient' },
   { value: 'DOCTOR', label: 'Doctor / Vaidya' },
+  { value: 'LAB', label: 'Diagnostic Lab' },
   { value: 'ADMIN', label: 'Administrator' },
 ] as const;
 
 const PORTAL_PATH: Record<string, string> = {
   PATIENT: '/patient',
   DOCTOR: '/doctor',
+  LAB: '/lab',
   ADMIN: '/admin',
 };
 
 const mobileStepSchema = z.object({
   mobile: z.string().min(10, 'Enter a 10-digit mobile number'),
-  role: z.enum(['PATIENT', 'DOCTOR', 'ADMIN']),
+  role: z.enum(['PATIENT', 'DOCTOR', 'LAB', 'ADMIN']),
 });
 type MobileStep = z.infer<typeof mobileStepSchema>;
 

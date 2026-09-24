@@ -59,6 +59,7 @@ model User {
   updatedAt      DateTime        @updatedAt
   patientProfile PatientProfile?
   doctorProfile  DoctorProfile?
+  diagnosticLab  DiagnosticLab?
   staffProfile   StaffProfile?
   sessions       Session[]
   consentRecords ConsentRecord[]
@@ -70,6 +71,9 @@ model User {
   notifications  Notification[]
   carePlans      CarePlan[]
   carePlanItemsOwned CarePlanItem[]
+  diagnosticRecommendations DiagnosticRecommendation[]
+  diagnosticOrders          DiagnosticOrder[]
+  reports                   Report[]
 
   @@index([role, status])
 }
@@ -305,6 +309,7 @@ model DoctorProfile {
   consultations          Consultation[]
   prescriptions          Prescription[]
   carePlans              CarePlan[]
+  diagnosticRecommendations DiagnosticRecommendation[]
 
   @@index([verificationStatus, isDiscoverable])
   @@index([lastName, firstName])
@@ -511,6 +516,7 @@ model Payment {
   updatedAt         DateTime       @updatedAt
   payer             User           @relation(fields: [payerUserId], references: [id], onDelete: Cascade)
   appointment       Appointment?
+  diagnosticOrder   DiagnosticOrder?
 
   @@index([payerUserId, status])
   @@index([purpose, purposeEntityId])
@@ -585,6 +591,7 @@ model Consultation {
   clinicalNote            ClinicalNote?
   prescriptions           Prescription[]
   carePlans               CarePlan[]
+  diagnosticRecommendations DiagnosticRecommendation[]
 
   @@index([doctorProfileId, status])
   @@index([patientUserId, status])
@@ -797,7 +804,220 @@ model CarePlanItem {
   updatedAt           DateTime                    @updatedAt
   carePlan            CarePlan                    @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
   owner               User?                       @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  diagnosticRecommendations DiagnosticRecommendation[]
 
   @@index([carePlanId])
   @@index([ownerUserId])
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostics — deliberately separate from Reports (docs/DOMAIN-MODEL.md §7,
+// explicit blueprint rule). One DiagnosticLab per LAB-role User, same 1:1
+// shape as DoctorProfile — a real multi-staff-per-lab-org model would need
+// its own onboarding/permissions layer (StaffProfile.organizationId is
+// already reserved for that per its Phase 0 comment); out of scope here.
+// No DiagnosticPackage yet (Phase 0 domain model allows testId/packageId
+// both nullable on recommendations/order-items specifically so this can
+// land without a schema change later) — every order line item is a single
+// DiagnosticTest for now.
+// ---------------------------------------------------------------------------
+
+enum DiagnosticLabVerificationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+// Mirrors DoctorVerificationStatus's shape (docs/DOMAIN-MODEL.md §7) but
+// intentionally lighter — no per-document upload/review subsystem, since a
+// lab's licenses are identifiers an admin can verify externally, not scans
+// that need per-file review like a doctor's registration certificate.
+model DiagnosticLab {
+  id                      String                           @id @default(cuid())
+  userId                  String                           @unique
+  name                    String?
+  licenseNumbers          String[]                         @default([])
+  serviceCities           String[]                         @default([])
+  homeCollectionSupported Boolean                          @default(false)
+  active                  Boolean                          @default(true)
+  verificationStatus      DiagnosticLabVerificationStatus   @default(DRAFT)
+  submittedAt             DateTime?
+  reviewedAt              DateTime?
+  reviewedByUserId        String?
+  rejectionReason         String?
+  createdAt               DateTime                         @default(now())
+  updatedAt               DateTime                         @updatedAt
+  user                    User                             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tests                   DiagnosticTest[]
+  orders                  DiagnosticOrder[]
+
+  @@index([verificationStatus, active])
+}
+
+model DiagnosticTest {
+  id                      String                     @id @default(cuid())
+  labId                   String
+  code                    String
+  name                    String
+  description             String?
+  sampleType              String?
+  preparationInstructions String?
+  price                   Int
+  turnaroundHours         Int?
+  active                  Boolean                    @default(true)
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+  lab                     DiagnosticLab              @relation(fields: [labId], references: [id], onDelete: Cascade)
+  orderItems              DiagnosticOrderItem[]
+  recommendations         DiagnosticRecommendation[]
+
+  @@index([labId, active])
+}
+
+enum DiagnosticRecommendationStatus {
+  RECOMMENDED
+  BOOKED
+  FULFILLED
+  CANCELLED
+}
+
+model DiagnosticRecommendation {
+  id                   String                          @id @default(cuid())
+  carePlanItemId       String?
+  consultationId       String
+  doctorProfileId      String
+  patientUserId        String
+  testId               String?
+  clinicalReason       String?
+  targetCompletionDate DateTime?
+  status               DiagnosticRecommendationStatus  @default(RECOMMENDED)
+  createdAt            DateTime                        @default(now())
+  updatedAt            DateTime                        @updatedAt
+  carePlanItem         CarePlanItem?                   @relation(fields: [carePlanItemId], references: [id], onDelete: SetNull)
+  consultation         Consultation                    @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  doctorProfile        DoctorProfile                   @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  patientUser          User                            @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  test                 DiagnosticTest?                 @relation(fields: [testId], references: [id], onDelete: SetNull)
+  orders               DiagnosticOrder[]
+
+  @@index([patientUserId, status])
+  @@index([doctorProfileId, status])
+}
+
+enum DiagnosticOrderStatus {
+  BOOKED
+  SCHEDULED
+  SAMPLE_COLLECTED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+enum DiagnosticCollectionMode {
+  HOME
+  LAB_VISIT
+}
+
+// recommendationId is NOT @unique: a cancelled order must not permanently
+// block rebooking the same recommendation — the exact bug already found
+// and fixed once this session for Appointment.slotId (docs/IMPLEMENTATION-STATUS.md
+// Phase 4). "At most one active order per recommendation" is enforced in
+// modules/diagnostics/orders.service.ts, not the DB schema.
+model DiagnosticOrder {
+  id                 String                    @id @default(cuid())
+  recommendationId   String?
+  patientUserId      String
+  labId              String
+  collectionMode     DiagnosticCollectionMode
+  scheduledAt        DateTime?
+  address            String?
+  paymentId          String?                   @unique
+  status             DiagnosticOrderStatus     @default(BOOKED)
+  cancelledAt        DateTime?
+  cancellationReason String?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  recommendation     DiagnosticRecommendation? @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  patientUser        User                      @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  lab                DiagnosticLab             @relation(fields: [labId], references: [id], onDelete: Cascade)
+  payment            Payment?                  @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  items              DiagnosticOrderItem[]
+  sampleCollection   SampleCollection?
+  report             DiagnosticReport?
+
+  @@index([recommendationId])
+  @@index([patientUserId, status])
+  @@index([labId, status])
+}
+
+model DiagnosticOrderItem {
+  id                String          @id @default(cuid())
+  diagnosticOrderId String
+  testId            String?
+  price             Int
+  createdAt         DateTime        @default(now())
+  diagnosticOrder   DiagnosticOrder @relation(fields: [diagnosticOrderId], references: [id], onDelete: Cascade)
+  test              DiagnosticTest? @relation(fields: [testId], references: [id], onDelete: SetNull)
+
+  @@index([diagnosticOrderId])
+}
+
+model SampleCollection {
+  id                String           @id @default(cuid())
+  diagnosticOrderId String           @unique
+  collectorName     String?
+  collectedAt       DateTime?
+  sampleBarcode     String?
+  qualityException  String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  diagnosticOrder   DiagnosticOrder  @relation(fields: [diagnosticOrderId], references: [id], onDelete: Cascade)
+}
+
+model DiagnosticReport {
+  id                   String          @id @default(cuid())
+  diagnosticOrderId    String          @unique
+  structuredResults    Json?
+  documentStorageKey   String?
+  releasedToPatientAt  DateTime?
+  notifiedDoctorAt     DateTime?
+  criticalFlag         Boolean         @default(false)
+  doctorAcknowledgedAt DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  diagnosticOrder      DiagnosticOrder @relation(fields: [diagnosticOrderId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Reports — patient document library, deliberately a separate concept from
+// diagnostic booking (docs/DOMAIN-MODEL.md §8). Only auto-populated from a
+// released DiagnosticReport in this phase; patient-uploaded historical
+// documents (sourceEntityId null) are schema-ready but not built yet.
+// ---------------------------------------------------------------------------
+
+enum ReportKind {
+  DIAGNOSTIC_REPORT
+  UPLOADED_HISTORICAL
+  PRESCRIPTION
+  CLINICAL_DOCUMENT
+  DISCHARGE_SUMMARY
+}
+
+model Report {
+  id                        String     @id @default(cuid())
+  patientUserId             String
+  kind                      ReportKind
+  sourceEntityType          String?
+  sourceEntityId            String?
+  storageKey                String
+  uploadedByUserId          String?
+  attachedToConsultationId  String?
+  attachedToCarePlanId      String?
+  createdAt                 DateTime   @default(now())
+  patientUser               User       @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+
+  @@index([patientUserId, kind])
 }

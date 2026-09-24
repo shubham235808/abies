@@ -4,6 +4,7 @@ const NAV = [
   { href: '/doctor', label: 'Overview' },
   { href: '/doctor/appointments', label: 'Appointments' },
   { href: '/doctor/care-plans', label: 'Care Plans' },
+  { href: '/doctor/diagnostics', label: 'Diagnostics' },
   { href: '/doctor/profile', label: 'Profile' },
   { href: '/doctor/documents', label: 'Documents' },
   { href: '/doctor/clinics', label: 'Clinics' },

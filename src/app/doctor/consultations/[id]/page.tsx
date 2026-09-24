@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
 import { resolveJoinInfo } from '@/lib/video';
 import { listForDoctorPatientPair } from '@/modules/care-plans/care-plans.service';
+import { listActiveForRecommendation } from '@/modules/diagnostics/catalogue.service';
+import { listForConsultation } from '@/modules/diagnostics/recommendations.service';
 import { getConsultation, listActiveAssessmentFields, recordJoin } from '@/modules/consultations/consultations.service';
 import { NotFoundError } from '@/lib/errors';
 import { requireSessionOrRedirect } from '@/server/current-user';
@@ -23,6 +25,8 @@ export default async function DoctorConsultationPage({ params }: { params: Promi
   }
   const fields = await listActiveAssessmentFields();
   const carePlans = await listForDoctorPatientPair(session.userId, consultation.patientUserId);
+  const diagnosticTests = await listActiveForRecommendation();
+  const diagnosticRecommendations = await listForConsultation(consultation.id);
 
   const patientName =
     [consultation.patientUser.patientProfile?.firstName, consultation.patientUser.patientProfile?.lastName]
@@ -82,6 +86,13 @@ export default async function DoctorConsultationPage({ params }: { params: Promi
       videoJoinMessage={consultation.appointment.mode === 'VIDEO' ? resolveJoinInfo().message : null}
       patientUserId={consultation.patientUserId}
       carePlans={carePlans.map((p) => ({ id: p.id, status: p.status, summary: p.summary, createdAt: p.createdAt.toISOString() }))}
+      diagnosticTests={diagnosticTests}
+      diagnosticRecommendations={diagnosticRecommendations.map((r) => ({
+        id: r.id,
+        status: r.status,
+        clinicalReason: r.clinicalReason,
+        testName: r.test?.name ?? null,
+      }))}
     />
   );
 }

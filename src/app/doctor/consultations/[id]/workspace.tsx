@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import { Alert } from '@/components/ui/alert';
-import { CarePlanStatusBadge, ConsultationStatusBadge, PrescriptionStatusBadge } from '@/components/ui/badge';
+import { Badge, CarePlanStatusBadge, ConsultationStatusBadge, PrescriptionStatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
@@ -43,6 +43,8 @@ type ConsultationDetail = {
 const EDITABLE_STATUSES = new Set(['SCHEDULED', 'IN_PROGRESS']);
 
 type CarePlanSummary = { id: string; status: string; summary: string | null; createdAt: string };
+type DiagnosticTestOption = { id: string; name: string; labName: string | null };
+type DiagnosticRecommendationSummary = { id: string; status: string; clinicalReason: string | null; testName: string | null };
 
 export function ConsultationWorkspace({
   consultation: initial,
@@ -50,12 +52,16 @@ export function ConsultationWorkspace({
   videoJoinMessage,
   patientUserId,
   carePlans: initialCarePlans,
+  diagnosticTests,
+  diagnosticRecommendations: initialRecommendations,
 }: {
   consultation: ConsultationDetail;
   assessmentFields: AssessmentField[];
   videoJoinMessage: string | null;
   patientUserId: string;
   carePlans: CarePlanSummary[];
+  diagnosticTests: DiagnosticTestOption[];
+  diagnosticRecommendations: DiagnosticRecommendationSummary[];
 }) {
   const [consultation, setConsultation] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +173,100 @@ export function ConsultationWorkspace({
         <h2 className="font-semibold text-brand-neutral-900">Care plans</h2>
         <CarePlansSection consultationId={consultation.id} patientUserId={patientUserId} initial={initialCarePlans} />
       </Card>
+
+      <Card className="mt-6">
+        <h2 className="font-semibold text-brand-neutral-900">Diagnostics</h2>
+        <DiagnosticsSection consultationId={consultation.id} tests={diagnosticTests} initial={initialRecommendations} editable={editable} />
+      </Card>
+    </div>
+  );
+}
+
+function DiagnosticsSection({
+  consultationId,
+  tests,
+  initial,
+  editable,
+}: {
+  consultationId: string;
+  tests: DiagnosticTestOption[];
+  initial: DiagnosticRecommendationSummary[];
+  editable: boolean;
+}) {
+  const [recommendations, setRecommendations] = useState(initial);
+  const [showForm, setShowForm] = useState(false);
+  const [clinicalReason, setClinicalReason] = useState('');
+  const [testId, setTestId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { recommendation } = await api.post<{ recommendation: { id: string; status: string; clinicalReason: string | null } }>(
+        `/api/consultations/${consultationId}/diagnostic-recommendations`,
+        { clinicalReason, testId: testId || undefined },
+      );
+      const test = tests.find((t) => t.id === testId);
+      setRecommendations((prev) => [{ ...recommendation, testName: test?.name ?? null }, ...prev]);
+      setClinicalReason('');
+      setTestId('');
+      setShowForm(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not recommend this test.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-3">
+      {error && <Alert tone="error">{error}</Alert>}
+      {recommendations.map((r) => (
+        <div key={r.id} className="rounded-card border border-brand-neutral-200 p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-brand-neutral-900">{r.testName ?? 'Unspecified test'}</p>
+            <Badge tone={r.status === 'CANCELLED' ? 'danger' : r.status === 'FULFILLED' ? 'success' : 'blue'}>{r.status}</Badge>
+          </div>
+          {r.clinicalReason && <p className="mt-1 text-xs text-brand-neutral-500">{r.clinicalReason}</p>}
+        </div>
+      ))}
+      {recommendations.length === 0 && !showForm && <p className="text-sm text-brand-neutral-500">No diagnostics recommended yet.</p>}
+
+      {showForm ? (
+        <div className="space-y-3 rounded-card border border-brand-neutral-200 p-4">
+          <div>
+            <Label htmlFor="clinicalReason">Clinical reason</Label>
+            <Textarea id="clinicalReason" rows={2} value={clinicalReason} onChange={(e) => setClinicalReason(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="testId">Suggested test (optional)</Label>
+            <Select id="testId" value={testId} onChange={(e) => setTestId(e.target.value)}>
+              <option value="">Any lab / unspecified</option>
+              {tests.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} {t.labName ? `— ${t.labName}` : ''}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={() => setShowForm(false)}>
+              Cancel
+            </Button>
+            <Button type="button" size="sm" loading={submitting} disabled={!clinicalReason} onClick={handleSubmit}>
+              Recommend
+            </Button>
+          </div>
+        </div>
+      ) : (
+        editable && (
+          <Button variant="secondary" size="sm" onClick={() => setShowForm(true)}>
+            + Recommend a test
+          </Button>
+        )
+      )}
     </div>
   );
 }

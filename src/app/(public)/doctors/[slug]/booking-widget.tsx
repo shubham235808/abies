@@ -8,25 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label, Select, Textarea } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api-client';
+import { loadRazorpayScript } from '@/lib/razorpay-checkout';
 
 type Slot = { startsAt: string; endsAt: string; mode: 'VIDEO' | 'CLINIC'; clinicId: string | null };
 type FamilyMember = { id: string; name: string };
-
-const RAZORPAY_SCRIPT_SRC = 'https://checkout.razorpay.com/v1/checkout.js';
-let razorpayScriptPromise: Promise<void> | null = null;
-
-function loadRazorpayScript(): Promise<void> {
-  if (typeof window.Razorpay !== 'undefined') return Promise.resolve();
-  if (razorpayScriptPromise) return razorpayScriptPromise;
-  razorpayScriptPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = RAZORPAY_SCRIPT_SRC;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Could not load the payment provider script'));
-    document.body.appendChild(script);
-  });
-  return razorpayScriptPromise;
-}
 
 function groupByDate(slots: Slot[]): Map<string, Slot[]> {
   const groups = new Map<string, Slot[]>();
