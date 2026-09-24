@@ -1,4 +1,4 @@
-import { getEnv } from '@/lib/env';
+import { getEnv, isLockedDownDeployment } from '@/lib/env';
 import { createMockAdapter } from './mock-adapter';
 import type { ExternalChannel, NotificationAdapter, SendResult } from './types';
 
@@ -17,8 +17,9 @@ export function getAdapter(channel: ExternalChannel): NotificationAdapter | null
 
   if (provider === 'mock') {
     // Same hard-fail rule as verifyAdminMfa() in auth.service.ts: a
-    // placeholder provider must never pretend to deliver in production.
-    if (env.NODE_ENV === 'production') return null;
+    // placeholder provider must never pretend to deliver in a genuinely
+    // locked-down deployment.
+    if (isLockedDownDeployment(env)) return null;
     return createMockAdapter(channel);
   }
 

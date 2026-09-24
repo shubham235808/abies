@@ -1,7 +1,7 @@
 import { createHmac } from 'crypto';
 import type { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import { getEnv } from '@/lib/env';
+import { getEnv, isLockedDownDeployment } from '@/lib/env';
 import { BadRequestError, ForbiddenError, UnauthorizedError } from '@/lib/errors';
 import { recordAuditEvent } from '@/server/audit';
 import { createSession, markMfaVerified, revokeSession, type SessionInfo } from '@/server/session';
@@ -43,8 +43,8 @@ export async function requestOtp(rawMobile: string, role: UserRole): Promise<Req
     throw new BadRequestError('Please wait before requesting another OTP');
   }
 
-  const isProd = env.NODE_ENV === 'production';
-  const otp = !isProd && env.OTP_DEV_CODE ? env.OTP_DEV_CODE : String(Math.floor(100000 + Math.random() * 900000));
+  const lockedDown = isLockedDownDeployment(env);
+  const otp = !lockedDown && env.OTP_DEV_CODE ? env.OTP_DEV_CODE : String(Math.floor(100000 + Math.random() * 900000));
 
   const challenge = await prisma.otpChallenge.create({
     data: {
@@ -59,7 +59,7 @@ export async function requestOtp(rawMobile: string, role: UserRole): Promise<Req
   return {
     requestId: challenge.id,
     expiresInSeconds: env.OTP_TTL_SECONDS,
-    ...(!isProd && env.EXPOSE_DEV_OTP ? { devOtp: otp } : {}),
+    ...(!lockedDown && env.EXPOSE_DEV_OTP ? { devOtp: otp } : {}),
   };
 }
 
@@ -135,7 +135,7 @@ export async function verifyAdminMfa(session: SessionInfo, code: string): Promis
     throw new ForbiddenError('MFA challenge is only required for administrators');
   }
   const env = getEnv();
-  if (env.NODE_ENV === 'production') {
+  if (isLockedDownDeployment(env)) {
     // No production MFA provider wired up yet — hard fail rather than
     // silently accept a code (docs/SECURITY-MODEL.md: "no admin path in
     // production without a real MFA provider configured").

@@ -25,6 +25,16 @@ const envSchema = z.object({
   OTP_DEV_CODE: z.string().optional(),
   EXPOSE_DEV_OTP: z.coerce.boolean().default(false),
   DEV_ADMIN_MFA_CODE: z.string().optional(),
+  // Off by default everywhere, including docker-compose.prod.yml — this is
+  // NOT "disable prod security", it's a second, explicit opt-in that must
+  // be set on TOP OF NODE_ENV=production before the OTP_DEV_CODE/
+  // EXPOSE_DEV_OTP/DEV_ADMIN_MFA_CODE bypasses fire (see src/modules/auth/auth.service.ts).
+  // Exists because a "production" Next.js build (NODE_ENV=production, which
+  // Next itself requires) is also used for this repo's LAN-exposed review
+  // deployment (docker-compose.yml), which is not the real ESXi Phase 12
+  // target and has no real SMS/MFA provider to receive a code with. The
+  // real deployment's .env must never set this to true.
+  ALLOW_DEV_AUTH_BYPASS_IN_PROD: z.coerce.boolean().default(false),
   ALLOW_DOCTOR_SELF_ONBOARDING: z.coerce.boolean().default(true),
   APP_BASE_URL: z.string().url(),
   UPLOAD_MAX_BYTES: z.coerce.number().default(10 * 1024 * 1024),
@@ -51,6 +61,15 @@ const envSchema = z.object({
 });
 
 export type Env = z.infer<typeof envSchema>;
+
+// True for a genuinely locked-down deployment where the OTP_DEV_CODE/
+// EXPOSE_DEV_OTP/DEV_ADMIN_MFA_CODE dev-auth bypasses must never fire.
+// False in dev/test, and false in a NODE_ENV=production build unless that
+// deployment has also explicitly opted in via ALLOW_DEV_AUTH_BYPASS_IN_PROD
+// (docker-compose.yml's review container does; the real prod target must not).
+export function isLockedDownDeployment(env: Env): boolean {
+  return env.NODE_ENV === 'production' && !env.ALLOW_DEV_AUTH_BYPASS_IN_PROD;
+}
 
 let cached: Env | undefined;
 

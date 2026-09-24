@@ -574,6 +574,38 @@ prescription → finalize prescription → complete) and then the patient's
 read-only view, confirming the finalized note and prescription are visible
 and correctly formatted. All fixture data was deleted afterward.
 
+## Review-deployment login fix (out of band, reported by user)
+
+The user reported "Incorrect OTP" trying to log into the live LAN
+deployment with the documented dev code (`123456`). Root cause: the
+Docker image runs `NODE_ENV=production` (required for Next's standalone
+build), which correctly disables `OTP_DEV_CODE`/`EXPOSE_DEV_OTP`/
+`DEV_ADMIN_MFA_CODE` per `docs/SECURITY-MODEL.md`'s "no dev bypass in
+production" rule — but this repo's review deployment (docker-compose.yml,
+LAN-exposed, no real SMS/MFA provider) also runs with that same
+`NODE_ENV=production`, so it was just as locked out as a real deployment
+would be, with no way to actually log in.
+
+Fixed by decoupling "Next.js production build" from "genuinely locked-down
+deployment": a new `ALLOW_DEV_AUTH_BYPASS_IN_PROD` env var (default
+`false` everywhere) must be explicitly set on top of `NODE_ENV=production`
+before the three dev codes fire (`isLockedDownDeployment()` in
+`src/lib/env.ts`, used by `auth.service.ts` and the notification mock
+adapter). Set to `true` only in this review deployment's `.env` — never in
+a real deployment's. `.env.example` documents this explicitly, including
+that `docker-compose.prod.yml` (Phase 12) must not set it.
+
+Also found and fixed a second, related bug the OTP issue was masking: the
+session cookie's `secure` flag was tied to `NODE_ENV` too, so even after
+fixing OTP, a login would have appeared to succeed but the browser would
+silently drop the `Secure` cookie over this deployment's plain HTTP,
+breaking the session. Changed `sessionCookieOptions()` to derive `secure`
+from whether `APP_BASE_URL` is an `https://` origin instead — the actually
+correct signal, unrelated to build mode. Verified end-to-end with a raw
+curl request/verify/me sequence against the rebuilt container: `devOtp`
+now returned, cookie set without `Secure`, and the follow-up authenticated
+request succeeds.
+
 ## Next up
 
 Phase 6: the Care Plan Engine (`docs/DOMAIN-MODEL.md` §6) — the central

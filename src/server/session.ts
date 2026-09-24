@@ -174,7 +174,13 @@ export async function revokeAllSessionsForUser(userId: string): Promise<void> {
 export function sessionCookieOptions(expiresAt: Date) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    // Derived from how the app is actually being served, not NODE_ENV: a
+    // Secure cookie is silently dropped by the browser over plain HTTP,
+    // which is exactly how this repo's LAN-exposed review deployment
+    // (docker-compose.yml) serves traffic today. The real deployment
+    // (Phase 12, behind Nginx/TLS) sets APP_BASE_URL to an https:// origin,
+    // which is what should actually gate this — not the Next.js build mode.
+    secure: getEnv().APP_BASE_URL.startsWith('https://'),
     sameSite: 'lax' as const,
     path: '/',
     expires: expiresAt,
