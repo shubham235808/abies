@@ -495,12 +495,92 @@ error on checkout, and `/patient/appointments` renders. All seed/demo
 accounts created for that walkthrough were deleted afterward — nothing
 fake was left in the dev database.
 
+## Phase 5 — Consultations, clinical notes, prescriptions
+
+Net-new per `docs/DOMAIN-MODEL.md` §5. Schema (one migration,
+`phase5_consultations_notes_prescriptions`): `Consultation`,
+`AssessmentTemplateField`, `ClinicalNote`, `VideoSession`, `Prescription`,
+`PrescriptionItem`.
+
+- **Every CONFIRMED appointment gets a `Consultation` row automatically** —
+  wired into `finalizePaymentSuccessByOrder` in
+  `modules/appointments/appointments.service.ts`, so there's always
+  somewhere for the doctor to record notes. Cancelling a still-`SCHEDULED`
+  consultation cancels it too (an already-started/finished one is left
+  alone — appointment cancellation is only reachable from
+  `PENDING_PAYMENT`/`CONFIRMED`, so this never touches real clinical work).
+- **Doctor workspace** (`/doctor/consultations/[id]`): start/complete the
+  visit, chief-complaint/HPI/notes, a clinical note form driven by
+  `AssessmentTemplateField` (seeded with Prakriti/Vikriti/Agni/Koshta —
+  configurable, not hard-coded into the schema, per the brief), and a
+  prescription editor with a dynamic item list.
+- **Immutability, for real**: `saveClinicalNote` throws once
+  `finalizedAt` is set — no code path can edit a finalized note.
+  `updatePrescription`/`createPrescription` only ever touch `DRAFT` rows;
+  finalizing a prescription is one-way; "correcting" a `FINALIZED`
+  prescription creates a brand-new `DRAFT` (seeded from the old item list)
+  with `supersedesId` pointing at the original, which flips to
+  `SUPERSEDED` in the same transaction — the original row and its items are
+  never mutated. Covered by an integration test that finalizes, corrects,
+  then re-reads the original row from the DB to confirm it's untouched.
+- **Patient visibility is service-layer filtered, not just hidden in the
+  UI**: `getConsultation` strips the doctor's private `notes` field, nulls
+  out `clinicalNote` unless `finalizedAt` is set, and drops `DRAFT`
+  prescriptions entirely for a patient caller — verified by an integration
+  test that reads as the patient mid-consultation (sees nothing) and again
+  after finalize (sees everything).
+- **Video**: no real provider (Twilio/Daily/etc.) is connected — `VideoProvider`
+  is a closed one-value (`MOCK`) enum on purpose, so adding a real one is a
+  schema-visible decision, not a silent env-var flip. `src/lib/video`
+  never fabricates a join URL; the UI shows the honest "not connected"
+  message instead of a fake call window. What *is* real: a `VideoSession`
+  row is created when a VIDEO consultation starts, and `doctorJoinedAt`/
+  `patientJoinedAt` are recorded for real (idempotently) whenever either
+  party opens the page — genuine audit data, not a fake call.
+- Navigation: no new top-level "Consultations" nav item — a consultation
+  is 1:1 with an appointment, so `/patient/appointments` and
+  `/doctor/appointments` each link straight into it (label changes with
+  status: "Start consultation" → "Continue consultation" → "View
+  consultation notes & prescription").
+- Integration tests (`tests/integration/consultations.test.ts`, 7 cases):
+  auto-created-on-confirm, start creates a VideoSession, cross-doctor
+  ownership refusal, complete cascades to the appointment, clinical-note
+  visibility + immutability, prescription visibility + the
+  finalize→correct→supersede chain.
+
+### One real bug found via a live browser walkthrough, not by inspection
+
+The prescription form's "Duration (days)" field used React Hook Form's
+`valueAsNumber: true`, which converts an empty input to `NaN` — and
+`z.number().int().optional()` rejects `NaN` (optional only excuses an
+*absent* key, not an invalid one), so `zodResolver` silently refused to
+call the submit handler whenever that field was left blank. No error
+shown anywhere; the "Save draft" button just did nothing. This is the same
+failure shape as the `isoDate` bug from Phase 2/3 (documented in
+`patients.schemas.ts`) — an HTML input's "empty" representation doesn't
+match what an optional Zod field will accept. Caught by a real Playwright
+run (DB check afterward showed zero `PrescriptionItem` rows despite the UI
+looking like the save had gone through) and fixed with `setValueAs` instead
+of `valueAsNumber`, converting `''` to `undefined` before Zod ever sees it.
+
+Verified: `tsc --noEmit`, `eslint .`, `vitest run` (34/34, was 27/27
+before this phase) all clean; `next build` locally (all new routes
+correctly `ƒ` dynamic); full Docker image rebuild; and a full Playwright
+walkthrough against `next dev` — using a fixture script that writes a
+CONFIRMED appointment directly (bootstrapping past the Razorpay-less
+checkout, which is already covered by its own tests) — driving the entire
+doctor flow (start → save details → clinical note → finalize note → draft
+prescription → finalize prescription → complete) and then the patient's
+read-only view, confirming the finalized note and prescription are visible
+and correctly formatted. All fixture data was deleted afterward.
+
 ## Next up
 
-Phase 5: consultations, clinical notes, prescriptions
-(`docs/DOMAIN-MODEL.md` §5) — also net-new, and the natural next step once
-an appointment can be confirmed. Outstanding from earlier phases, still
-unresolved: real Ubuntu ESXi VM SSH details for Phase 12 deployment, and
-real (even test-mode) Razorpay/SMS/email/WhatsApp credentials so Phase 4's
-booking flow can be exercised end-to-end rather than stopping at the
-honest "not configured" message.
+Phase 6: the Care Plan Engine (`docs/DOMAIN-MODEL.md` §6) — the central
+orchestration layer that ties a consultation's outcome to ongoing
+diagnostic/medicine/panchakarma/lifestyle items, now that there's a real
+consultation for a plan to originate from. Outstanding from earlier
+phases, still unresolved: real Ubuntu ESXi VM SSH details for Phase 12
+deployment, and real (even test-mode) Razorpay/SMS/email/WhatsApp/video
+credentials so the booking and consultation flows can be exercised fully
+live rather than stopping at honest "not configured" messages.

@@ -15,6 +15,7 @@ export default async function DoctorAppointmentsPage() {
     patientUser: a.patientUser,
     careRecipientFamilyMember: a.careRecipientFamilyMember,
     clinic: a.clinic,
+    consultation: a.consultation,
   }));
 
   return (

@@ -20,6 +20,7 @@ type Appointment = {
   careRecipientFamilyMember: { name: string } | null;
   payment: { status: string; amount: number } | null;
   clinic: { name: string; city: string } | null;
+  consultation: { id: string; status: string } | null;
 };
 
 const CANCELLABLE = new Set(['PENDING_PAYMENT', 'CONFIRMED']);
@@ -83,6 +84,14 @@ export function AppointmentList({ initial }: { initial: Appointment[]; viewerRol
               <p className="mt-2 text-xs text-brand-neutral-400">
                 Cancelling a paid appointment does not automatically refund payment yet — contact support for refunds.
               </p>
+            )}
+
+            {a.consultation && a.consultation.status !== 'CANCELLED' && (
+              <div className="mt-3 border-t border-brand-neutral-100 pt-3">
+                <Link href={`/patient/consultations/${a.consultation.id}`} className="text-sm font-medium text-brand-purple-700 hover:underline">
+                  {a.consultation.status === 'COMPLETED' ? 'View consultation notes & prescription' : 'View consultation'} →
+                </Link>
+              </div>
             )}
 
             {CANCELLABLE.has(a.status) && (

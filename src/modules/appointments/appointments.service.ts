@@ -285,6 +285,16 @@ async function finalizePaymentSuccessByOrder(params: { gatewayOrderId: string; g
       where: { id: appointment.slotId },
       data: { status: 'BOOKED', heldByUserId: null, heldUntil: null },
     });
+    // Every CONFIRMED appointment gets a Consultation row up front (status
+    // SCHEDULED) so there's always somewhere for the doctor to record notes,
+    // even before the visit technically starts — modules/consultations.
+    await tx.consultation.create({
+      data: {
+        appointmentId: appointment.id,
+        doctorProfileId: appointment.doctorProfileId,
+        patientUserId: appointment.patientUserId,
+      },
+    });
     return appointment;
   });
 }
@@ -364,6 +374,15 @@ export async function cancelAppointment(actorUserId: string, role: UserRole, app
       where: { id: appointment.slotId },
       data: { status: 'OPEN', heldByUserId: null, heldUntil: null },
     });
+    // A SCHEDULED consultation (created at confirm-time) is cancelled along
+    // with its appointment. One that already started or finished is left
+    // alone — the appointment can only be cancelled from PENDING_PAYMENT or
+    // CONFIRMED, and a consultation only leaves SCHEDULED once the doctor
+    // actually starts it, so this never touches real clinical work.
+    await tx.consultation.updateMany({
+      where: { appointmentId, status: 'SCHEDULED' },
+      data: { status: 'CANCELLED' },
+    });
   });
 
   await recordAuditEvent(auditCtx, {
@@ -388,6 +407,7 @@ export async function listMineAsPatient(userId: string) {
       careRecipientFamilyMember: { select: { name: true } },
       payment: { select: { status: true, amount: true } },
       clinic: { select: { name: true, city: true } },
+      consultation: { select: { id: true, status: true } },
     },
     orderBy: { scheduledAt: 'desc' },
   });
@@ -402,6 +422,7 @@ export async function listMineAsDoctor(userId: string) {
       patientUser: { select: { mobile: true, patientProfile: { select: { firstName: true, lastName: true } } } },
       careRecipientFamilyMember: { select: { name: true } },
       clinic: { select: { name: true, city: true } },
+      consultation: { select: { id: true, status: true } },
     },
     orderBy: { scheduledAt: 'desc' },
   });

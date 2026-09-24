@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Alert } from '@/components/ui/alert';
 import { AppointmentStatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,13 @@ type Appointment = {
   patientUser: { mobile: string; patientProfile: { firstName: string | null; lastName: string | null } | null };
   careRecipientFamilyMember: { name: string } | null;
   clinic: { name: string; city: string } | null;
+  consultation: { id: string; status: string } | null;
+};
+
+const CONSULTATION_LABEL: Record<string, string> = {
+  SCHEDULED: 'Start consultation',
+  IN_PROGRESS: 'Continue consultation',
+  COMPLETED: 'View consultation notes & prescription',
 };
 
 const CANCELLABLE = new Set(['PENDING_PAYMENT', 'CONFIRMED']);
@@ -73,6 +81,14 @@ export function AppointmentList({ initial }: { initial: Appointment[] }) {
               </div>
               <AppointmentStatusBadge status={a.status} />
             </div>
+
+            {a.consultation && a.consultation.status !== 'CANCELLED' && (
+              <div className="mt-3 border-t border-brand-neutral-100 pt-3">
+                <Link href={`/doctor/consultations/${a.consultation.id}`} className="text-sm font-medium text-brand-purple-700 hover:underline">
+                  {CONSULTATION_LABEL[a.consultation.status] ?? 'View consultation'} →
+                </Link>
+              </div>
+            )}
 
             {CANCELLABLE.has(a.status) && (
               <div className="mt-3 border-t border-brand-neutral-100 pt-3">

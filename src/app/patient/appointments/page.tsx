@@ -17,6 +17,7 @@ export default async function PatientAppointmentsPage() {
     careRecipientFamilyMember: a.careRecipientFamilyMember,
     payment: a.payment,
     clinic: a.clinic,
+    consultation: a.consultation,
   }));
 
   return (

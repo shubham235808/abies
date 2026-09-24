@@ -8,6 +8,16 @@ import { PrismaClient, UserRole } from '@prisma/client';
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
+// Configurable Ayurveda assessment fields (docs/DOMAIN-MODEL.md §5) — real
+// clinical config, not demo data, seeded the same way CONSENT_ARTIFACTS is
+// until an admin UI exists to manage this table directly (Phase 11).
+const ASSESSMENT_TEMPLATE_FIELDS = [
+  { key: 'prakriti', label: 'Prakriti (constitution)', fieldType: 'text', sortOrder: 1 },
+  { key: 'vikriti', label: 'Vikriti (current imbalance)', fieldType: 'text', sortOrder: 2 },
+  { key: 'agni', label: 'Agni (digestive fire)', fieldType: 'select', options: ['Sama', 'Vishama', 'Tikshna', 'Manda'], sortOrder: 3 },
+  { key: 'koshta', label: 'Koshta (bowel type)', fieldType: 'select', options: ['Mridu', 'Madhyama', 'Krura'], sortOrder: 4 },
+];
+
 const CONSENT_ARTIFACTS = [
   { key: 'terms', version: '1.0', title: 'Terms of Service' },
   { key: 'privacy', version: '1.0', title: 'Privacy Policy' },
@@ -26,6 +36,14 @@ const DEV_CLINICS = [
 ];
 
 async function main() {
+  for (const field of ASSESSMENT_TEMPLATE_FIELDS) {
+    await prisma.assessmentTemplateField.upsert({
+      where: { key: field.key },
+      update: {},
+      create: { ...field, options: field.options ?? [] },
+    });
+  }
+
   for (const artifact of CONSENT_ARTIFACTS) {
     await prisma.consentArtifact.upsert({
       where: { key_version: { key: artifact.key, version: artifact.version } },

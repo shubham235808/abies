@@ -52,3 +52,24 @@ const APPOINTMENT_STATUS_TONE: Record<string, Tone> = {
 export function AppointmentStatusBadge({ status }: { status: string }) {
   return <Badge tone={APPOINTMENT_STATUS_TONE[status] ?? 'neutral'}>{status.replace(/_/g, ' ')}</Badge>;
 }
+
+const CONSULTATION_STATUS_TONE: Record<string, Tone> = {
+  SCHEDULED: 'blue',
+  IN_PROGRESS: 'orange',
+  COMPLETED: 'success',
+  CANCELLED: 'danger',
+};
+
+export function ConsultationStatusBadge({ status }: { status: string }) {
+  return <Badge tone={CONSULTATION_STATUS_TONE[status] ?? 'neutral'}>{status.replace(/_/g, ' ')}</Badge>;
+}
+
+const PRESCRIPTION_STATUS_TONE: Record<string, Tone> = {
+  DRAFT: 'neutral',
+  FINALIZED: 'success',
+  SUPERSEDED: 'orange',
+};
+
+export function PrescriptionStatusBadge({ status }: { status: string }) {
+  return <Badge tone={PRESCRIPTION_STATUS_TONE[status] ?? 'neutral'}>{status}</Badge>;
+}
