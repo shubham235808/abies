@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@/lib/errors';
+import { resolveMedicineByName } from '@/modules/medicines/catalogue.service';
 import { notify } from '@/modules/notifications/notifications.service';
 import { recordAuditEvent } from '@/server/audit';
 import type { AuditContext } from '@/server/audit';
@@ -67,8 +68,18 @@ export async function updatePrescription(doctorUserId: string, prescriptionId: s
 
 export async function finalizePrescription(doctorUserId: string, prescriptionId: string, auditCtx: AuditContext) {
   const prescription = await ownedDraftPrescription(doctorUserId, prescriptionId);
-  const itemCount = await prisma.prescriptionItem.count({ where: { prescriptionId } });
-  if (itemCount === 0) throw new BadRequestError('Add at least one item before finalizing');
+  const items = await prisma.prescriptionItem.findMany({ where: { prescriptionId } });
+  if (items.length === 0) throw new BadRequestError('Add at least one item before finalizing');
+
+  // Resolve each item's free-text productName to a catalogue Medicine
+  // (find-or-create) so a pharmacy can later fulfil it as a MedicineOrder —
+  // draft items are never resolved, only a prescription actually being
+  // finalized (modules/medicines/catalogue.service.ts resolveMedicineByName).
+  for (const item of items) {
+    if (item.medicineId) continue;
+    const medicine = await resolveMedicineByName(item.productName);
+    await prisma.prescriptionItem.update({ where: { id: item.id }, data: { medicineId: medicine.id } });
+  }
 
   const finalized = await prisma.prescription.update({
     where: { id: prescriptionId },

@@ -773,14 +773,100 @@ full lab fulfilment sequence — collect → process → release a critical
 report — through to the patient seeing it in both Diagnostics and
 Reports. All fixture data deleted afterward.
 
+## Phase 8 — Medicines + pharmacy portal
+
+Net-new per `docs/DOMAIN-MODEL.md` §9 (one migration,
+`phase8_medicines_and_pharmacy`): `Medicine`, `Pharmacy`,
+`PharmacyInventory`, `MedicineOrder`, `MedicineOrderItem`, `Shipment`, plus
+a retrofitted FK from Phase 5's `PrescriptionItem.medicineId` (previously
+an unused, unconstrained column) onto the new `Medicine` table. Third
+phase to add a new portal + role: **PHARMACY**.
+
+**The one modelling decision that shaped everything else:** unlike
+`DiagnosticTest` (Phase 7, deliberately scoped one-per-lab, since a test is
+a lab-specific procedure), `Medicine` here is a **platform-wide** catalogue,
+not owned by any one pharmacy. This isn't an arbitrary difference — a
+doctor writing a `PrescriptionItem` has no idea which pharmacy will
+eventually fill it, so `medicineId` has to point at a stable drug identity
+independent of any pharmacy. Each pharmacy then holds its own
+`PharmacyInventory` (batch number, expiry, quantity, price) against that
+shared `Medicine` row. The catalogue is built lazily, never curated
+up front: `resolveMedicineByName` (find-by-name-or-create,
+case-insensitive) is called from two places — `finalizePrescription`
+(Phase 5 code, now resolves each item's free-text `productName` to a
+catalogue entry the moment a prescription is finalized, never at draft
+time) and a pharmacy's own "add inventory" flow (stocking an OTC item
+nobody has prescribed yet). A later, more complete mention of the same
+drug name fills in gaps (form, strength, manufacturer) on the existing row
+rather than creating a duplicate or clobbering what's there.
+
+**Scope decisions, made explicit rather than silently assumed:**
+- No `Brand`/`Manufacturer` join tables and no
+  `MedicineOrderItemSubstitution` audit trail this phase — brand/
+  manufacturer are plain descriptive strings on `Medicine`, and a
+  pharmacist simply isn't offered a substitution action. Same "document
+  the gap in a schema comment, don't build an unused stub table" call as
+  Phase 7's `DiagnosticPackage`.
+- `MedicineOrderStatus` is the brief's exact 6-value list (`PENDING |
+  ACCEPTED | PACKING | DISPATCHED | DELIVERED | CANCELLED`) — unlike
+  `AppointmentStatus`/`DiagnosticOrderStatus`, there's no separate
+  "awaiting payment" state. `PENDING` does double duty: an order sits at
+  `PENDING` both before and after payment succeeds. `Payment.status` is
+  what actually distinguishes the two — `acceptOrder` refuses a pharmacy
+  action until `payment.status === 'SUCCESS'`, and `listMineAsPharmacy`
+  filters on payment status rather than order status for the same reason
+  Phase 7's lab order list excludes `BOOKED`.
+- Stock is reserved FEFO (first-expiry-first-out: the soonest-expiring
+  batch with enough quantity to cover the whole line) at booking time, in
+  the same transaction as order creation — mirroring how Phase 7 reserves
+  a `DiagnosticRecommendation`. Splitting one order line across multiple
+  batches is out of scope; insufficient stock in any single batch fails
+  the booking outright rather than silently partial-filling it. Cancelling
+  a `PENDING`/`ACCEPTED` order restocks the reserved quantity.
+- PHARMACY self-onboarding is the third role behind the same gate pattern
+  as DOCTOR and LAB (`ALLOW_PHARMACY_SELF_ONBOARDING`, checked in both
+  `requestOtp` and `verifyOtp` this time — Phase 7 already found and fixed
+  the "two independent copies of the same check" trap, so this one landed
+  correct on the first pass).
+
+**Ordering, exactly as designed:** a patient orders either against a
+finalized `Prescription` (only the items whose resolved `Medicine` this
+specific pharmacy actually stocks are orderable —
+`matchPrescriptionAtPharmacy` shows availability per item before the
+patient commits) or, for OTC (`requiresPrescription: false`) items,
+directly from the public `/medicines` catalogue with no prescription at
+all. Booking reuses the Razorpay adapter and `Payment` model wholesale
+(`purpose: MEDICINE_ORDER`, already anticipated in the Phase 4 enum) — the
+shared webhook route now dispatches to a third module's finalizer
+alongside `CONSULTATION` and `DIAGNOSTIC_ORDER`.
+
+Verified: `tsc --noEmit`, `eslint .`, `vitest run` (63/63, stable across 3
+consecutive runs — was 51/51 before this phase, +12 new tests) all clean;
+`next build` locally (all ~25 new routes correctly `ƒ` dynamic); full
+Docker image rebuild and redeploy; and a full Playwright walkthrough
+against the live container covering: pharmacy self-registration → profile
+→ inventory (OTC batch) → submission, admin approval, the new OTC item
+appearing on the public `/medicines` catalogue, a patient hitting the
+honest "payments are not configured" message when attempting to order it,
+a patient seeing a finalized prescription on `/patient/medicines` and
+`matchPrescriptionAtPharmacy` correctly reporting stock availability at a
+chosen pharmacy, and (via the same bootstrapped-paid-order fixture pattern
+used in Phases 5-7) the full pharmacy fulfilment sequence — accept → pack
+→ dispatch (with carrier/tracking) → deliver — with the patient seeing the
+order reach `DELIVERED` with tracking info on their own dashboard
+afterward. All fixture/test data deleted afterward, including 54 orphaned
+`Medicine` rows accumulated across repeated `vitest run` stability checks
+(expected: `Medicine` has no owning FK, so nothing cascade-deletes it the
+way `DiagnosticTest` gets cleaned up via its owning lab).
+
 ## Next up
 
-Phase 8: Medicines + pharmacy portal (`docs/DOMAIN-MODEL.md` §9,
-`docs/IMPLEMENTATION-PLAN.md` row 8) — the next Payment purpose already
-anticipated in the enum (`MEDICINE_ORDER`), and the second new
-partner-facing role/portal after LAB this phase. Outstanding from earlier
-phases, still unresolved: real Ubuntu ESXi VM SSH details for Phase 12
-deployment, and real (even test-mode) Razorpay/SMS/email/WhatsApp/video
-credentials so the booking, consultation, and diagnostics flows can be
-exercised fully live rather than stopping at honest "not configured"
-messages.
+Phase 9: Panchakarma + centre portal (`docs/DOMAIN-MODEL.md` §10,
+`docs/IMPLEMENTATION-PLAN.md` row 9) — the fourth and last
+partner-facing role/portal (`PANCHAKARMA_CENTRE`), following the same
+recommendation → booking → fulfilment shape as Diagnostics (Phase 7).
+Outstanding from earlier phases, still unresolved: real Ubuntu ESXi VM SSH
+details for Phase 12 deployment, and real (even test-mode) Razorpay/SMS/
+email/WhatsApp/video credentials so the booking, consultation,
+diagnostics, and now medicines flows can be exercised fully live rather
+than stopping at honest "not configured" messages.

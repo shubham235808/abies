@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { verifyWebhookSignature } from '@/lib/payments/razorpay';
 import { handleRazorpayWebhookPayment } from '@/modules/appointments/appointments.service';
 import { finalizeOrderPaymentByOrder } from '@/modules/diagnostics/orders.service';
+import { finalizeMedicineOrderPaymentByOrder } from '@/modules/medicines/orders.service';
 
 // Defense-in-depth alongside each purpose's own /verify-payment route: a
 // patient whose browser closes right after paying (before the checkout
@@ -34,6 +35,8 @@ export async function POST(req: Request) {
     try {
       if (record?.purpose === 'DIAGNOSTIC_ORDER') {
         await finalizeOrderPaymentByOrder({ gatewayOrderId: payment.order_id, gatewayPaymentId: payment.id, gatewaySignature: 'webhook' });
+      } else if (record?.purpose === 'MEDICINE_ORDER') {
+        await finalizeMedicineOrderPaymentByOrder({ gatewayOrderId: payment.order_id, gatewayPaymentId: payment.id, gatewaySignature: 'webhook' });
       } else if (record?.purpose === 'CONSULTATION') {
         await handleRazorpayWebhookPayment(payment);
       }

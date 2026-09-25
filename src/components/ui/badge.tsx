@@ -98,3 +98,16 @@ const CARE_PLAN_ITEM_STATUS_TONE: Record<string, Tone> = {
 export function CarePlanItemStatusBadge({ status }: { status: string }) {
   return <Badge tone={CARE_PLAN_ITEM_STATUS_TONE[status] ?? 'neutral'}>{status}</Badge>;
 }
+
+const MEDICINE_ORDER_STATUS_TONE: Record<string, Tone> = {
+  PENDING: 'orange',
+  ACCEPTED: 'blue',
+  PACKING: 'blue',
+  DISPATCHED: 'purple',
+  DELIVERED: 'success',
+  CANCELLED: 'danger',
+};
+
+export function MedicineOrderStatusBadge({ status }: { status: string }) {
+  return <Badge tone={MEDICINE_ORDER_STATUS_TONE[status] ?? 'neutral'}>{status}</Badge>;
+}

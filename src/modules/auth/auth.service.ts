@@ -33,7 +33,9 @@ export async function requestOtp(rawMobile: string, role: UserRole): Promise<Req
   if (role !== 'PATIENT') {
     const user = await prisma.user.findUnique({ where: { mobile } });
     const selfOnboardingAllowed =
-      (role === 'DOCTOR' && env.ALLOW_DOCTOR_SELF_ONBOARDING) || (role === 'LAB' && env.ALLOW_LAB_SELF_ONBOARDING);
+      (role === 'DOCTOR' && env.ALLOW_DOCTOR_SELF_ONBOARDING) ||
+      (role === 'LAB' && env.ALLOW_LAB_SELF_ONBOARDING) ||
+      (role === 'PHARMACY' && env.ALLOW_PHARMACY_SELF_ONBOARDING);
     if ((!user && !selfOnboardingAllowed) || (user && user.role !== role)) {
       throw new ForbiddenError('This account is not enabled for the selected role');
     }
@@ -96,7 +98,8 @@ export async function verifyOtp(
   if (!user) {
     const selfOnboardingAllowed =
       (challenge.role === 'DOCTOR' && env.ALLOW_DOCTOR_SELF_ONBOARDING) ||
-      (challenge.role === 'LAB' && env.ALLOW_LAB_SELF_ONBOARDING);
+      (challenge.role === 'LAB' && env.ALLOW_LAB_SELF_ONBOARDING) ||
+      (challenge.role === 'PHARMACY' && env.ALLOW_PHARMACY_SELF_ONBOARDING);
     if (challenge.role !== 'PATIENT' && !selfOnboardingAllowed) {
       throw new ForbiddenError('Account must be provisioned by an administrator');
     }

@@ -49,31 +49,33 @@ enum StaffDepartment {
 }
 
 model User {
-  id             String          @id @default(cuid())
-  mobile         String          @unique
-  email          String?         @unique
-  role           UserRole        @default(PATIENT)
-  status         UserStatus      @default(ACTIVE)
-  mfaEnabled     Boolean         @default(false)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  patientProfile PatientProfile?
-  doctorProfile  DoctorProfile?
-  diagnosticLab  DiagnosticLab?
-  staffProfile   StaffProfile?
-  sessions       Session[]
-  consentRecords ConsentRecord[]
-  auditEvents    AuditEvent[]
-  appointments   Appointment[]
-  consultations  Consultation[]
-  prescriptions  Prescription[]
-  payments       Payment[]
-  notifications  Notification[]
-  carePlans      CarePlan[]
-  carePlanItemsOwned CarePlanItem[]
+  id                        String                     @id @default(cuid())
+  mobile                    String                     @unique
+  email                     String?                    @unique
+  role                      UserRole                   @default(PATIENT)
+  status                    UserStatus                 @default(ACTIVE)
+  mfaEnabled                Boolean                    @default(false)
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  patientProfile            PatientProfile?
+  doctorProfile             DoctorProfile?
+  diagnosticLab             DiagnosticLab?
+  pharmacy                  Pharmacy?
+  staffProfile              StaffProfile?
+  sessions                  Session[]
+  consentRecords            ConsentRecord[]
+  auditEvents               AuditEvent[]
+  appointments              Appointment[]
+  consultations             Consultation[]
+  prescriptions             Prescription[]
+  payments                  Payment[]
+  notifications             Notification[]
+  carePlans                 CarePlan[]
+  carePlanItemsOwned        CarePlanItem[]
   diagnosticRecommendations DiagnosticRecommendation[]
   diagnosticOrders          DiagnosticOrder[]
   reports                   Report[]
+  medicineOrders            MedicineOrder[]
 
   @@index([role, status])
 }
@@ -117,17 +119,17 @@ model OtpChallenge {
 // this row is looked up by its hash on every request (see src/server/session.ts).
 // mfaVerified gates privileged admin actions per docs/TARGET-ARCHITECTURE.md.
 model Session {
-  id               String    @id @default(cuid())
-  userId           String
-  tokenHash        String    @unique
-  mfaVerified      Boolean   @default(false)
-  expiresAt        DateTime
-  revokedAt        DateTime?
-  ip               String?
-  userAgent        String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  mfaVerified Boolean   @default(false)
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, revokedAt])
 }
@@ -195,41 +197,42 @@ enum FamilyRelation {
 }
 
 model PatientProfile {
-  id                String         @id @default(cuid())
-  userId            String         @unique
-  firstName         String?
-  lastName          String?
-  dateOfBirth       DateTime?
-  gender            String?
-  phone             String?
-  address           String?
-  city              String?
-  state             String?
-  pin               String?
-  preferredLanguage String         @default("English")
-  emergencyContact  String?
-  allergies         String[]       @default([])
-  medicalHistory    String?
+  id                 String         @id @default(cuid())
+  userId             String         @unique
+  firstName          String?
+  lastName           String?
+  dateOfBirth        DateTime?
+  gender             String?
+  phone              String?
+  address            String?
+  city               String?
+  state              String?
+  pin                String?
+  preferredLanguage  String         @default("English")
+  emergencyContact   String?
+  allergies          String[]       @default([])
+  medicalHistory     String?
   consentPreferences Json?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  familyMembers     FamilyMember[]
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyMembers      FamilyMember[]
 }
 
 model FamilyMember {
-  id               String         @id @default(cuid())
+  id               String          @id @default(cuid())
   patientProfileId String
   name             String
   relation         FamilyRelation
   dateOfBirth      DateTime?
   gender           String?
   mobile           String?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  patientProfile   PatientProfile @relation(fields: [patientProfileId], references: [id], onDelete: Cascade)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  patientProfile   PatientProfile  @relation(fields: [patientProfileId], references: [id], onDelete: Cascade)
   appointments     Appointment[]
   carePlans        CarePlan[]
+  medicineOrders   MedicineOrder[]
 
   @@index([patientProfileId])
 }
@@ -267,53 +270,53 @@ enum ConsultationMode {
 }
 
 model DoctorProfile {
-  id                     String                     @id @default(cuid())
-  userId                 String                     @unique
-  slug                   String                     @unique
-  title                  String                     @default("Dr.")
-  firstName              String?
-  lastName               String?
-  gender                 String?
-  bio                    String?
-  registrationCouncil    String?
-  registrationNumber     String?
-  registrationYear       Int?
-  primaryQualification   String?
-  highestQualification   String?
-  graduationInstitution  String?
-  graduationYear         Int?
-  yearsExperience        Int?
-  specialties            String[]                   @default([])
-  languages              String[]                   @default([])
-  consultationModes      ConsultationMode[]         @default([VIDEO])
-  videoFee               Int?
-  clinicFee              Int?
-  rating                 Float                      @default(0)
-  reviewCount            Int                        @default(0)
-  isAcceptingNewPatients Boolean                    @default(true)
-  verificationStatus     DoctorVerificationStatus   @default(DRAFT)
-  isDiscoverable         Boolean                    @default(false)
-  submittedAt            DateTime?
-  reviewedAt             DateTime?
-  reviewedByUserId       String?
-  rejectionReason        String?
-  createdAt              DateTime                   @default(now())
-  updatedAt              DateTime                   @updatedAt
-  user                   User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  documents              DoctorDocument[]
-  clinics                DoctorClinic[]
-  availability           DoctorAvailability[]
-  verificationActions    DoctorVerificationAction[]
-  appointmentSlots       AppointmentSlot[]
-  appointments           Appointment[]
-  consultations          Consultation[]
-  prescriptions          Prescription[]
-  carePlans              CarePlan[]
+  id                        String                     @id @default(cuid())
+  userId                    String                     @unique
+  slug                      String                     @unique
+  title                     String                     @default("Dr.")
+  firstName                 String?
+  lastName                  String?
+  gender                    String?
+  bio                       String?
+  registrationCouncil       String?
+  registrationNumber        String?
+  registrationYear          Int?
+  primaryQualification      String?
+  highestQualification      String?
+  graduationInstitution     String?
+  graduationYear            Int?
+  yearsExperience           Int?
+  specialties               String[]                   @default([])
+  languages                 String[]                   @default([])
+  consultationModes         ConsultationMode[]         @default([VIDEO])
+  videoFee                  Int?
+  clinicFee                 Int?
+  rating                    Float                      @default(0)
+  reviewCount               Int                        @default(0)
+  isAcceptingNewPatients    Boolean                    @default(true)
+  verificationStatus        DoctorVerificationStatus   @default(DRAFT)
+  isDiscoverable            Boolean                    @default(false)
+  submittedAt               DateTime?
+  reviewedAt                DateTime?
+  reviewedByUserId          String?
+  rejectionReason           String?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  user                      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents                 DoctorDocument[]
+  clinics                   DoctorClinic[]
+  availability              DoctorAvailability[]
+  verificationActions       DoctorVerificationAction[]
+  appointmentSlots          AppointmentSlot[]
+  appointments              Appointment[]
+  consultations             Consultation[]
+  prescriptions             Prescription[]
+  carePlans                 CarePlan[]
   diagnosticRecommendations DiagnosticRecommendation[]
 
+  @@unique([registrationCouncil, registrationNumber])
   @@index([verificationStatus, isDiscoverable])
   @@index([lastName, firstName])
-  @@unique([registrationCouncil, registrationNumber])
 }
 
 model DoctorDocument {
@@ -336,24 +339,24 @@ model DoctorDocument {
 }
 
 model DoctorClinic {
-  id           String        @id @default(cuid())
-  doctorProfileId String
-  name         String
-  addressLine1 String
-  addressLine2 String?
-  city         String
-  state        String
-  postalCode   String
-  phone        String?
-  latitude     Float?
-  longitude    Float?
-  active       Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  availability  DoctorAvailability[]
+  id               String               @id @default(cuid())
+  doctorProfileId  String
+  name             String
+  addressLine1     String
+  addressLine2     String?
+  city             String
+  state            String
+  postalCode       String
+  phone            String?
+  latitude         Float?
+  longitude        Float?
+  active           Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  doctorProfile    DoctorProfile        @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  availability     DoctorAvailability[]
   appointmentSlots AppointmentSlot[]
-  appointments  Appointment[]
+  appointments     Appointment[]
 
   @@index([doctorProfileId, active])
   @@index([city, state])
@@ -383,14 +386,14 @@ model DoctorAvailability {
 }
 
 model DoctorVerificationAction {
-  id              String                     @id @default(cuid())
+  id              String                    @id @default(cuid())
   doctorProfileId String
   adminUserId     String
   fromStatus      DoctorVerificationStatus?
   toStatus        DoctorVerificationStatus
   notes           String?
-  createdAt       DateTime                   @default(now())
-  doctorProfile   DoctorProfile              @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  createdAt       DateTime                  @default(now())
+  doctorProfile   DoctorProfile             @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
 
   @@index([doctorProfileId, createdAt])
   @@index([adminUserId, createdAt])
@@ -444,35 +447,35 @@ model AppointmentSlot {
 }
 
 model Appointment {
-  id                           String             @id @default(cuid())
-  patientUserId                String
-  careRecipientFamilyMemberId  String?
-  doctorProfileId              String
+  id                          String            @id @default(cuid())
+  patientUserId               String
+  careRecipientFamilyMemberId String?
+  doctorProfileId             String
   // Not @unique: a cancelled appointment frees its AppointmentSlot back to
   // OPEN (modules/appointments/appointments.service.ts) so another patient
   // can book the same calendar slot — one slot can accumulate several
   // Appointment rows over time (at most one non-cancelled at a time, which
   // AppointmentSlot.status enforces, not this FK).
-  slotId                       String
-  mode                         ConsultationMode
-  clinicId                     String?
-  scheduledAt                  DateTime
-  durationMinutes              Int
-  status                       AppointmentStatus  @default(PENDING_PAYMENT)
-  reasonForVisit                String?
-  paymentId                    String?            @unique
-  cancelledAt                  DateTime?
-  cancelledBy                  String?
-  cancellationReason           String?
-  createdAt                    DateTime           @default(now())
-  updatedAt                    DateTime           @updatedAt
-  patientUser                  User               @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
-  careRecipientFamilyMember    FamilyMember?      @relation(fields: [careRecipientFamilyMemberId], references: [id], onDelete: SetNull)
-  doctorProfile                DoctorProfile      @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  slot                         AppointmentSlot    @relation(fields: [slotId], references: [id], onDelete: Restrict)
-  clinic                       DoctorClinic?      @relation(fields: [clinicId], references: [id], onDelete: SetNull)
-  payment                      Payment?           @relation(fields: [paymentId], references: [id], onDelete: SetNull)
-  consultation                 Consultation?
+  slotId                      String
+  mode                        ConsultationMode
+  clinicId                    String?
+  scheduledAt                 DateTime
+  durationMinutes             Int
+  status                      AppointmentStatus @default(PENDING_PAYMENT)
+  reasonForVisit              String?
+  paymentId                   String?           @unique
+  cancelledAt                 DateTime?
+  cancelledBy                 String?
+  cancellationReason          String?
+  createdAt                   DateTime          @default(now())
+  updatedAt                   DateTime          @updatedAt
+  patientUser                 User              @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  careRecipientFamilyMember   FamilyMember?     @relation(fields: [careRecipientFamilyMemberId], references: [id], onDelete: SetNull)
+  doctorProfile               DoctorProfile     @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  slot                        AppointmentSlot   @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  clinic                      DoctorClinic?     @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  payment                     Payment?          @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  consultation                Consultation?
 
   @@index([patientUserId, status])
   @@index([doctorProfileId, scheduledAt])
@@ -500,23 +503,24 @@ enum PaymentStatus {
 // — the Razorpay adapter (src/lib/payments/razorpay.ts) is the one place
 // that converts to paise, right before the gateway call.
 model Payment {
-  id                String         @id @default(cuid())
-  payerUserId       String
-  purpose           PaymentPurpose
-  purposeEntityId   String
-  amount            Int
-  currency          String         @default("INR")
-  status            PaymentStatus  @default(CREATED)
-  gateway           String         @default("razorpay")
-  gatewayOrderId    String?        @unique
-  gatewayPaymentId  String?        @unique
-  gatewaySignature  String?
-  verifiedAt        DateTime?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  payer             User           @relation(fields: [payerUserId], references: [id], onDelete: Cascade)
-  appointment       Appointment?
-  diagnosticOrder   DiagnosticOrder?
+  id               String           @id @default(cuid())
+  payerUserId      String
+  purpose          PaymentPurpose
+  purposeEntityId  String
+  amount           Int
+  currency         String           @default("INR")
+  status           PaymentStatus    @default(CREATED)
+  gateway          String           @default("razorpay")
+  gatewayOrderId   String?          @unique
+  gatewayPaymentId String?          @unique
+  gatewaySignature String?
+  verifiedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  payer            User             @relation(fields: [payerUserId], references: [id], onDelete: Cascade)
+  appointment      Appointment?
+  diagnosticOrder  DiagnosticOrder?
+  medicineOrder    MedicineOrder?
 
   @@index([payerUserId, status])
   @@index([purpose, purposeEntityId])
@@ -572,25 +576,25 @@ enum ConsultationStatus {
 // technically "starts". Video-call infrastructure isn't connected in this
 // environment (see VideoSession below); everything else here is real.
 model Consultation {
-  id                      String             @id @default(cuid())
-  appointmentId           String             @unique
-  doctorProfileId         String
-  patientUserId           String
-  startedAt               DateTime?
-  endedAt                 DateTime?
-  chiefComplaint          String?
-  historyOfPresentIllness String?
-  notes                   String?
-  status                  ConsultationStatus @default(SCHEDULED)
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
-  appointment             Appointment        @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  doctorProfile           DoctorProfile      @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  patientUser             User               @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
-  videoSession            VideoSession?
-  clinicalNote            ClinicalNote?
-  prescriptions           Prescription[]
-  carePlans               CarePlan[]
+  id                        String                     @id @default(cuid())
+  appointmentId             String                     @unique
+  doctorProfileId           String
+  patientUserId             String
+  startedAt                 DateTime?
+  endedAt                   DateTime?
+  chiefComplaint            String?
+  historyOfPresentIllness   String?
+  notes                     String?
+  status                    ConsultationStatus         @default(SCHEDULED)
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  appointment               Appointment                @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  doctorProfile             DoctorProfile              @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  patientUser               User                       @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  videoSession              VideoSession?
+  clinicalNote              ClinicalNote?
+  prescriptions             Prescription[]
+  carePlans                 CarePlan[]
   diagnosticRecommendations DiagnosticRecommendation[]
 
   @@index([doctorProfileId, status])
@@ -638,8 +642,8 @@ enum VideoProvider {
 // patient/doctor-visible row (docs/DOMAIN-MODEL.md §5) — the adapter
 // (src/lib/video) resolves join tokens server-side, per request.
 model VideoSession {
-  id                 String       @id @default(cuid())
-  consultationId     String       @unique
+  id                 String        @id @default(cuid())
+  consultationId     String        @unique
   provider           VideoProvider @default(MOCK)
   providerSessionRef String?
   joinWindowStart    DateTime?
@@ -648,9 +652,9 @@ model VideoSession {
   doctorJoinedAt     DateTime?
   endedAt            DateTime?
   failureReason      String?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-  consultation       Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  consultation       Consultation  @relation(fields: [consultationId], references: [id], onDelete: Cascade)
 }
 
 enum PrescriptionStatus {
@@ -660,48 +664,56 @@ enum PrescriptionStatus {
 }
 
 model Prescription {
-  id              String              @id @default(cuid())
+  id              String             @id @default(cuid())
   consultationId  String
   doctorProfileId String
   patientUserId   String
-  status          PrescriptionStatus  @default(DRAFT)
+  status          PrescriptionStatus @default(DRAFT)
   finalizedAt     DateTime?
   // Set on the NEW row when it's a correction of an older FINALIZED one,
   // which is marked SUPERSEDED at the same time — the old row and its
   // items are never mutated (modules/consultations/prescriptions.service.ts).
-  supersedesId    String?             @unique
+  supersedesId    String?            @unique
   doctorNotes     String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  consultation    Consultation        @relation(fields: [consultationId], references: [id], onDelete: Cascade)
-  doctorProfile   DoctorProfile       @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  patientUser     User                @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
-  supersedes      Prescription?       @relation("PrescriptionCorrection", fields: [supersedesId], references: [id], onDelete: SetNull)
-  supersededBy    Prescription?       @relation("PrescriptionCorrection")
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  consultation    Consultation       @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  doctorProfile   DoctorProfile      @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  patientUser     User               @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  supersedes      Prescription?      @relation("PrescriptionCorrection", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy    Prescription?      @relation("PrescriptionCorrection")
   items           PrescriptionItem[]
+  medicineOrders  MedicineOrder[]
 
   @@index([consultationId])
   @@index([patientUserId, status])
   @@index([doctorProfileId, status])
 }
 
-// medicineId has no FK yet — the Medicines catalogue (Phase 8) doesn't
-// exist. Free-text productName is always required and is what renders
-// today; medicineId is reserved for when Phase 8 lands (docs/DOMAIN-MODEL.md
-// §5: "may reference an unlisted/compounded product by free-text name").
+// medicineId is resolved automatically at finalizePrescription time
+// (modules/consultations/prescriptions.service.ts calls
+// modules/medicines/catalogue.service.ts's resolveMedicineByName, which
+// finds-or-creates a Medicine by case-insensitive name match) — free-text
+// productName stays the field doctors actually type and what always
+// renders; medicineId is what lets a finalized item become a
+// MedicineOrderItem later (docs/DOMAIN-MODEL.md §5: "may reference an
+// unlisted/compounded product by free-text name" — draft items stay
+// unresolved, only a FINALIZED prescription's items get a medicineId).
 model PrescriptionItem {
-  id             String       @id @default(cuid())
-  prescriptionId String
-  medicineId     String?
-  productName    String
-  dosage         String?
-  frequency      String?
-  durationDays   Int?
-  route          String?
-  instructions   String?
-  startDate      DateTime?
-  endDate        DateTime?
-  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  id                 String              @id @default(cuid())
+  prescriptionId     String
+  medicineId         String?
+  productName        String
+  dosage             String?
+  frequency          String?
+  durationDays       Int?
+  route              String?
+  instructions       String?
+  startDate          DateTime?
+  endDate            DateTime?
+  prescription       Prescription        @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicine           Medicine?           @relation(fields: [medicineId], references: [id], onDelete: SetNull)
+  medicineOrderItems MedicineOrderItem[]
 
   @@index([prescriptionId])
 }
@@ -786,24 +798,24 @@ enum CarePlanRelatedEntityType {
 // are schema-ready but unused until then; CONSULTATION and TASK (no
 // external entity — the item itself is the task) are usable today.
 model CarePlanItem {
-  id                  String                      @id @default(cuid())
-  carePlanId          String
-  type                CarePlanItemType
-  title               String
-  description         String?
-  status              CarePlanItemStatus          @default(PLANNED)
-  startDate           DateTime?
-  dueDate             DateTime?
-  completedDate       DateTime?
-  relatedEntityType   CarePlanRelatedEntityType?
-  relatedEntityId     String?
-  ownerUserId         String?
-  notes               String?
-  patientMarkedDoneAt DateTime?
-  createdAt           DateTime                    @default(now())
-  updatedAt           DateTime                    @updatedAt
-  carePlan            CarePlan                    @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
-  owner               User?                       @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  id                        String                     @id @default(cuid())
+  carePlanId                String
+  type                      CarePlanItemType
+  title                     String
+  description               String?
+  status                    CarePlanItemStatus         @default(PLANNED)
+  startDate                 DateTime?
+  dueDate                   DateTime?
+  completedDate             DateTime?
+  relatedEntityType         CarePlanRelatedEntityType?
+  relatedEntityId           String?
+  ownerUserId               String?
+  notes                     String?
+  patientMarkedDoneAt       DateTime?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  carePlan                  CarePlan                   @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
+  owner                     User?                      @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
   diagnosticRecommendations DiagnosticRecommendation[]
 
   @@index([carePlanId])
@@ -836,21 +848,21 @@ enum DiagnosticLabVerificationStatus {
 // lab's licenses are identifiers an admin can verify externally, not scans
 // that need per-file review like a doctor's registration certificate.
 model DiagnosticLab {
-  id                      String                           @id @default(cuid())
-  userId                  String                           @unique
+  id                      String                          @id @default(cuid())
+  userId                  String                          @unique
   name                    String?
-  licenseNumbers          String[]                         @default([])
-  serviceCities           String[]                         @default([])
-  homeCollectionSupported Boolean                          @default(false)
-  active                  Boolean                          @default(true)
-  verificationStatus      DiagnosticLabVerificationStatus   @default(DRAFT)
+  licenseNumbers          String[]                        @default([])
+  serviceCities           String[]                        @default([])
+  homeCollectionSupported Boolean                         @default(false)
+  active                  Boolean                         @default(true)
+  verificationStatus      DiagnosticLabVerificationStatus @default(DRAFT)
   submittedAt             DateTime?
   reviewedAt              DateTime?
   reviewedByUserId        String?
   rejectionReason         String?
-  createdAt               DateTime                         @default(now())
-  updatedAt               DateTime                         @updatedAt
-  user                    User                             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt               DateTime                        @default(now())
+  updatedAt               DateTime                        @updatedAt
+  user                    User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
   tests                   DiagnosticTest[]
   orders                  DiagnosticOrder[]
 
@@ -885,7 +897,7 @@ enum DiagnosticRecommendationStatus {
 }
 
 model DiagnosticRecommendation {
-  id                   String                          @id @default(cuid())
+  id                   String                         @id @default(cuid())
   carePlanItemId       String?
   consultationId       String
   doctorProfileId      String
@@ -893,14 +905,14 @@ model DiagnosticRecommendation {
   testId               String?
   clinicalReason       String?
   targetCompletionDate DateTime?
-  status               DiagnosticRecommendationStatus  @default(RECOMMENDED)
-  createdAt            DateTime                        @default(now())
-  updatedAt            DateTime                        @updatedAt
-  carePlanItem         CarePlanItem?                   @relation(fields: [carePlanItemId], references: [id], onDelete: SetNull)
-  consultation         Consultation                    @relation(fields: [consultationId], references: [id], onDelete: Cascade)
-  doctorProfile        DoctorProfile                   @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  patientUser          User                            @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
-  test                 DiagnosticTest?                 @relation(fields: [testId], references: [id], onDelete: SetNull)
+  status               DiagnosticRecommendationStatus @default(RECOMMENDED)
+  createdAt            DateTime                       @default(now())
+  updatedAt            DateTime                       @updatedAt
+  carePlanItem         CarePlanItem?                  @relation(fields: [carePlanItemId], references: [id], onDelete: SetNull)
+  consultation         Consultation                   @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  doctorProfile        DoctorProfile                  @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  patientUser          User                           @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  test                 DiagnosticTest?                @relation(fields: [testId], references: [id], onDelete: SetNull)
   orders               DiagnosticOrder[]
 
   @@index([patientUserId, status])
@@ -966,15 +978,15 @@ model DiagnosticOrderItem {
 }
 
 model SampleCollection {
-  id                String           @id @default(cuid())
-  diagnosticOrderId String           @unique
+  id                String          @id @default(cuid())
+  diagnosticOrderId String          @unique
   collectorName     String?
   collectedAt       DateTime?
   sampleBarcode     String?
   qualityException  String?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  diagnosticOrder   DiagnosticOrder  @relation(fields: [diagnosticOrderId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  diagnosticOrder   DiagnosticOrder @relation(fields: [diagnosticOrderId], references: [id], onDelete: Cascade)
 }
 
 model DiagnosticReport {
@@ -1007,17 +1019,175 @@ enum ReportKind {
 }
 
 model Report {
-  id                        String     @id @default(cuid())
-  patientUserId             String
-  kind                      ReportKind
-  sourceEntityType          String?
-  sourceEntityId            String?
-  storageKey                String
-  uploadedByUserId          String?
-  attachedToConsultationId  String?
-  attachedToCarePlanId      String?
-  createdAt                 DateTime   @default(now())
-  patientUser               User       @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  id                       String     @id @default(cuid())
+  patientUserId            String
+  kind                     ReportKind
+  sourceEntityType         String?
+  sourceEntityId           String?
+  storageKey               String
+  uploadedByUserId         String?
+  attachedToConsultationId String?
+  attachedToCarePlanId     String?
+  createdAt                DateTime   @default(now())
+  patientUser              User       @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
 
   @@index([patientUserId, kind])
+}
+
+// ---------------------------------------------------------------------------
+// Medicines & Pharmacy (docs/DOMAIN-MODEL.md §9). Unlike DiagnosticTest
+// (Phase 7, deliberately lab-owned catalogue), Medicine here is a
+// platform-wide reference list, not scoped to one pharmacy — a doctor
+// writing a Prescription has no idea which pharmacy will eventually fill it,
+// so PrescriptionItem.medicineId must point at a stable drug identity
+// independent of any pharmacy. Pharmacies each hold their own stock of a
+// given Medicine as PharmacyInventory batches (with expiry/batch tracking,
+// which diagnostics never needed). The catalogue is built lazily: a
+// doctor's free-text PrescriptionItem.productName is resolved to a Medicine
+// row (find-by-name-or-create) when the prescription is finalized
+// (modules/medicines/catalogue.service.ts resolveMedicineByName, called
+// from modules/consultations/prescriptions.service.ts finalizePrescription),
+// and a pharmacy can likewise create one directly when first stocking an
+// OTC item. No Brand/Manufacturer join tables or MedicineOrderItemSubstitution
+// audit trail yet (out of scope this phase, same "document the gap, don't
+// build a stub table" call as Phase 7's DiagnosticPackage) — brand/
+// manufacturer are plain descriptive strings on Medicine for now, and a
+// substitution simply isn't offered as a fulfilment action.
+// ---------------------------------------------------------------------------
+
+model Medicine {
+  id                   String              @id @default(cuid())
+  name                 String
+  genericName          String?
+  form                 String?
+  strength             String?
+  manufacturerName     String?
+  brandName            String?
+  requiresPrescription Boolean             @default(true)
+  active               Boolean             @default(true)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  prescriptionItems    PrescriptionItem[]
+  inventory            PharmacyInventory[]
+  orderItems           MedicineOrderItem[]
+
+  @@index([name])
+}
+
+enum PharmacyVerificationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+// Mirrors DiagnosticLab's verification shape (docs/DOMAIN-MODEL.md §9).
+model Pharmacy {
+  id                 String                     @id @default(cuid())
+  userId             String                     @unique
+  name               String?
+  licenseNumbers     String[]                   @default([])
+  serviceAreas       String[]                   @default([])
+  active             Boolean                    @default(true)
+  verificationStatus PharmacyVerificationStatus @default(DRAFT)
+  submittedAt        DateTime?
+  reviewedAt         DateTime?
+  reviewedByUserId   String?
+  rejectionReason    String?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  user               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventory          PharmacyInventory[]
+  orders             MedicineOrder[]
+
+  @@index([verificationStatus, active])
+}
+
+model PharmacyInventory {
+  id                String   @id @default(cuid())
+  pharmacyId        String
+  medicineId        String
+  batchNumber       String
+  expiryDate        DateTime
+  quantityAvailable Int
+  price             Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  pharmacy          Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  medicine          Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@unique([pharmacyId, medicineId, batchNumber])
+  @@index([pharmacyId, medicineId])
+}
+
+// PENDING | ACCEPTED | PACKING | DISPATCHED | DELIVERED | CANCELLED is the
+// brief's exact list — unlike DiagnosticOrder there is no separate
+// "awaiting payment" state, so PENDING does double duty: an order sits at
+// PENDING both before and after payment succeeds, and a pharmacy may only
+// act on it (acceptOrder) once its Payment row is SUCCESS
+// (modules/medicines/orders.service.ts). listMineAsPharmacy filters on
+// payment status rather than order status for the same reason
+// DiagnosticOrder's lab list excludes BOOKED.
+enum MedicineOrderStatus {
+  PENDING
+  ACCEPTED
+  PACKING
+  DISPATCHED
+  DELIVERED
+  CANCELLED
+}
+
+model MedicineOrder {
+  id                          String              @id @default(cuid())
+  prescriptionId              String?
+  patientUserId               String
+  careRecipientFamilyMemberId String?
+  pharmacyId                  String
+  paymentId                   String?             @unique
+  status                      MedicineOrderStatus @default(PENDING)
+  deliveryAddress             String?
+  cancelledAt                 DateTime?
+  cancellationReason          String?
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
+  prescription                Prescription?       @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
+  patientUser                 User                @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  careRecipientFamilyMember   FamilyMember?       @relation(fields: [careRecipientFamilyMemberId], references: [id], onDelete: SetNull)
+  pharmacy                    Pharmacy            @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  payment                     Payment?            @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  items                       MedicineOrderItem[]
+  shipment                    Shipment?
+
+  @@index([patientUserId, status])
+  @@index([pharmacyId, status])
+}
+
+model MedicineOrderItem {
+  id                 String            @id @default(cuid())
+  medicineOrderId    String
+  prescriptionItemId String?
+  medicineId         String
+  batchNumber        String
+  quantity           Int
+  unitPrice          Int
+  createdAt          DateTime          @default(now())
+  medicineOrder      MedicineOrder     @relation(fields: [medicineOrderId], references: [id], onDelete: Cascade)
+  prescriptionItem   PrescriptionItem? @relation(fields: [prescriptionItemId], references: [id], onDelete: SetNull)
+  medicine           Medicine          @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@index([medicineOrderId])
+}
+
+model Shipment {
+  id              String        @id @default(cuid())
+  medicineOrderId String        @unique
+  carrier         String?
+  trackingRef     String?
+  dispatchedAt    DateTime?
+  deliveredAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  medicineOrder   MedicineOrder @relation(fields: [medicineOrderId], references: [id], onDelete: Cascade)
 }
