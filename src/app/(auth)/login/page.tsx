@@ -16,6 +16,7 @@ const ROLE_OPTIONS = [
   { value: 'DOCTOR', label: 'Doctor / Vaidya' },
   { value: 'LAB', label: 'Diagnostic Lab' },
   { value: 'PHARMACY', label: 'Pharmacy' },
+  { value: 'PANCHAKARMA_CENTRE', label: 'Panchakarma Centre' },
   { value: 'ADMIN', label: 'Administrator' },
 ] as const;
 
@@ -24,12 +25,13 @@ const PORTAL_PATH: Record<string, string> = {
   DOCTOR: '/doctor',
   LAB: '/lab',
   PHARMACY: '/pharmacy',
+  PANCHAKARMA_CENTRE: '/panchakarma-centre',
   ADMIN: '/admin',
 };
 
 const mobileStepSchema = z.object({
   mobile: z.string().min(10, 'Enter a 10-digit mobile number'),
-  role: z.enum(['PATIENT', 'DOCTOR', 'LAB', 'PHARMACY', 'ADMIN']),
+  role: z.enum(['PATIENT', 'DOCTOR', 'LAB', 'PHARMACY', 'PANCHAKARMA_CENTRE', 'ADMIN']),
 });
 type MobileStep = z.infer<typeof mobileStepSchema>;
 

@@ -45,6 +45,14 @@ const EDITABLE_STATUSES = new Set(['SCHEDULED', 'IN_PROGRESS']);
 type CarePlanSummary = { id: string; status: string; summary: string | null; createdAt: string };
 type DiagnosticTestOption = { id: string; name: string; labName: string | null };
 type DiagnosticRecommendationSummary = { id: string; status: string; clinicalReason: string | null; testName: string | null };
+type TherapyOption = { id: string; name: string; centreName: string | null };
+type PanchakarmaRecommendationSummary = {
+  id: string;
+  status: string;
+  clinicalReason: string | null;
+  therapyName: string | null;
+  sessionCountRecommended: number | null;
+};
 
 export function ConsultationWorkspace({
   consultation: initial,
@@ -54,6 +62,8 @@ export function ConsultationWorkspace({
   carePlans: initialCarePlans,
   diagnosticTests,
   diagnosticRecommendations: initialRecommendations,
+  therapies,
+  panchakarmaRecommendations: initialPanchakarmaRecommendations,
 }: {
   consultation: ConsultationDetail;
   assessmentFields: AssessmentField[];
@@ -62,6 +72,8 @@ export function ConsultationWorkspace({
   carePlans: CarePlanSummary[];
   diagnosticTests: DiagnosticTestOption[];
   diagnosticRecommendations: DiagnosticRecommendationSummary[];
+  therapies: TherapyOption[];
+  panchakarmaRecommendations: PanchakarmaRecommendationSummary[];
 }) {
   const [consultation, setConsultation] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +190,11 @@ export function ConsultationWorkspace({
         <h2 className="font-semibold text-brand-neutral-900">Diagnostics</h2>
         <DiagnosticsSection consultationId={consultation.id} tests={diagnosticTests} initial={initialRecommendations} editable={editable} />
       </Card>
+
+      <Card className="mt-6">
+        <h2 className="font-semibold text-brand-neutral-900">Panchakarma</h2>
+        <PanchakarmaSection consultationId={consultation.id} therapies={therapies} initial={initialPanchakarmaRecommendations} editable={editable} />
+      </Card>
     </div>
   );
 }
@@ -264,6 +281,110 @@ function DiagnosticsSection({
         editable && (
           <Button variant="secondary" size="sm" onClick={() => setShowForm(true)}>
             + Recommend a test
+          </Button>
+        )
+      )}
+    </div>
+  );
+}
+
+function PanchakarmaSection({
+  consultationId,
+  therapies,
+  initial,
+  editable,
+}: {
+  consultationId: string;
+  therapies: TherapyOption[];
+  initial: PanchakarmaRecommendationSummary[];
+  editable: boolean;
+}) {
+  const [recommendations, setRecommendations] = useState(initial);
+  const [showForm, setShowForm] = useState(false);
+  const [clinicalReason, setClinicalReason] = useState('');
+  const [therapyId, setTherapyId] = useState('');
+  const [sessionCountRecommended, setSessionCountRecommended] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { recommendation } = await api.post<{
+        recommendation: { id: string; status: string; clinicalReason: string | null; sessionCountRecommended: number | null };
+      }>(`/api/consultations/${consultationId}/panchakarma-recommendations`, {
+        clinicalReason,
+        therapyId: therapyId || undefined,
+        sessionCountRecommended: sessionCountRecommended ? Number(sessionCountRecommended) : undefined,
+      });
+      const therapy = therapies.find((t) => t.id === therapyId);
+      setRecommendations((prev) => [{ ...recommendation, therapyName: therapy?.name ?? null }, ...prev]);
+      setClinicalReason('');
+      setTherapyId('');
+      setSessionCountRecommended('');
+      setShowForm(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not recommend this therapy.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-3">
+      {error && <Alert tone="error">{error}</Alert>}
+      {recommendations.map((r) => (
+        <div key={r.id} className="rounded-card border border-brand-neutral-200 p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-brand-neutral-900">{r.therapyName ?? 'Unspecified therapy'}</p>
+            <Badge tone={r.status === 'CANCELLED' ? 'danger' : r.status === 'FULFILLED' ? 'success' : 'blue'}>{r.status}</Badge>
+          </div>
+          {r.clinicalReason && <p className="mt-1 text-xs text-brand-neutral-500">{r.clinicalReason}</p>}
+          {r.sessionCountRecommended && <p className="mt-1 text-xs text-brand-neutral-400">{r.sessionCountRecommended} session(s) recommended</p>}
+        </div>
+      ))}
+      {recommendations.length === 0 && !showForm && <p className="text-sm text-brand-neutral-500">No Panchakarma therapies recommended yet.</p>}
+
+      {showForm ? (
+        <div className="space-y-3 rounded-card border border-brand-neutral-200 p-4">
+          <div>
+            <Label htmlFor="pkClinicalReason">Clinical reason</Label>
+            <Textarea id="pkClinicalReason" rows={2} value={clinicalReason} onChange={(e) => setClinicalReason(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="therapyId">Suggested therapy (optional)</Label>
+            <Select id="therapyId" value={therapyId} onChange={(e) => setTherapyId(e.target.value)}>
+              <option value="">Any centre / unspecified</option>
+              {therapies.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} {t.centreName ? `— ${t.centreName}` : ''}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="sessionCountRecommended">Sessions recommended (optional)</Label>
+            <Input
+              id="sessionCountRecommended"
+              inputMode="numeric"
+              value={sessionCountRecommended}
+              onChange={(e) => setSessionCountRecommended(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={() => setShowForm(false)}>
+              Cancel
+            </Button>
+            <Button type="button" size="sm" loading={submitting} disabled={!clinicalReason} onClick={handleSubmit}>
+              Recommend
+            </Button>
+          </div>
+        </div>
+      ) : (
+        editable && (
+          <Button variant="secondary" size="sm" onClick={() => setShowForm(true)}>
+            + Recommend a therapy
           </Button>
         )
       )}

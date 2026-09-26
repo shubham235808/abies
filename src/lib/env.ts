@@ -38,6 +38,7 @@ const envSchema = z.object({
   ALLOW_DOCTOR_SELF_ONBOARDING: z.coerce.boolean().default(true),
   ALLOW_LAB_SELF_ONBOARDING: z.coerce.boolean().default(true),
   ALLOW_PHARMACY_SELF_ONBOARDING: z.coerce.boolean().default(true),
+  ALLOW_PANCHAKARMA_CENTRE_SELF_ONBOARDING: z.coerce.boolean().default(true),
   APP_BASE_URL: z.string().url(),
   UPLOAD_MAX_BYTES: z.coerce.number().default(10 * 1024 * 1024),
 

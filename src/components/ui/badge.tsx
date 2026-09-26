@@ -111,3 +111,16 @@ const MEDICINE_ORDER_STATUS_TONE: Record<string, Tone> = {
 export function MedicineOrderStatusBadge({ status }: { status: string }) {
   return <Badge tone={MEDICINE_ORDER_STATUS_TONE[status] ?? 'neutral'}>{status}</Badge>;
 }
+
+const PANCHAKARMA_BOOKING_STATUS_TONE: Record<string, Tone> = {
+  RECOMMENDED: 'neutral',
+  BOOKED: 'orange',
+  SCHEDULED: 'blue',
+  IN_PROGRESS: 'purple',
+  COMPLETED: 'success',
+  CANCELLED: 'danger',
+};
+
+export function PanchakarmaBookingStatusBadge({ status }: { status: string }) {
+  return <Badge tone={PANCHAKARMA_BOOKING_STATUS_TONE[status] ?? 'neutral'}>{status.replace(/_/g, ' ')}</Badge>;
+}

@@ -3,6 +3,8 @@ import { resolveJoinInfo } from '@/lib/video';
 import { listForDoctorPatientPair } from '@/modules/care-plans/care-plans.service';
 import { listActiveForRecommendation } from '@/modules/diagnostics/catalogue.service';
 import { listForConsultation } from '@/modules/diagnostics/recommendations.service';
+import { listActiveForRecommendation as listActiveTherapiesForRecommendation } from '@/modules/panchakarma/catalogue.service';
+import { listForConsultation as listPanchakarmaForConsultation } from '@/modules/panchakarma/recommendations.service';
 import { getConsultation, listActiveAssessmentFields, recordJoin } from '@/modules/consultations/consultations.service';
 import { NotFoundError } from '@/lib/errors';
 import { requireSessionOrRedirect } from '@/server/current-user';
@@ -27,6 +29,8 @@ export default async function DoctorConsultationPage({ params }: { params: Promi
   const carePlans = await listForDoctorPatientPair(session.userId, consultation.patientUserId);
   const diagnosticTests = await listActiveForRecommendation();
   const diagnosticRecommendations = await listForConsultation(consultation.id);
+  const therapies = await listActiveTherapiesForRecommendation();
+  const panchakarmaRecommendations = await listPanchakarmaForConsultation(consultation.id);
 
   const patientName =
     [consultation.patientUser.patientProfile?.firstName, consultation.patientUser.patientProfile?.lastName]
@@ -92,6 +96,14 @@ export default async function DoctorConsultationPage({ params }: { params: Promi
         status: r.status,
         clinicalReason: r.clinicalReason,
         testName: r.test?.name ?? null,
+      }))}
+      therapies={therapies}
+      panchakarmaRecommendations={panchakarmaRecommendations.map((r) => ({
+        id: r.id,
+        status: r.status,
+        clinicalReason: r.clinicalReason,
+        therapyName: r.therapy?.name ?? null,
+        sessionCountRecommended: r.sessionCountRecommended,
       }))}
     />
   );

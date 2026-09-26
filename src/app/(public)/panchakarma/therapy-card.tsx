@@ -1,0 +1,123 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input, Label } from '@/components/ui/input';
+import { api, ApiError } from '@/lib/api-client';
+import { loadRazorpayScript } from '@/lib/razorpay-checkout';
+import type { PublicTherapy } from '@/modules/panchakarma/catalogue.service';
+
+export function TherapyCard({ therapy, viewerRole }: { therapy: PublicTherapy; viewerRole: string | null }) {
+  const router = useRouter();
+  const [booking, setBooking] = useState(false);
+  const [sessionCount, setSessionCount] = useState(1);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleBookAndPay() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await api.post<{
+        booking: { id: string };
+        razorpayOrder: { id: string; amount: number; currency: string };
+        razorpayKeyId: string;
+      }>('/api/panchakarma-bookings', {
+        centreId: therapy.centre.id,
+        therapyId: therapy.id,
+        sessionCount,
+      });
+
+      await loadRazorpayScript();
+      if (!window.Razorpay) throw new Error('Payment provider script did not load');
+
+      const checkout = new window.Razorpay({
+        key: result.razorpayKeyId,
+        amount: result.razorpayOrder.amount,
+        currency: result.razorpayOrder.currency,
+        order_id: result.razorpayOrder.id,
+        name: 'ABIES',
+        description: `${therapy.name} — ${therapy.centre.name ?? 'Centre'}`,
+        theme: { color: '#7A1783' },
+        handler: async (response) => {
+          try {
+            await api.post('/api/panchakarma-bookings/verify-payment', {
+              bookingId: result.booking.id,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            });
+            router.push('/patient/panchakarma');
+          } catch (err) {
+            setError(err instanceof ApiError ? err.message : 'Payment succeeded but confirmation failed — contact support.');
+          }
+        },
+        modal: { ondismiss: () => setSubmitting(false) },
+      });
+      checkout.open();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not start booking.');
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-brand-neutral-900">{therapy.name}</h3>
+          <p className="text-xs text-brand-neutral-500">
+            {therapy.centre.name ?? 'Centre'} {therapy.centre.city ? `· ${therapy.centre.city}` : ''}
+          </p>
+        </div>
+        <Badge tone="blue">₹{therapy.price}/session</Badge>
+      </div>
+      {therapy.description && <p className="mt-2 text-sm text-brand-neutral-600">{therapy.description}</p>}
+      {therapy.durationMinutes && <p className="mt-1 text-xs text-brand-neutral-400">{therapy.durationMinutes} min per session</p>}
+      {therapy.requiredSupervision && <Badge tone="orange" className="mt-2">Requires supervision</Badge>}
+      {therapy.contraindications && <p className="mt-1 text-xs text-brand-neutral-400">Contraindications: {therapy.contraindications}</p>}
+
+      {viewerRole !== 'PATIENT' ? (
+        <div className="mt-3 text-sm text-brand-neutral-500">
+          {viewerRole ? (
+            'Only patients can book Panchakarma therapies.'
+          ) : (
+            <>
+              <Link href="/login" className="font-medium text-brand-purple-700 underline">
+                Log in as a patient
+              </Link>{' '}
+              to book this therapy.
+            </>
+          )}
+        </div>
+      ) : booking ? (
+        <div className="mt-3 space-y-3 border-t border-brand-neutral-100 pt-3">
+          {error && <Alert tone="error">{error}</Alert>}
+          <div>
+            <Label htmlFor={`sessions-${therapy.id}`}>Number of sessions</Label>
+            <Input
+              id={`sessions-${therapy.id}`}
+              type="number"
+              min={1}
+              max={60}
+              value={sessionCount}
+              onChange={(e) => setSessionCount(Number(e.target.value))}
+            />
+          </div>
+          <Button size="sm" loading={submitting} onClick={handleBookAndPay}>
+            Book & pay ₹{therapy.price * sessionCount}
+          </Button>
+        </div>
+      ) : (
+        <Button variant="secondary" size="sm" className="mt-3" onClick={() => setBooking(true)}>
+          Book
+        </Button>
+      )}
+    </Card>
+  );
+}

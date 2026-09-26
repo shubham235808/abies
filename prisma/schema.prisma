@@ -49,33 +49,36 @@ enum StaffDepartment {
 }
 
 model User {
-  id                        String                     @id @default(cuid())
-  mobile                    String                     @unique
-  email                     String?                    @unique
-  role                      UserRole                   @default(PATIENT)
-  status                    UserStatus                 @default(ACTIVE)
-  mfaEnabled                Boolean                    @default(false)
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
-  patientProfile            PatientProfile?
-  doctorProfile             DoctorProfile?
-  diagnosticLab             DiagnosticLab?
-  pharmacy                  Pharmacy?
-  staffProfile              StaffProfile?
-  sessions                  Session[]
-  consentRecords            ConsentRecord[]
-  auditEvents               AuditEvent[]
-  appointments              Appointment[]
-  consultations             Consultation[]
-  prescriptions             Prescription[]
-  payments                  Payment[]
-  notifications             Notification[]
-  carePlans                 CarePlan[]
-  carePlanItemsOwned        CarePlanItem[]
-  diagnosticRecommendations DiagnosticRecommendation[]
-  diagnosticOrders          DiagnosticOrder[]
-  reports                   Report[]
-  medicineOrders            MedicineOrder[]
+  id                         String                      @id @default(cuid())
+  mobile                     String                      @unique
+  email                      String?                     @unique
+  role                       UserRole                    @default(PATIENT)
+  status                     UserStatus                  @default(ACTIVE)
+  mfaEnabled                 Boolean                     @default(false)
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  patientProfile             PatientProfile?
+  doctorProfile              DoctorProfile?
+  diagnosticLab              DiagnosticLab?
+  pharmacy                   Pharmacy?
+  panchakarmaCentre          PanchakarmaCentre?
+  staffProfile               StaffProfile?
+  sessions                   Session[]
+  consentRecords             ConsentRecord[]
+  auditEvents                AuditEvent[]
+  appointments               Appointment[]
+  consultations              Consultation[]
+  prescriptions              Prescription[]
+  payments                   Payment[]
+  notifications              Notification[]
+  carePlans                  CarePlan[]
+  carePlanItemsOwned         CarePlanItem[]
+  diagnosticRecommendations  DiagnosticRecommendation[]
+  diagnosticOrders           DiagnosticOrder[]
+  reports                    Report[]
+  medicineOrders             MedicineOrder[]
+  panchakarmaRecommendations PanchakarmaRecommendation[]
+  panchakarmaBookings        PanchakarmaBooking[]
 
   @@index([role, status])
 }
@@ -270,49 +273,50 @@ enum ConsultationMode {
 }
 
 model DoctorProfile {
-  id                        String                     @id @default(cuid())
-  userId                    String                     @unique
-  slug                      String                     @unique
-  title                     String                     @default("Dr.")
-  firstName                 String?
-  lastName                  String?
-  gender                    String?
-  bio                       String?
-  registrationCouncil       String?
-  registrationNumber        String?
-  registrationYear          Int?
-  primaryQualification      String?
-  highestQualification      String?
-  graduationInstitution     String?
-  graduationYear            Int?
-  yearsExperience           Int?
-  specialties               String[]                   @default([])
-  languages                 String[]                   @default([])
-  consultationModes         ConsultationMode[]         @default([VIDEO])
-  videoFee                  Int?
-  clinicFee                 Int?
-  rating                    Float                      @default(0)
-  reviewCount               Int                        @default(0)
-  isAcceptingNewPatients    Boolean                    @default(true)
-  verificationStatus        DoctorVerificationStatus   @default(DRAFT)
-  isDiscoverable            Boolean                    @default(false)
-  submittedAt               DateTime?
-  reviewedAt                DateTime?
-  reviewedByUserId          String?
-  rejectionReason           String?
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
-  user                      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  documents                 DoctorDocument[]
-  clinics                   DoctorClinic[]
-  availability              DoctorAvailability[]
-  verificationActions       DoctorVerificationAction[]
-  appointmentSlots          AppointmentSlot[]
-  appointments              Appointment[]
-  consultations             Consultation[]
-  prescriptions             Prescription[]
-  carePlans                 CarePlan[]
-  diagnosticRecommendations DiagnosticRecommendation[]
+  id                         String                      @id @default(cuid())
+  userId                     String                      @unique
+  slug                       String                      @unique
+  title                      String                      @default("Dr.")
+  firstName                  String?
+  lastName                   String?
+  gender                     String?
+  bio                        String?
+  registrationCouncil        String?
+  registrationNumber         String?
+  registrationYear           Int?
+  primaryQualification       String?
+  highestQualification       String?
+  graduationInstitution      String?
+  graduationYear             Int?
+  yearsExperience            Int?
+  specialties                String[]                    @default([])
+  languages                  String[]                    @default([])
+  consultationModes          ConsultationMode[]          @default([VIDEO])
+  videoFee                   Int?
+  clinicFee                  Int?
+  rating                     Float                       @default(0)
+  reviewCount                Int                         @default(0)
+  isAcceptingNewPatients     Boolean                     @default(true)
+  verificationStatus         DoctorVerificationStatus    @default(DRAFT)
+  isDiscoverable             Boolean                     @default(false)
+  submittedAt                DateTime?
+  reviewedAt                 DateTime?
+  reviewedByUserId           String?
+  rejectionReason            String?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  user                       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents                  DoctorDocument[]
+  clinics                    DoctorClinic[]
+  availability               DoctorAvailability[]
+  verificationActions        DoctorVerificationAction[]
+  appointmentSlots           AppointmentSlot[]
+  appointments               Appointment[]
+  consultations              Consultation[]
+  prescriptions              Prescription[]
+  carePlans                  CarePlan[]
+  diagnosticRecommendations  DiagnosticRecommendation[]
+  panchakarmaRecommendations PanchakarmaRecommendation[]
 
   @@unique([registrationCouncil, registrationNumber])
   @@index([verificationStatus, isDiscoverable])
@@ -503,24 +507,25 @@ enum PaymentStatus {
 // — the Razorpay adapter (src/lib/payments/razorpay.ts) is the one place
 // that converts to paise, right before the gateway call.
 model Payment {
-  id               String           @id @default(cuid())
-  payerUserId      String
-  purpose          PaymentPurpose
-  purposeEntityId  String
-  amount           Int
-  currency         String           @default("INR")
-  status           PaymentStatus    @default(CREATED)
-  gateway          String           @default("razorpay")
-  gatewayOrderId   String?          @unique
-  gatewayPaymentId String?          @unique
-  gatewaySignature String?
-  verifiedAt       DateTime?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  payer            User             @relation(fields: [payerUserId], references: [id], onDelete: Cascade)
-  appointment      Appointment?
-  diagnosticOrder  DiagnosticOrder?
-  medicineOrder    MedicineOrder?
+  id                 String              @id @default(cuid())
+  payerUserId        String
+  purpose            PaymentPurpose
+  purposeEntityId    String
+  amount             Int
+  currency           String              @default("INR")
+  status             PaymentStatus       @default(CREATED)
+  gateway            String              @default("razorpay")
+  gatewayOrderId     String?             @unique
+  gatewayPaymentId   String?             @unique
+  gatewaySignature   String?
+  verifiedAt         DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  payer              User                @relation(fields: [payerUserId], references: [id], onDelete: Cascade)
+  appointment        Appointment?
+  diagnosticOrder    DiagnosticOrder?
+  medicineOrder      MedicineOrder?
+  panchakarmaBooking PanchakarmaBooking?
 
   @@index([payerUserId, status])
   @@index([purpose, purposeEntityId])
@@ -576,26 +581,27 @@ enum ConsultationStatus {
 // technically "starts". Video-call infrastructure isn't connected in this
 // environment (see VideoSession below); everything else here is real.
 model Consultation {
-  id                        String                     @id @default(cuid())
-  appointmentId             String                     @unique
-  doctorProfileId           String
-  patientUserId             String
-  startedAt                 DateTime?
-  endedAt                   DateTime?
-  chiefComplaint            String?
-  historyOfPresentIllness   String?
-  notes                     String?
-  status                    ConsultationStatus         @default(SCHEDULED)
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
-  appointment               Appointment                @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  doctorProfile             DoctorProfile              @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  patientUser               User                       @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
-  videoSession              VideoSession?
-  clinicalNote              ClinicalNote?
-  prescriptions             Prescription[]
-  carePlans                 CarePlan[]
-  diagnosticRecommendations DiagnosticRecommendation[]
+  id                         String                      @id @default(cuid())
+  appointmentId              String                      @unique
+  doctorProfileId            String
+  patientUserId              String
+  startedAt                  DateTime?
+  endedAt                    DateTime?
+  chiefComplaint             String?
+  historyOfPresentIllness    String?
+  notes                      String?
+  status                     ConsultationStatus          @default(SCHEDULED)
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  appointment                Appointment                 @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  doctorProfile              DoctorProfile               @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  patientUser                User                        @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  videoSession               VideoSession?
+  clinicalNote               ClinicalNote?
+  prescriptions              Prescription[]
+  carePlans                  CarePlan[]
+  diagnosticRecommendations  DiagnosticRecommendation[]
+  panchakarmaRecommendations PanchakarmaRecommendation[]
 
   @@index([doctorProfileId, status])
   @@index([patientUserId, status])
@@ -793,30 +799,32 @@ enum CarePlanRelatedEntityType {
 
 // relatedEntityId has no DB-level FK — it's polymorphic across four
 // different tables depending on relatedEntityType (same pattern as
-// Payment.purposeEntityId). DIAGNOSTIC_ORDER/MEDICINE_ORDER/
-// PANCHAKARMA_BOOKING have no backing table yet (Phases 7-9) — those types
-// are schema-ready but unused until then; CONSULTATION and TASK (no
-// external entity — the item itself is the task) are usable today.
+// Payment.purposeEntityId). CONSULTATION and TASK (no external entity —
+// the item itself is the task) are usable today; DIAGNOSTIC_ORDER,
+// MEDICINE_ORDER and PANCHAKARMA_BOOKING all now have backing tables
+// (Phases 7-9) but still go through relatedEntityId/relatedEntityType
+// rather than a typed FK, same as CONSULTATION/TASK.
 model CarePlanItem {
-  id                        String                     @id @default(cuid())
-  carePlanId                String
-  type                      CarePlanItemType
-  title                     String
-  description               String?
-  status                    CarePlanItemStatus         @default(PLANNED)
-  startDate                 DateTime?
-  dueDate                   DateTime?
-  completedDate             DateTime?
-  relatedEntityType         CarePlanRelatedEntityType?
-  relatedEntityId           String?
-  ownerUserId               String?
-  notes                     String?
-  patientMarkedDoneAt       DateTime?
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
-  carePlan                  CarePlan                   @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
-  owner                     User?                      @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
-  diagnosticRecommendations DiagnosticRecommendation[]
+  id                         String                      @id @default(cuid())
+  carePlanId                 String
+  type                       CarePlanItemType
+  title                      String
+  description                String?
+  status                     CarePlanItemStatus          @default(PLANNED)
+  startDate                  DateTime?
+  dueDate                    DateTime?
+  completedDate              DateTime?
+  relatedEntityType          CarePlanRelatedEntityType?
+  relatedEntityId            String?
+  ownerUserId                String?
+  notes                      String?
+  patientMarkedDoneAt        DateTime?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  carePlan                   CarePlan                    @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
+  owner                      User?                       @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  diagnosticRecommendations  DiagnosticRecommendation[]
+  panchakarmaRecommendations PanchakarmaRecommendation[]
 
   @@index([carePlanId])
   @@index([ownerUserId])
@@ -1190,4 +1198,178 @@ model Shipment {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   medicineOrder   MedicineOrder @relation(fields: [medicineOrderId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Panchakarma (docs/DOMAIN-MODEL.md §10). Same partner-verification shape as
+// DiagnosticLab/Pharmacy, and PanchakarmaRecommendation deliberately mirrors
+// DiagnosticRecommendation's shape (the domain model says so explicitly).
+// No TherapyPackage yet — same "document the gap, don't build an unused
+// stub table" call as Phase 7's DiagnosticPackage and Phase 8's
+// Brand/Manufacturer tables; a booking is always for one Therapy, and
+// sessionCount already carries the "course of N sessions" concept without
+// needing a separate bundled-package entity.
+// ---------------------------------------------------------------------------
+
+enum PanchakarmaCentreVerificationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+model PanchakarmaCentre {
+  id                      String                              @id @default(cuid())
+  userId                  String                              @unique
+  name                    String?
+  addressLine1            String?
+  city                    String?
+  state                   String?
+  postalCode              String?
+  supervisingPractitioner String?
+  licenseNumbers          String[]                            @default([])
+  active                  Boolean                             @default(true)
+  verificationStatus      PanchakarmaCentreVerificationStatus @default(DRAFT)
+  submittedAt             DateTime?
+  reviewedAt              DateTime?
+  reviewedByUserId        String?
+  rejectionReason         String?
+  createdAt               DateTime                            @default(now())
+  updatedAt               DateTime                            @updatedAt
+  user                    User                                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  therapies               Therapy[]
+  therapists              Therapist[]
+  bookings                PanchakarmaBooking[]
+
+  @@index([verificationStatus, active])
+}
+
+model Therapy {
+  id                  String                      @id @default(cuid())
+  centreId            String
+  name                String
+  description         String?
+  durationMinutes     Int?
+  prerequisites       String?
+  contraindications   String?
+  price               Int
+  requiredSupervision Boolean                     @default(false)
+  active              Boolean                     @default(true)
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  centre              PanchakarmaCentre           @relation(fields: [centreId], references: [id], onDelete: Cascade)
+  recommendations     PanchakarmaRecommendation[]
+  bookings            PanchakarmaBooking[]
+
+  @@index([centreId, active])
+}
+
+model Therapist {
+  id             String               @id @default(cuid())
+  centreId       String
+  name           String
+  qualifications String?
+  active         Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  centre         PanchakarmaCentre    @relation(fields: [centreId], references: [id], onDelete: Cascade)
+  sessions       PanchakarmaSession[]
+
+  @@index([centreId, active])
+}
+
+enum PanchakarmaRecommendationStatus {
+  RECOMMENDED
+  BOOKED
+  FULFILLED
+  CANCELLED
+}
+
+model PanchakarmaRecommendation {
+  id                      String                          @id @default(cuid())
+  carePlanItemId          String?
+  consultationId          String
+  doctorProfileId         String
+  patientUserId           String
+  therapyId               String?
+  clinicalReason          String?
+  sessionCountRecommended Int?
+  status                  PanchakarmaRecommendationStatus @default(RECOMMENDED)
+  createdAt               DateTime                        @default(now())
+  updatedAt               DateTime                        @updatedAt
+  carePlanItem            CarePlanItem?                   @relation(fields: [carePlanItemId], references: [id], onDelete: SetNull)
+  consultation            Consultation                    @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  doctorProfile           DoctorProfile                   @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  patientUser             User                            @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  therapy                 Therapy?                        @relation(fields: [therapyId], references: [id], onDelete: SetNull)
+  bookings                PanchakarmaBooking[]
+
+  @@index([patientUserId, status])
+  @@index([doctorProfileId, status])
+}
+
+// PENDING-equivalent overload, same call as Phase 8's MedicineOrderStatus:
+// the brief's exact list includes RECOMMENDED (inherited from the
+// vocabulary it shares with PanchakarmaRecommendationStatus), but a
+// PanchakarmaBooking row is only ever created once a patient actually
+// books, so RECOMMENDED is never a reachable state here in practice —
+// bookings are created at BOOKED, which (like Phase 8's MedicineOrder
+// PENDING) does double duty for both "awaiting payment" and "paid,
+// awaiting the centre to schedule the first session"; Payment.status is
+// what actually distinguishes the two (modules/panchakarma/bookings.service.ts).
+enum PanchakarmaBookingStatus {
+  RECOMMENDED
+  BOOKED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// recommendationId is NOT @unique — same "cancel-and-rebook must not
+// permanently block the recommendation" lesson as Appointment.slotId
+// (Phase 4) and DiagnosticOrder.recommendationId (Phase 7).
+model PanchakarmaBooking {
+  id                 String                     @id @default(cuid())
+  recommendationId   String?
+  centreId           String
+  patientUserId      String
+  therapyId          String
+  sessionCount       Int
+  paymentId          String?                    @unique
+  status             PanchakarmaBookingStatus   @default(BOOKED)
+  cancelledAt        DateTime?
+  cancellationReason String?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  recommendation     PanchakarmaRecommendation? @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  centre             PanchakarmaCentre          @relation(fields: [centreId], references: [id], onDelete: Cascade)
+  patientUser        User                       @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  therapy            Therapy                    @relation(fields: [therapyId], references: [id], onDelete: Cascade)
+  payment            Payment?                   @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  sessions           PanchakarmaSession[]
+
+  @@index([recommendationId])
+  @@index([patientUserId, status])
+  @@index([centreId, status])
+}
+
+model PanchakarmaSession {
+  id            String             @id @default(cuid())
+  bookingId     String
+  sessionNumber Int
+  therapistId   String?
+  scheduledAt   DateTime
+  attendedAt    DateTime?
+  notes         String?
+  exceptionFlag String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  booking       PanchakarmaBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  therapist     Therapist?         @relation(fields: [therapistId], references: [id], onDelete: SetNull)
+
+  @@unique([bookingId, sessionNumber])
+  @@index([bookingId])
 }

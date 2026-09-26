@@ -859,14 +859,81 @@ afterward. All fixture/test data deleted afterward, including 54 orphaned
 (expected: `Medicine` has no owning FK, so nothing cascade-deletes it the
 way `DiagnosticTest` gets cleaned up via its owning lab).
 
+## Phase 9 — Panchakarma + centre portal
+
+Net-new per `docs/DOMAIN-MODEL.md` §10 (one migration,
+`phase9_panchakarma`): `PanchakarmaCentre`, `Therapy`, `Therapist`,
+`PanchakarmaRecommendation`, `PanchakarmaBooking`, `PanchakarmaSession`.
+Fourth and last partner-facing role/portal: **PANCHAKARMA_CENTRE**.
+
+**Modelling choice, following the Phase 7 precedent rather than Phase 8's:**
+`Therapy` and `Therapist` are **centre-owned**, not a platform-wide
+catalogue — the same shape as `DiagnosticTest` (lab-owned), not `Medicine`
+(platform-wide). The reasoning is identical to Phase 7's: a therapy is a
+specific centre's offering (its own price, its own duration, its own
+supervision requirement), not an interchangeable drug identity a
+prescription can point at independent of who fills it. A doctor's
+`PanchakarmaRecommendation` therefore names a specific `Therapy` at a
+specific centre, not an abstract treatment type.
+
+**Scope decisions, made explicit rather than silently assumed:**
+- No `TherapyPackage` table — the brief's "course of N sessions" concept
+  is carried entirely by `sessionCount` on the booking (and
+  `sessionCountRecommended` on the recommendation), same "document the gap,
+  don't build an unused stub table" call as Phase 7's `DiagnosticPackage`
+  and Phase 8's `Brand`/`Manufacturer`.
+- `PanchakarmaBookingStatus` has no separate "awaiting payment" state, so
+  `BOOKED` does double duty before and after payment succeeds —
+  `Payment.status` is what actually distinguishes the two, same pattern as
+  Phase 8's `MedicineOrderStatus.PENDING`.
+- `PanchakarmaBooking.recommendationId` is nullable and deliberately
+  **not** `@unique` — a patient can self-book a therapy directly from the
+  public catalogue with no doctor recommendation at all (mirroring Phase
+  8's medicines: prescription-linked *or* OTC), and a cancelled-and-rebooked
+  recommendation can point at a second booking without a stale unique
+  constraint in the way. Same non-unique-FK rule applied proactively since
+  the Phase 4 `Appointment.slotId` bug, reused identically in Phase 7's
+  `DiagnosticOrder.recommendationId`.
+- PANCHAKARMA_CENTRE self-onboarding is the fourth role behind the same
+  `ALLOW_<ROLE>_SELF_ONBOARDING` gate, checked in both `requestOtp` and
+  `verifyOtp`.
+
+**Fulfilment, exactly as designed:** a centre schedules each
+`PanchakarmaSession` individually (`scheduledAt`, optional `therapistId`)
+and marks it attended one at a time; the booking status derives from
+session progress (`BOOKED` → `IN_PROGRESS` after the first attended session
+→ `COMPLETED` once `sessionCount` sessions are attended). The centre
+portal's booking-detail page was built as a client component holding its
+own `status`/`sessions` state from the start — updated directly from each
+action's response rather than from a server re-render — applying the
+Phase 7 stale-client-state lesson proactively instead of discovering it
+live again.
+
+Verified: `tsc --noEmit`, `eslint .`, `vitest run` (74/74, stable across 3
+consecutive runs — was 63/63 before this phase, +11 new tests) all clean;
+`next build` locally (all ~13 new routes correctly `ƒ` dynamic); full
+Docker image rebuild and redeploy; and a full Playwright walkthrough
+against the live container covering: centre self-registration →
+profile → therapy → therapist → submission, admin approval, the new
+therapy appearing on the public `/panchakarma` catalogue, a patient
+hitting the honest "payments are not configured" message when attempting
+to book it, and (via the same bootstrapped-paid-booking fixture pattern
+used in Phases 5-8) the full centre fulfilment sequence for a
+doctor-recommended two-session course — schedule → mark attended →
+schedule → mark attended — with the booking reaching `COMPLETED` and the
+patient seeing "2/2 sessions attended" on their own dashboard afterward.
+All fixture/test data deleted afterward (centre, its therapies/therapists/
+bookings/sessions all cascaded from one `User` delete; the fixture
+doctor, recommendation, and orphaned fixture payments cleaned up
+explicitly) — verified back to zero rows across every Phase 9 table.
+
 ## Next up
 
-Phase 9: Panchakarma + centre portal (`docs/DOMAIN-MODEL.md` §10,
-`docs/IMPLEMENTATION-PLAN.md` row 9) — the fourth and last
-partner-facing role/portal (`PANCHAKARMA_CENTRE`), following the same
-recommendation → booking → fulfilment shape as Diagnostics (Phase 7).
-Outstanding from earlier phases, still unresolved: real Ubuntu ESXi VM SSH
-details for Phase 12 deployment, and real (even test-mode) Razorpay/SMS/
-email/WhatsApp/video credentials so the booking, consultation,
-diagnostics, and now medicines flows can be exercised fully live rather
-than stopping at honest "not configured" messages.
+Phase 10: Support / Tech Support / Sales / Care Coordination CRM
+(`docs/IMPLEMENTATION-PLAN.md` row 10) — not yet started, pending
+explicit go-ahead. Outstanding from earlier phases, still unresolved: real
+Ubuntu ESXi VM SSH details for Phase 12 deployment, and real (even
+test-mode) Razorpay/SMS/email/WhatsApp/video credentials so the booking,
+consultation, diagnostics, medicines, and now panchakarma flows can be
+exercised fully live rather than stopping at honest "not configured"
+messages.
