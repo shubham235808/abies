@@ -124,3 +124,41 @@ const PANCHAKARMA_BOOKING_STATUS_TONE: Record<string, Tone> = {
 export function PanchakarmaBookingStatusBadge({ status }: { status: string }) {
   return <Badge tone={PANCHAKARMA_BOOKING_STATUS_TONE[status] ?? 'neutral'}>{status.replace(/_/g, ' ')}</Badge>;
 }
+
+const SUPPORT_TICKET_STATUS_TONE: Record<string, Tone> = {
+  OPEN: 'orange',
+  IN_PROGRESS: 'blue',
+  WAITING_CUSTOMER: 'purple',
+  WAITING_PARTNER: 'purple',
+  RESOLVED: 'success',
+  CLOSED: 'neutral',
+};
+
+export function SupportTicketStatusBadge({ status }: { status: string }) {
+  return <Badge tone={SUPPORT_TICKET_STATUS_TONE[status] ?? 'neutral'}>{status.replace(/_/g, ' ')}</Badge>;
+}
+
+const SUPPORT_TICKET_PRIORITY_TONE: Record<string, Tone> = {
+  P1: 'danger',
+  P2: 'orange',
+  P3: 'blue',
+  P4: 'neutral',
+};
+
+export function SupportTicketPriorityBadge({ priority }: { priority: string }) {
+  return <Badge tone={SUPPORT_TICKET_PRIORITY_TONE[priority] ?? 'neutral'}>{priority}</Badge>;
+}
+
+const PARTNER_LEAD_STAGE_TONE: Record<string, Tone> = {
+  LEAD: 'neutral',
+  QUALIFIED: 'blue',
+  VERIFICATION: 'orange',
+  COMMERCIAL: 'purple',
+  ENABLEMENT: 'purple',
+  ACTIVATED: 'success',
+  REJECTED: 'danger',
+};
+
+export function PartnerLeadStageBadge({ stage }: { stage: string }) {
+  return <Badge tone={PARTNER_LEAD_STAGE_TONE[stage] ?? 'neutral'}>{stage}</Badge>;
+}

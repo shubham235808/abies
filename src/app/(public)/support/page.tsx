@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { Alert } from '@/components/ui/alert';
 
@@ -30,11 +31,15 @@ export default function SupportPage() {
       </div>
 
       <Alert tone="info" className="mt-10">
-        The support ticketing console isn&apos;t connected yet — see{' '}
-        <a href="/contact" className="text-brand-purple-600 underline">
-          Contact
-        </a>{' '}
-        for current status.
+        Signed-in patients can open and track a ticket from{' '}
+        <Link href="/patient/support" className="text-brand-purple-600 underline">
+          Patient → Support
+        </Link>
+        . Not signed in yet?{' '}
+        <Link href="/login" className="text-brand-purple-600 underline">
+          Log in
+        </Link>{' '}
+        first.
       </Alert>
     </main>
   );

@@ -927,13 +927,103 @@ bookings/sessions all cascaded from one `User` delete; the fixture
 doctor, recommendation, and orphaned fixture payments cleaned up
 explicitly) — verified back to zero rows across every Phase 9 table.
 
+## Phase 10 — Support / Tech Support / Sales / Care Coordination CRM
+
+Net-new per `docs/DOMAIN-MODEL.md` §12 (one migration,
+`phase10_support_crm`): `SupportTicket`, `SupportMessage`,
+`SupportAttachment`, `PartnerLead`. Fourth and last set of new
+portals/roles in the brief's 10-portal count — **CUSTOMER_SUPPORT**,
+**TECH_SUPPORT**, **SALES**, **CARE_COORDINATOR** — but unlike the
+partner roles (LAB/PHARMACY/PANCHAKARMA_CENTRE/DOCTOR), none of these
+self-onboard: `modules/staff` gives an admin a real "create staff
+account" UI (`/admin/staff`) that provisions a `User` + `StaffProfile`
+(the latter already scaffolded, unused, since Phase 0) directly, the same
+way `prisma/seed.ts` has always provisioned the demo admin — just through
+a UI instead of a script.
+
+**One ticket model, four queues:** rather than a separate table per
+department, `SupportTicket.department` reuses the existing
+`StaffDepartment` enum (Phase 0) and every one of the four portals reads/
+writes the same table filtered to its own department —
+`modules/support/tickets.service.ts`'s `departmentForRole()` is the single
+place that mapping lives. Sales is the exception with extra surface: it
+also owns the `PartnerLead` pipeline, tracked independently of tickets.
+
+**Classification and SLA targets are the brief's own tables, not
+invented ones** (blueprint §27/§28, extracted from the source `.docx`
+since `docs/DOMAIN-MODEL.md` referenced the SLA table by name but didn't
+inline it): `SupportTicketCategory` is the patient support journey's
+8-value list (`BOOKING | PAYMENT | REPORT | MEDICINE | THERAPY |
+CLINICAL_CONCERN | TECHNICAL_ISSUE | GENERAL`); each category defaults to
+a `SupportTicketPriority` (P1-P4) and a department per
+`modules/support/sla.ts`, with `CLINICAL_CONCERN` forced to P1 and routed
+to Care Coordination regardless of who files it — the same "never let a
+safety concern sit at low priority" promise the Phase 0 placeholder page
+already made to patients, now backed by real routing. `sla` is stored as
+a JSON snapshot (numeric response deadline; the brief's P2-P4 resolution
+targets are qualitative text — "same business day," "1-2 business days" —
+so they're kept as descriptive text, not a fabricated second deadline).
+
+**Scope decisions, made explicit rather than silently assumed:**
+- No automatic classification, routing engine, or SLA-breach
+  alerting/paging this phase — category → priority/department is a static
+  default table an agent can override (`triage` action), and nothing
+  watches `sla.responseDueAt` and fires a notification when it passes.
+  Same "document the gap" call as every prior phase's deferred piece;
+  breach alerting belongs with Phase 12's observability wiring.
+- `SupportTicket`'s four `linked*` fields (appointment/medicine-order/
+  diagnostic-order/panchakarma-booking) are plain, unenforced string
+  columns rather than Prisma relations — deliberately mirroring
+  `Payment.purposeEntityId`'s existing polymorphic-reference convention
+  (Phase 4), since a ticket may reference any one of four unrelated order
+  types and a real FK would mean a support-only back-relation array on
+  every one of those models.
+- `PartnerLead.stage` (Lead → Qualified → Verification → Commercial →
+  Enablement → Activated/Rejected, the brief's own sales journey) is a
+  CRM tracking field only, not a system gate — the actual credential/
+  verification enforcement for each partner kind already lives in its own
+  module (`DoctorVerificationStatus`, `PanchakarmaCentreVerificationStatus`,
+  etc.); a rep marking a lead "Activated" doesn't make anything
+  discoverable or bookable by itself.
+- Care Coordinator's "unified patient work queue" (brief's own
+  description of the role) reuses `CarePlanItem` with zero new schema —
+  `listAtRiskItems()` surfaces anything `MISSED`, or `PLANNED`/`ACTIVE`
+  with a due date already passed or within 2 days. Deliberately read-only:
+  coordinators help patients complete the plan and escalate via a ticket,
+  they don't edit clinical items themselves (that stays the doctor's).
+
+Verified: `tsc --noEmit`, `eslint .`, `vitest run` (90/90, stable across 3
+consecutive runs — was 74/74 before this phase, +16 new tests) all clean;
+`next build` locally (all new routes correctly `ƒ` dynamic, including
+`/sales/[id]` and the static `/sales/tickets` sibling resolving without
+conflict); full Docker image rebuild and redeploy; and a full Playwright
+walkthrough against the live container covering: an admin provisioning
+all four staff accounts, a patient opening a ticket (verifying the
+category → P3/Customer-Support default), the agent claiming it, replying,
+and resolving it, both remaining portals (Tech Support, Care Coordination
+— including the care-plan follow-up queue) loading their own empty
+queues, the patient seeing the resolution and reopening the ticket by
+replying again (`RESOLVED` → `IN_PROGRESS`), and a sales rep creating a
+partner lead and moving it through the pipeline. The walkthrough needed
+splitting across two `playwright test` invocations with a real
+shell-level sleep between them — Playwright's `fullyParallel` config
+re-imports the spec per test even under `--workers=1`, so the patient's
+two logins (opening the ticket, then replying to the resolution) landed
+inside the same 30s OTP cooldown window when run as one process; a
+JSON state file replaces the DEMO_BOOKING_ID-style env-var handoff used
+in earlier phases since here the ticket id is generated mid-run, not
+known up front. All fixture data cleaned up afterward, including
+`PartnerLead` rows orphaned across repeated `vitest run`s (its
+`ownerUserId` is `onDelete: SetNull`, not `Cascade` — a lead outlives the
+rep who logged it, same orphaning shape as Phase 8's `Medicine` rows) —
+verified back to zero across every Phase 10 table.
+
 ## Next up
 
-Phase 10: Support / Tech Support / Sales / Care Coordination CRM
-(`docs/IMPLEMENTATION-PLAN.md` row 10) — not yet started, pending
-explicit go-ahead. Outstanding from earlier phases, still unresolved: real
-Ubuntu ESXi VM SSH details for Phase 12 deployment, and real (even
-test-mode) Razorpay/SMS/email/WhatsApp/video credentials so the booking,
-consultation, diagnostics, medicines, and now panchakarma flows can be
-exercised fully live rather than stopping at honest "not configured"
-messages.
+Phase 11: Admin operations, reporting, audit (`docs/IMPLEMENTATION-PLAN.md`
+row 11) — not yet started, pending explicit go-ahead. Outstanding from
+earlier phases, still unresolved: real Ubuntu ESXi VM SSH details for
+Phase 12 deployment, and real (even test-mode) Razorpay/SMS/email/
+WhatsApp/video credentials so the booking, consultation, diagnostics,
+medicines, panchakarma, and now support flows can be exercised fully live
+rather than stopping at honest "not configured" messages.

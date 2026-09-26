@@ -79,6 +79,12 @@ model User {
   medicineOrders             MedicineOrder[]
   panchakarmaRecommendations PanchakarmaRecommendation[]
   panchakarmaBookings        PanchakarmaBooking[]
+  supportTicketsRequested    SupportTicket[]             @relation("SupportTicketRequester")
+  supportTicketsAsPatient    SupportTicket[]             @relation("SupportTicketPatient")
+  supportTicketsAssigned     SupportTicket[]             @relation("SupportTicketAgent")
+  supportMessages            SupportMessage[]
+  supportAttachmentsUploaded SupportAttachment[]
+  partnerLeadsOwned          PartnerLead[]
 
   @@index([role, status])
 }
@@ -1372,4 +1378,176 @@ model PanchakarmaSession {
 
   @@unique([bookingId, sessionNumber])
   @@index([bookingId])
+}
+
+// ---------------------------------------------------------------------------
+// Support / Sales / Care Coordination CRM (docs/DOMAIN-MODEL.md §12). Fourth
+// and last new portal set — CUSTOMER_SUPPORT, TECH_SUPPORT, SALES,
+// CARE_COORDINATOR all read/write through the one SupportTicket queue below,
+// filtered by `department`; Sales additionally owns the PartnerLead pipeline.
+// Unlike the four partner roles (LAB/PHARMACY/PANCHAKARMA_CENTRE/DOCTOR),
+// none of these roles self-onboard — an admin provisions the account
+// (StaffProfile already scaffolded in Phase 0) via modules/staff.
+
+// The brief's exact 8-value classification from the patient support journey
+// (blueprint §28), plus GENERAL for the P4 "general enquiry" case the
+// journey names but doesn't put in the list.
+enum SupportTicketCategory {
+  BOOKING
+  PAYMENT
+  REPORT
+  MEDICINE
+  THERAPY
+  CLINICAL_CONCERN
+  TECHNICAL_ISSUE
+  GENERAL
+}
+
+// Brief's exact Support SLA Model (blueprint §27): P1 Critical / P2 High /
+// P3 Medium / P4 Low. Numeric response targets live in
+// modules/support/sla.ts; resolution targets in that table are qualitative
+// ("same business day", "1-2 business days") rather than a fixed duration,
+// so they're stored as descriptive text on the ticket's `sla` snapshot
+// rather than a second deadline column.
+enum SupportTicketPriority {
+  P1
+  P2
+  P3
+  P4
+}
+
+enum SupportChannel {
+  IN_APP
+  WHATSAPP
+  PHONE
+  EMAIL
+  WEB_FORM
+  PARTNER
+}
+
+// Brief's exact list (docs/DOMAIN-MODEL.md §12). "Any state may re-open to
+// IN_PROGRESS" per the documented state machine — enforced in
+// modules/support/tickets.service.ts, not by the column type.
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  WAITING_PARTNER
+  RESOLVED
+  CLOSED
+}
+
+model SupportTicket {
+  id                         String                @id @default(cuid())
+  requesterUserId            String
+  category                   SupportTicketCategory
+  department                 StaffDepartment
+  priority                   SupportTicketPriority
+  channel                    SupportChannel        @default(IN_APP)
+  assignedAgentUserId        String?
+  status                     SupportTicketStatus   @default(OPEN)
+  sla                        Json?
+  subject                    String
+  description                String
+  linkedPatientUserId        String?
+  // Polymorphic cross-module references, deliberately plain strings rather
+  // than enforced relations — same convention as Payment.purposeEntityId
+  // (Phase 4), since a ticket may point at any one of four unrelated order
+  // types and adding a back-relation array to each of those models for a
+  // support-only lookup isn't worth the coupling.
+  linkedAppointmentId        String?
+  linkedMedicineOrderId      String?
+  linkedDiagnosticOrderId    String?
+  linkedPanchakarmaBookingId String?
+  createdAt                  DateTime              @default(now())
+  lastResponseAt             DateTime?
+  resolvedAt                 DateTime?
+  updatedAt                  DateTime              @updatedAt
+  requester                  User                  @relation("SupportTicketRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  linkedPatient              User?                 @relation("SupportTicketPatient", fields: [linkedPatientUserId], references: [id], onDelete: SetNull)
+  assignedAgent              User?                 @relation("SupportTicketAgent", fields: [assignedAgentUserId], references: [id], onDelete: SetNull)
+  messages                   SupportMessage[]
+  attachments                SupportAttachment[]
+
+  @@index([department, status])
+  @@index([requesterUserId])
+  @@index([linkedPatientUserId])
+  @@index([assignedAgentUserId])
+}
+
+model SupportMessage {
+  id           String              @id @default(cuid())
+  ticketId     String
+  authorUserId String?
+  body         String
+  createdAt    DateTime            @default(now())
+  ticket       SupportTicket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author       User?               @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  attachments  SupportAttachment[]
+
+  @@index([ticketId, createdAt])
+}
+
+model SupportAttachment {
+  id               String          @id @default(cuid())
+  ticketId         String
+  messageId        String?
+  storageKey       String
+  originalName     String
+  mimeType         String
+  sizeBytes        Int
+  uploadedByUserId String
+  createdAt        DateTime        @default(now())
+  ticket           SupportTicket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  message          SupportMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  uploadedBy       User            @relation(fields: [uploadedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+// Brief's exact partner kinds and pipeline stages (blueprint §28 sales
+// journey: Lead -> Verification -> Commercial -> Enablement -> Activation).
+// Deliberately a CRM tracking field only, not a system gate: the actual
+// credential/verification enforcement for each partner kind already lives
+// in its own module (doctors/diagnostics/medicines/panchakarma
+// verificationStatus) — a sales rep marking a lead ACTIVATED is a pipeline
+// note, not what makes that partner discoverable or bookable.
+enum PartnerLeadKind {
+  DOCTOR
+  CLINIC
+  LAB
+  PHARMACY
+  PANCHAKARMA_CENTRE
+  CORPORATE
+}
+
+enum PartnerLeadStage {
+  LEAD
+  QUALIFIED
+  VERIFICATION
+  COMMERCIAL
+  ENABLEMENT
+  ACTIVATED
+  REJECTED
+}
+
+model PartnerLead {
+  id             String           @id @default(cuid())
+  kind           PartnerLeadKind
+  source         String?
+  contactName    String
+  contactPhone   String
+  contactEmail   String?
+  city           String?
+  ownerUserId    String?
+  stage          PartnerLeadStage @default(LEAD)
+  nextFollowUpAt DateTime?
+  notes          String?
+  documentKeys   String[]         @default([])
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  owner          User?            @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+
+  @@index([stage])
+  @@index([ownerUserId])
 }

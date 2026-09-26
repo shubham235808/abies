@@ -5,6 +5,7 @@ const NAV = [
   { href: '/admin/labs', label: 'Lab Verification' },
   { href: '/admin/pharmacies', label: 'Pharmacy Verification' },
   { href: '/admin/panchakarma-centres', label: 'Panchakarma Verification' },
+  { href: '/admin/staff', label: 'Staff' },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

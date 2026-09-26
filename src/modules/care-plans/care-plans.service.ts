@@ -251,3 +251,30 @@ export async function listForDoctorPatientPair(doctorUserId: string, patientUser
     orderBy: { createdAt: 'desc' },
   });
 }
+
+// Care Coordinator's "unified patient work queue" (docs/TARGET-ARCHITECTURE.md
+// portal description) — read-only, no new schema: an item is at-risk once
+// it's MISSED outright, or still open (PLANNED/ACTIVE) with a due date
+// already passed or landing within the next 2 days. Coordinators help
+// patients complete the plan; they don't edit clinical items themselves
+// (that stays the doctor's call), so this list is deliberately view-only —
+// escalation happens by opening a support ticket linked to the patient.
+export async function listAtRiskItems() {
+  const horizon = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+  return prisma.carePlanItem.findMany({
+    where: {
+      OR: [{ status: 'MISSED' }, { status: { in: ['PLANNED', 'ACTIVE'] }, dueDate: { lte: horizon } }],
+      carePlan: { status: 'ACTIVE' },
+    },
+    include: {
+      carePlan: {
+        select: {
+          patientUserId: true,
+          patientUser: { select: { mobile: true, patientProfile: { select: { firstName: true, lastName: true } } } },
+          doctorProfile: { select: { firstName: true, lastName: true } },
+        },
+      },
+    },
+    orderBy: { dueDate: 'asc' },
+  });
+}

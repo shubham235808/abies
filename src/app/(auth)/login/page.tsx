@@ -17,6 +17,10 @@ const ROLE_OPTIONS = [
   { value: 'LAB', label: 'Diagnostic Lab' },
   { value: 'PHARMACY', label: 'Pharmacy' },
   { value: 'PANCHAKARMA_CENTRE', label: 'Panchakarma Centre' },
+  { value: 'CUSTOMER_SUPPORT', label: 'Customer Support' },
+  { value: 'TECH_SUPPORT', label: 'Technical Support' },
+  { value: 'SALES', label: 'Sales / Partner Ops' },
+  { value: 'CARE_COORDINATOR', label: 'Care Coordinator' },
   { value: 'ADMIN', label: 'Administrator' },
 ] as const;
 
@@ -26,12 +30,27 @@ const PORTAL_PATH: Record<string, string> = {
   LAB: '/lab',
   PHARMACY: '/pharmacy',
   PANCHAKARMA_CENTRE: '/panchakarma-centre',
+  CUSTOMER_SUPPORT: '/customer-support',
+  TECH_SUPPORT: '/tech-support',
+  SALES: '/sales',
+  CARE_COORDINATOR: '/care-coordination',
   ADMIN: '/admin',
 };
 
 const mobileStepSchema = z.object({
   mobile: z.string().min(10, 'Enter a 10-digit mobile number'),
-  role: z.enum(['PATIENT', 'DOCTOR', 'LAB', 'PHARMACY', 'PANCHAKARMA_CENTRE', 'ADMIN']),
+  role: z.enum([
+    'PATIENT',
+    'DOCTOR',
+    'LAB',
+    'PHARMACY',
+    'PANCHAKARMA_CENTRE',
+    'CUSTOMER_SUPPORT',
+    'TECH_SUPPORT',
+    'SALES',
+    'CARE_COORDINATOR',
+    'ADMIN',
+  ]),
 });
 type MobileStep = z.infer<typeof mobileStepSchema>;
 
@@ -121,11 +140,11 @@ function MobileStepForm({
     <form onSubmit={onSubmit} className="space-y-5">
       <div>
         <Label htmlFor="role">I am a</Label>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {ROLE_OPTIONS.map((opt) => (
             <label
               key={opt.value}
-              className="flex-1 cursor-pointer rounded-lg border border-brand-neutral-200 px-3 py-2 text-center text-sm has-[:checked]:border-brand-purple-500 has-[:checked]:bg-brand-purple-50 has-[:checked]:text-brand-purple-700"
+              className="cursor-pointer rounded-lg border border-brand-neutral-200 px-3 py-2 text-center text-sm has-[:checked]:border-brand-purple-500 has-[:checked]:bg-brand-purple-50 has-[:checked]:text-brand-purple-700"
             >
               <input type="radio" value={opt.value} {...register('role')} className="sr-only" />
               {opt.label}
