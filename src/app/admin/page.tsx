@@ -1,32 +1,37 @@
 import Link from 'next/link';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
+import { MetricCard } from '@/components/ui/metric-card';
 import { getDashboardMetrics } from '@/modules/admin/dashboard.service';
+import { queue as queueDoctors } from '@/modules/doctors/admin-doctors.service';
+import { queue as queueLabs } from '@/modules/diagnostics/admin-labs.service';
+import { queue as queuePharmacies } from '@/modules/medicines/admin-pharmacies.service';
+import { queue as queueCentres } from '@/modules/panchakarma/admin-centres.service';
 
-function StatCard({ title, rows, href }: { title: string; rows: Record<string, number>; href?: string }) {
-  const entries = Object.entries(rows);
-  const content = (
-    <Card className="h-full">
-      <CardTitle className="text-base">{title}</CardTitle>
-      {entries.length === 0 ? (
-        <CardDescription>No data yet.</CardDescription>
-      ) : (
-        <dl className="mt-2 space-y-1 text-sm">
-          {entries.map(([label, count]) => (
-            <div key={label} className="flex items-center justify-between gap-3">
-              <dt className="text-brand-neutral-600">{label.replace(/_/g, ' ')}</dt>
-              <dd className="font-medium text-brand-neutral-900">{count}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </Card>
-  );
-  return href ? <Link href={href}>{content}</Link> : content;
+function toRows(rows: Record<string, number>) {
+  return Object.entries(rows).map(([label, value]) => ({ label: label.replace(/_/g, ' '), value }));
 }
 
 export default async function AdminOverviewPage() {
-  const metrics = await getDashboardMetrics();
-  const pendingTotal = Object.values(metrics.verificationQueues).reduce((a, b) => a + b, 0);
+  const [metrics, doctors, labs, pharmacies, centres] = await Promise.all([
+    getDashboardMetrics(),
+    queueDoctors(),
+    queueLabs(),
+    queuePharmacies(),
+    queueCentres(),
+  ]);
+
+  // First 3 named applicants per queue — the brief's "Pending Verifications"
+  // should be something an admin can act on directly from the dashboard,
+  // not just a count they have to click through to see (docs/UI-UX-AUDIT.md's
+  // Admin section). queue() already returns this; it just wasn't rendered
+  // here before.
+  const queues: { title: string; href: string; items: { id: string; name: string | null; mobile: string }[]; total: number }[] = [
+    { title: 'Doctors', href: '/admin/doctors', items: doctors.doctors, total: doctors.total },
+    { title: 'Labs', href: '/admin/labs', items: labs.labs, total: labs.total },
+    { title: 'Pharmacies', href: '/admin/pharmacies', items: pharmacies.pharmacies, total: pharmacies.total },
+    { title: 'Panchakarma centres', href: '/admin/panchakarma-centres', items: centres.centres, total: centres.total },
+  ];
+  const pendingTotal = queues.reduce((sum, q) => sum + q.total, 0);
 
   return (
     <div>
@@ -36,63 +41,56 @@ export default async function AdminOverviewPage() {
         writes to.
       </p>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardTitle className="text-base">Verification queues</CardTitle>
-          {pendingTotal === 0 ? (
-            <CardDescription>Nothing pending review.</CardDescription>
-          ) : (
-            <dl className="mt-2 space-y-1 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <dt>
-                  <Link href="/admin/doctors" className="text-brand-purple-600 underline">
-                    Doctors
-                  </Link>
-                </dt>
-                <dd className="font-medium">{metrics.verificationQueues.doctors}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt>
-                  <Link href="/admin/labs" className="text-brand-purple-600 underline">
-                    Labs
-                  </Link>
-                </dt>
-                <dd className="font-medium">{metrics.verificationQueues.labs}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt>
-                  <Link href="/admin/pharmacies" className="text-brand-purple-600 underline">
-                    Pharmacies
-                  </Link>
-                </dt>
-                <dd className="font-medium">{metrics.verificationQueues.pharmacies}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt>
-                  <Link href="/admin/panchakarma-centres" className="text-brand-purple-600 underline">
-                    Panchakarma centres
-                  </Link>
-                </dt>
-                <dd className="font-medium">{metrics.verificationQueues.panchakarmaCentres}</dd>
-              </div>
-            </dl>
-          )}
-        </Card>
+      <Card className="mt-6">
+        <CardTitle>Pending verifications</CardTitle>
+        {pendingTotal === 0 ? (
+          <CardDescription>Nothing pending review.</CardDescription>
+        ) : (
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {queues
+              .filter((q) => q.total > 0)
+              .map((q) => (
+                <div key={q.title}>
+                  <p className="text-sm font-semibold text-brand-neutral-900">
+                    {q.title} ({q.total})
+                  </p>
+                  <ul className="mt-1.5 space-y-1">
+                    {q.items.slice(0, 3).map((item) => (
+                      <li key={item.id}>
+                        <Link href={`${q.href}/${item.id}`} className="text-sm text-brand-purple-600 underline decoration-brand-purple-200 underline-offset-2 hover:decoration-brand-purple-600">
+                          {item.name || item.mobile}
+                        </Link>
+                      </li>
+                    ))}
+                    {q.total > 3 && (
+                      <li>
+                        <Link href={q.href} className="text-xs text-brand-neutral-400">
+                          +{q.total - 3} more →
+                        </Link>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              ))}
+          </div>
+        )}
+      </Card>
 
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardTitle className="text-base">Revenue</CardTitle>
           <p className="mt-2 text-2xl font-semibold text-brand-neutral-900">₹{metrics.totalRevenue.toLocaleString('en-IN')}</p>
           <CardDescription>Successful + partially-refunded payments, lifetime.</CardDescription>
         </Card>
 
-        <StatCard title="Payments" rows={metrics.paymentsByStatus} />
-        <StatCard title="Refunds" rows={metrics.refundsByStatus} href="/admin/refunds" />
-        <StatCard title="Appointments" rows={metrics.appointmentsByStatus} />
-        <StatCard title="Diagnostic orders" rows={metrics.diagnosticOrdersByStatus} />
-        <StatCard title="Medicine orders" rows={metrics.medicineOrdersByStatus} />
-        <StatCard title="Panchakarma bookings" rows={metrics.panchakarmaBookingsByStatus} />
-        <StatCard title="Open support tickets by department" rows={metrics.openTicketsPerDepartment} />
-        <StatCard title="Partner leads by stage" rows={metrics.leadsByStage} href="/sales" />
+        <MetricCard title="Payments" rows={toRows(metrics.paymentsByStatus)} />
+        <MetricCard title="Refunds" rows={toRows(metrics.refundsByStatus)} href="/admin/refunds" />
+        <MetricCard title="Appointments" rows={toRows(metrics.appointmentsByStatus)} />
+        <MetricCard title="Diagnostic orders" rows={toRows(metrics.diagnosticOrdersByStatus)} />
+        <MetricCard title="Medicine orders" rows={toRows(metrics.medicineOrdersByStatus)} />
+        <MetricCard title="Panchakarma bookings" rows={toRows(metrics.panchakarmaBookingsByStatus)} />
+        <MetricCard title="Open support tickets by department" rows={toRows(metrics.openTicketsPerDepartment)} />
+        <MetricCard title="Partner leads by stage" rows={toRows(metrics.leadsByStage)} href="/sales" />
       </div>
     </div>
   );

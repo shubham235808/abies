@@ -6,6 +6,7 @@ import { PanchakarmaBookingStatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label, Select } from '@/components/ui/input';
+import { ProgressSteps, type ProgressStep } from '@/components/ui/progress-steps';
 import { api, ApiError } from '@/lib/api-client';
 
 type SessionRow = { id: string; sessionNumber: number; scheduledAt: string; attendedAt: string | null; therapistName: string | null };
@@ -94,6 +95,27 @@ export function BookingActions({
   const canScheduleMore = sessions.length < sessionCount && (status === 'BOOKED' || status === 'SCHEDULED' || status === 'IN_PROGRESS');
   const cancellable = status === 'BOOKED' || status === 'SCHEDULED';
 
+  // Docs/UI-UX-AUDIT.md Finding 4: the brief explicitly asks for a visual
+  // course-progress indicator, not just a plain list — one step per booked
+  // session, first not-yet-attended one marked "current." Found via
+  // findIndex rather than a mutated loop variable — React Compiler flags
+  // in-render mutation of an outer `let` as unsafe to memoize.
+  const firstIncompleteIndex = Array.from({ length: sessionCount }, (_, i) => i).findIndex(
+    (i) => !sessions.find((s) => s.sessionNumber === i + 1)?.attendedAt,
+  );
+  const progressSteps: ProgressStep[] = Array.from({ length: sessionCount }, (_, i) => {
+    const session = sessions.find((s) => s.sessionNumber === i + 1);
+    if (session?.attendedAt) return { label: `Session ${i + 1}`, status: 'done' as const };
+    if (i === firstIncompleteIndex) {
+      return {
+        label: `Session ${i + 1}`,
+        status: 'current' as const,
+        detail: session ? new Date(session.scheduledAt).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : 'Not yet scheduled',
+      };
+    }
+    return { label: `Session ${i + 1}`, status: 'upcoming' as const };
+  });
+
   return (
     <Card className="mt-6">
       <div className="flex items-center justify-between">
@@ -101,6 +123,10 @@ export function BookingActions({
           Sessions ({sessions.length}/{sessionCount})
         </h2>
         <PanchakarmaBookingStatusBadge status={status} />
+      </div>
+
+      <div className="mt-3 border-b border-brand-neutral-100 pb-4">
+        <ProgressSteps steps={progressSteps} />
       </div>
 
       {error && (

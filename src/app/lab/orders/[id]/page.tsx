@@ -17,9 +17,13 @@ export default async function LabOrderPage({ params }: { params: Promise<{ id: s
     throw err;
   }
 
+  const patientName =
+    [order.patientUser.patientProfile?.firstName, order.patientUser.patientProfile?.lastName].filter(Boolean).join(' ') ||
+    order.patientUser.mobile;
+
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-semibold text-brand-neutral-900">Order</h1>
+      <h1 className="text-2xl font-semibold text-brand-neutral-900">Order — {patientName}</h1>
       <p className="mt-1 text-sm text-brand-neutral-600">
         {order.scheduledAt ? new Date(order.scheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'Not scheduled'} ·{' '}
         {order.collectionMode === 'HOME' ? `Home collection — ${order.address ?? ''}` : 'Lab visit'}

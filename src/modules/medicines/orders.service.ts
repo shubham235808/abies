@@ -345,6 +345,7 @@ export async function markDelivered(pharmacyUserId: string, orderId: string) {
 function detailInclude() {
   return {
     pharmacy: { select: { id: true, name: true, serviceAreas: true } },
+    patientUser: { select: { mobile: true, patientProfile: { select: { firstName: true, lastName: true } } } },
     items: { include: { medicine: { select: { name: true, form: true, strength: true } } } },
     shipment: true,
     payment: { select: { status: true, amount: true } },

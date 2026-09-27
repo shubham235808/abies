@@ -17,9 +17,13 @@ export default async function PharmacyOrderPage({ params }: { params: Promise<{ 
     throw err;
   }
 
+  const patientName =
+    [order.patientUser.patientProfile?.firstName, order.patientUser.patientProfile?.lastName].filter(Boolean).join(' ') ||
+    order.patientUser.mobile;
+
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-semibold text-brand-neutral-900">Order</h1>
+      <h1 className="text-2xl font-semibold text-brand-neutral-900">Order — {patientName}</h1>
       <p className="mt-1 text-sm text-brand-neutral-600">Deliver to: {order.deliveryAddress}</p>
 
       <Card className="mt-6">

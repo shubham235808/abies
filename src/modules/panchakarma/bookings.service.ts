@@ -272,6 +272,7 @@ export async function markSessionAttended(centreUserId: string, sessionId: strin
 function detailInclude() {
   return {
     centre: { select: { id: true, name: true, city: true, state: true } },
+    patientUser: { select: { mobile: true, patientProfile: { select: { firstName: true, lastName: true } } } },
     therapy: { select: { name: true, durationMinutes: true } },
     sessions: { include: { therapist: { select: { name: true } } }, orderBy: { sessionNumber: 'asc' as const } },
     payment: { select: { status: true, amount: true } },

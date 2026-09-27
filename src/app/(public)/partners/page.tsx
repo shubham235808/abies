@@ -32,13 +32,12 @@ export default function PartnersPage() {
       </div>
 
       <Alert tone="info" className="mt-10">
-        Doctor sign-up already works — see{' '}
+        Doctors, diagnostic labs, pharmacies and Panchakarma centres can all register directly — see{' '}
         <a href="/login" className="text-brand-purple-600 underline">
           Sign in
         </a>{' '}
-        and choose &ldquo;Doctor / Vaidya&rdquo;. Partner onboarding for labs, pharmacies and Panchakarma
-        centres is a later build phase; a lead-capture form will replace this notice once the sales
-        console ships.
+        and choose your role. Your account starts in draft while our verification team reviews your
+        credentials, and you won&apos;t appear to patients until that&apos;s complete.
       </Alert>
     </main>
   );

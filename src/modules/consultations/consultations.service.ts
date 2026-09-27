@@ -184,3 +184,33 @@ export async function finalizeClinicalNote(doctorUserId: string, consultationId:
 
   return finalized;
 }
+
+// Doctor dashboard's "Tasks requiring attention" (docs/PORTAL-UX-SPEC.md) —
+// computed from real state, not invented: a completed consultation with no
+// finalized clinical note, or with a prescription still sitting in DRAFT.
+// Deliberately excludes anything already finalized/no-prescription-needed;
+// this is a work list, not a full history.
+export async function listTasksNeedingAttention(doctorUserId: string) {
+  const profile = await prisma.doctorProfile.findUnique({ where: { userId: doctorUserId } });
+  if (!profile) throw new NotFoundError('Doctor profile not found');
+
+  const consultations = await prisma.consultation.findMany({
+    where: { doctorProfileId: profile.id, status: 'COMPLETED' },
+    include: {
+      patientUser: { select: { patientProfile: { select: { firstName: true, lastName: true } } } },
+      clinicalNote: { select: { finalizedAt: true } },
+      prescriptions: { select: { status: true }, orderBy: { createdAt: 'desc' }, take: 1 },
+    },
+    orderBy: { endedAt: 'desc' },
+    take: 20,
+  });
+
+  return consultations
+    .filter((c) => !c.clinicalNote?.finalizedAt || c.prescriptions[0]?.status === 'DRAFT')
+    .map((c) => ({
+      consultationId: c.id,
+      patientName: [c.patientUser.patientProfile?.firstName, c.patientUser.patientProfile?.lastName].filter(Boolean).join(' ') || 'Patient',
+      reason: !c.clinicalNote?.finalizedAt ? ('Clinical note not finalized' as const) : ('Prescription still in draft' as const),
+      endedAt: c.endedAt,
+    }));
+}

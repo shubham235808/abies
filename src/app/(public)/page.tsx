@@ -82,6 +82,24 @@ const PILLARS: { title: string; body: string; accent: Accent }[] = [
   },
 ];
 
+const SERVICES: { title: string; body: string; href: string }[] = [
+  { title: 'Consult an Ayurveda doctor', body: 'Video or in-clinic, with verified credentials and real availability.', href: '/doctors' },
+  { title: 'Book diagnostic tests', body: 'Home collection or lab visit, results returned to you and your doctor.', href: '/diagnostics' },
+  { title: 'Order Ayurvedic medicines', body: 'Prescription-linked or over-the-counter, from verified pharmacies.', href: '/medicines' },
+  { title: 'Discover Panchakarma centres', body: 'Book verified therapy courses, with your doctor’s recommendation carried through.', href: '/panchakarma' },
+  { title: 'Manage your care plan', body: 'One treatment timeline across every consultation, test and therapy.', href: '/login' },
+  { title: 'Access reports & prescriptions', body: 'Every document your care has produced, in one place.', href: '/login' },
+];
+
+const HOW_IT_WORKS = [
+  { step: '1', title: 'Discover the right care', body: 'Search verified doctors by specialty, language and consultation mode.' },
+  { step: '2', title: 'Consult verified professionals', body: 'Video or in-clinic — your practitioner sees your history, not a blank form.' },
+  { step: '3', title: 'Receive your care plan', body: 'Prescriptions, diagnostics and next steps organised around one timeline.' },
+  { step: '4', title: 'Book diagnostics or therapy', body: 'Tests and Panchakarma sessions booked against your doctor’s recommendation.' },
+  { step: '5', title: 'Order medicines', body: 'Fulfilled by a verified pharmacy, tracked to delivery.' },
+  { step: '6', title: 'Track your health journey', body: 'Every visit, report and order in one patient dashboard.' },
+];
+
 export default function HomePage() {
   return (
     <main>
@@ -120,7 +138,37 @@ export default function HomePage() {
       </div>
 
       <div className="mx-auto max-w-5xl px-6 pb-16">
-        <dl className="mt-10 grid gap-6 sm:grid-cols-2">
+        <h2 className="mt-4 text-2xl font-semibold text-brand-neutral-900">Everything your care needs, in one place</h2>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {SERVICES.map((service) => (
+            <Link
+              key={service.title}
+              href={service.href}
+              className="block rounded-card border border-brand-neutral-200 bg-white p-5 shadow-sm transition-colors hover:border-brand-purple-300"
+            >
+              <p className="font-semibold text-brand-neutral-900">{service.title}</p>
+              <p className="mt-1.5 text-sm text-brand-neutral-600">{service.body}</p>
+            </Link>
+          ))}
+        </div>
+
+        <h2 className="mt-16 text-2xl font-semibold text-brand-neutral-900">How ABIES works</h2>
+        <ol className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {HOW_IT_WORKS.map((item) => (
+            <li key={item.step} className="flex gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-purple-100 text-sm font-semibold text-brand-purple-700">
+                {item.step}
+              </span>
+              <div>
+                <p className="font-medium text-brand-neutral-900">{item.title}</p>
+                <p className="mt-1 text-sm text-brand-neutral-600">{item.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        <h2 className="mt-16 text-2xl font-semibold text-brand-neutral-900">Why ABIES</h2>
+        <dl className="mt-6 grid gap-6 sm:grid-cols-2">
           {PILLARS.map((pillar) => (
             <div
               key={pillar.title}
@@ -134,6 +182,28 @@ export default function HomePage() {
             </div>
           ))}
         </dl>
+
+        <h2 className="mt-16 text-2xl font-semibold text-brand-neutral-900">Partner with ABIES</h2>
+        <p className="mt-2 max-w-2xl text-sm text-brand-neutral-600">
+          ABIES verifies every partner before they can receive referrals or appear to patients.
+        </p>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { title: 'For Doctors', body: 'Bring your practice onto a platform that handles scheduling and records for you.' },
+            { title: 'For Diagnostic Labs', body: 'Receive practitioner-ordered tests with clear clinical context.' },
+            { title: 'For Pharmacies', body: 'Fulfil prescription-linked orders with batch/expiry tracking.' },
+            { title: 'For Panchakarma Centres', body: 'Receive qualified referrals with documented prerequisites.' },
+          ].map((p) => (
+            <Link
+              key={p.title}
+              href="/partners"
+              className="block rounded-card border border-brand-neutral-200 bg-white p-5 shadow-sm transition-colors hover:border-brand-purple-300"
+            >
+              <p className="font-semibold text-brand-neutral-900">{p.title}</p>
+              <p className="mt-1.5 text-sm text-brand-neutral-600">{p.body}</p>
+            </Link>
+          ))}
+        </div>
 
         <p className="mt-14 border-t border-brand-neutral-200 pt-6 text-xs text-brand-neutral-400">
           ABIES is a care-coordination platform, not a substitute for professional medical

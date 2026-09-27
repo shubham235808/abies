@@ -324,6 +324,7 @@ export async function acknowledgeReport(doctorUserId: string, orderId: string) {
 function detailInclude() {
   return {
     lab: { select: { id: true, name: true, serviceCities: true } },
+    patientUser: { select: { mobile: true, patientProfile: { select: { firstName: true, lastName: true } } } },
     items: { include: { test: { select: { name: true, code: true } } } },
     sampleCollection: true,
     report: true,
@@ -356,6 +357,7 @@ export async function listMineAsLab(labUserId: string) {
     include: {
       patientUser: { select: { mobile: true, patientProfile: { select: { firstName: true, lastName: true } } } },
       items: { include: { test: { select: { name: true } } } },
+      report: { select: { criticalFlag: true, doctorAcknowledgedAt: true } },
     },
     orderBy: { scheduledAt: 'asc' },
   });

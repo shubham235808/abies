@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import type { UserRole } from '@prisma/client';
 import { getCurrentSession } from '@/server/current-user';
 import { LogoutButton } from './logout-button';
+import { MobileNav } from './mobile-nav';
 
 export interface PortalNavItem {
   href: string;
@@ -57,17 +58,7 @@ export async function PortalShell({
             <LogoutButton />
           </div>
         </div>
-        <nav className="flex gap-1 overflow-x-auto border-t border-brand-neutral-100 px-4 py-2 sm:px-6 md:hidden">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="whitespace-nowrap rounded-md px-3 py-1.5 text-sm text-brand-neutral-600 hover:bg-brand-neutral-100"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <MobileNav nav={nav} />
       </header>
 
       <div className="mx-auto flex max-w-6xl">
