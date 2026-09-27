@@ -16,5 +16,5 @@ export default async function PatientTicketPage({ params }: { params: Promise<{ 
     throw err;
   }
 
-  return <TicketThread ticket={JSON.parse(JSON.stringify(ticket))} viewerIsStaff={false} />;
+  return <TicketThread ticket={JSON.parse(JSON.stringify(ticket))} viewerRole={session.user.role} />;
 }

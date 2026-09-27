@@ -16,5 +16,5 @@ export default async function SalesTicketPage({ params }: { params: Promise<{ id
     throw err;
   }
 
-  return <TicketThread ticket={JSON.parse(JSON.stringify(ticket))} viewerIsStaff />;
+  return <TicketThread ticket={JSON.parse(JSON.stringify(ticket))} viewerRole={session.user.role} />;
 }

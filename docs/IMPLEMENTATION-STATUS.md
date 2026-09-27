@@ -1018,12 +1018,110 @@ known up front. All fixture data cleaned up afterward, including
 rep who logged it, same orphaning shape as Phase 8's `Medicine` rows) —
 verified back to zero across every Phase 10 table.
 
+## Phase 11 — Admin operations, reporting, audit
+
+Net-new per `docs/DOMAIN-MODEL.md` §11 (one migration,
+`phase11_admin_ops`): `Refund` — the one Payments entity left unbuilt
+after Phase 4. Everything else this phase adds is UI/reporting over data
+every earlier phase already writes; no other new tables.
+
+**Refunds are staff-mediated, not self-service.** A patient never sees a
+"request refund" button on their own booking/order pages — instead, the
+brief's own patient support journey (blueprint §28: "refund query" is a
+named P3 ticket example) is taken literally: a `CUSTOMER_SUPPORT` agent
+(or `ADMIN`) requests a refund *from inside a support ticket*, against
+one of that ticket's linked patient's actual payments.
+`getTicket()` (`modules/support/tickets.service.ts`) now returns the
+linked patient's refundable payments alongside the thread whenever the
+viewer is staff, and `TicketThread` renders a "Patient's payments" card
+with an inline amount field and a "Request refund" button — no separate
+payments-search screen needed, since every payment a patient has made is
+already reachable from a ticket about it. Approval is where
+`docs/SECURITY-MODEL.md`'s MFA gate actually bites: only `ADMIN` (via
+`requireAdminMfa`) can approve or reject, from a new `/admin/refunds`
+queue.
+
+**The refund gateway call is synchronous, unlike checkout — deliberately
+no webhook path added for it.** Booking/ordering needs a webhook backup
+because the *client* could vanish mid-checkout before confirming; a
+refund is entirely server-initiated by an admin, so the Razorpay SDK's
+own response to `payments.refund()` (new `refundPayment()` in
+`lib/payments/razorpay.ts`) is the confirmation. Same honest-gap pattern
+as every checkout path when credentials are missing: `approveRefund`
+always records the admin's decision (`status: PROCESSING`,
+`approvedByUserId` set) so the audit trail is accurate regardless of
+gateway availability, then only flips to `COMPLETED` (and the payment to
+`REFUNDED`/`PARTIALLY_REFUNDED`, computed from what's still outstanding
+across every non-rejected refund on that payment) if a real gateway call
+actually succeeds — it never fabricates a completed refund.
+
+**The audit log had been write-only since Phase 1.** Every phase since
+has called `recordAuditEvent()`, and nothing had ever read `AuditEvent`
+back — `docs/SECURITY-MODEL.md`'s "audit log access" privileged action
+existed only as a design intent. `modules/audit/audit.service.ts` is the
+first reader (`src/server/audit.ts`'s writer is untouched), and
+`/admin/audit` filters by event type (populated from what's actually in
+the table, not a hardcoded list that would drift the moment a new module
+invents its own `eventType` string — eleven phases have each invented
+their own), resource type, actor, and date range, paginated.
+
+**The operations dashboard replaces `/admin`'s old redirect** — its own
+Phase 0 comment ("Doctor verification is the only admin section that
+exists so far... Phase 11 adds broader admin operations") anticipated
+exactly this. `getDashboardMetrics()` runs a handful of `groupBy`/`count`
+queries — verification-queue depth per partner type, order/booking counts
+by status per module, payment/refund counts, lifetime revenue, open
+ticket counts per support department, lead counts per sales stage — no
+new metrics table, no cron/rollup job.
+
+**Scope decisions, made explicit rather than silently assumed:**
+- `Fee`/`Commission`/`Payout`/`Settlement`/`Reconciliation` from the raw
+  blueprint's wider "Admin operations & settlements" vision are **not**
+  modelled — `docs/DOMAIN-MODEL.md` §11 scopes this MVP's Payments section
+  to `Payment`+`Refund` only, so partner payout/settlement tracking stays
+  out of scope here, same "don't build an unused stub table" call as
+  every earlier phase's deferred piece. "Reconcile bookings, orders and
+  partner payouts" becomes, honestly, a revenue/volume dashboard over
+  existing data — not a ledger.
+- No automatic exception detection (stuck orders, aging tickets, anomaly
+  alerts) — the brief mentions "operational exceptions" but specifies no
+  concrete rules, so nothing is fabricated; the dashboard shows real
+  counts an admin reads themselves.
+- `Refund.requestedByUserId` isn't in the brief's literal field list but
+  is added deliberately (staff-mediated refunds need to know who on
+  staff filed the request); `approvedByUserId` doubles as "who rejected
+  it" on a `REJECTED` refund — same one-field, two-meaning overload as
+  `MedicineOrderStatus.PENDING` (Phase 8) and
+  `PanchakarmaBookingStatus.BOOKED` (Phase 9).
+
+Verified: `tsc --noEmit`, `eslint .`, `vitest run` (100/100, stable across
+3 consecutive runs — was 90/90 before this phase, +10 new tests) all
+clean; `next build` locally (`/admin`, `/admin/audit`, `/admin/refunds`
+and their API routes all correctly `ƒ` dynamic); full Docker image
+rebuild and redeploy; and a full Playwright walkthrough against the live
+container covering: an admin landing on the real operations dashboard
+(no longer redirected to doctor verification) after login, provisioning
+a support agent, a patient opening a payments-category ticket, the agent
+claiming it and seeing the patient's actual payment listed with a
+"Request refund" control, requesting a ₹300 partial refund against a
+₹500 payment, and an admin approving it from the `/admin/refunds` queue
+(landing at `PROCESSING` — this environment still has no real Razorpay
+credentials, so the honest "awaiting gateway confirmation" message shows
+rather than a fabricated completion) and confirming both the REQUESTED
+and APPROVED events in `/admin/audit`. All fixture data (staff accounts,
+the support ticket, the seeded payment, and the refund it cascaded away
+with) cleaned up afterward — verified back to zero across every Phase 11
+table.
+
 ## Next up
 
-Phase 11: Admin operations, reporting, audit (`docs/IMPLEMENTATION-PLAN.md`
-row 11) — not yet started, pending explicit go-ahead. Outstanding from
-earlier phases, still unresolved: real Ubuntu ESXi VM SSH details for
-Phase 12 deployment, and real (even test-mode) Razorpay/SMS/email/
-WhatsApp/video credentials so the booking, consultation, diagnostics,
-medicines, panchakarma, and now support flows can be exercised fully live
-rather than stopping at honest "not configured" messages.
+Phase 12: Security hardening, performance, observability, backup,
+deployment (`docs/IMPLEMENTATION-PLAN.md` row 12) — the final phase, not
+yet started, pending explicit go-ahead. Outstanding, still unresolved:
+real Ubuntu ESXi VM SSH details for the actual deployment target, and
+real (even test-mode) Razorpay/SMS/email/WhatsApp/video credentials so
+every payment-dependent flow built across Phases 4-11 can be exercised
+fully live rather than stopping at honest "not configured" messages —
+Phase 12's own scope (the 9 mandatory end-to-end tests run against a
+deployed environment) makes at least the payment gateway credential a
+likely hard blocker, not just a nice-to-have, for finishing it for real.

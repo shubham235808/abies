@@ -70,6 +70,24 @@ export function verifySignature(params: { orderId: string; paymentId: string; si
   return timingSafeEqual(a, b);
 }
 
+export interface GatewayRefund {
+  id: string;
+  amount: number;
+  status: string;
+}
+
+// Unlike createOrder (needs a webhook backup because the client could vanish
+// mid-checkout), a refund is entirely server-initiated by an admin, so the
+// SDK call's own response is the confirmation — no webhook dependency here.
+export async function refundPayment(params: { gatewayPaymentId: string; amountRupees: number; notes?: Record<string, string> }): Promise<GatewayRefund> {
+  const rp = getClient();
+  const refund = await rp.payments.refund(params.gatewayPaymentId, {
+    amount: Math.round(params.amountRupees * 100),
+    notes: params.notes,
+  });
+  return { id: refund.id, amount: Number(refund.amount), status: String(refund.status) };
+}
+
 // Webhooks sign the raw request body with a separate secret
 // (RAZORPAY_WEBHOOK_SECRET) using the same HMAC-SHA256 scheme.
 export function verifyWebhookSignature(rawBody: string, signature: string): boolean {

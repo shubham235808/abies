@@ -85,6 +85,8 @@ model User {
   supportMessages            SupportMessage[]
   supportAttachmentsUploaded SupportAttachment[]
   partnerLeadsOwned          PartnerLead[]
+  refundsRequested           Refund[]                    @relation("RefundRequester")
+  refundsApproved            Refund[]                    @relation("RefundApprover")
 
   @@index([role, status])
 }
@@ -532,6 +534,7 @@ model Payment {
   diagnosticOrder    DiagnosticOrder?
   medicineOrder      MedicineOrder?
   panchakarmaBooking PanchakarmaBooking?
+  refunds            Refund[]
 
   @@index([payerUserId, status])
   @@index([purpose, purposeEntityId])
@@ -1550,4 +1553,53 @@ model PartnerLead {
 
   @@index([stage])
   @@index([ownerUserId])
+}
+
+// ---------------------------------------------------------------------------
+// Refunds (docs/DOMAIN-MODEL.md §11) — the one net-new Payments entity left
+// after Phase 4. Admin operations/reporting/audit (Phase 11) otherwise reads
+// existing data; Fee/Commission/Payout/Settlement/Reconciliation from the
+// raw blueprint's wider vision are deliberately not modelled here — §11 of
+// docs/DOMAIN-MODEL.md scopes this MVP's Payments section to Payment+Refund
+// only, same "don't build an unused stub table" call as every earlier
+// phase's deferred piece (Phase 7's DiagnosticPackage, Phase 9's
+// TherapyPackage, ...).
+
+// Brief's exact 5-value list (docs/DOMAIN-MODEL.md §11).
+enum RefundStatus {
+  REQUESTED
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+}
+
+// requestedByUserId isn't in the brief's literal field list but is added
+// deliberately: refunds here are staff-mediated (a support agent or admin
+// requests one after a payment-dispute conversation, mirroring the brief's
+// own patient-support journey — "refund query" is a named P3 ticket example)
+// rather than self-service from a patient's own order page, so knowing who
+// on staff filed the request is necessary, not optional.
+model Refund {
+  id                String       @id @default(cuid())
+  paymentId         String
+  amount            Int
+  reason            String?
+  status            RefundStatus @default(REQUESTED)
+  requestedByUserId String
+  // Doubles as "who rejected it" on a REJECTED refund — same one-field,
+  // two-meaning overload as MedicineOrderStatus.PENDING (Phase 8) and
+  // PanchakarmaBookingStatus.BOOKED (Phase 9): the brief's exact field list
+  // has no separate rejectedByUserId, and "who made the APPROVE/REJECT call"
+  // is one concept either way.
+  approvedByUserId  String?
+  gatewayRefundRef  String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  payment           Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  requestedBy       User         @relation("RefundRequester", fields: [requestedByUserId], references: [id], onDelete: Cascade)
+  approvedBy        User?        @relation("RefundApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([paymentId])
+  @@index([status])
 }

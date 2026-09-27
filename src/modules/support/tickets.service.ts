@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { assertUploadAllowed, putObject } from '@/lib/storage';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@/lib/errors';
 import { notify } from '@/modules/notifications/notifications.service';
+import { listRefundablePayments } from '@/modules/payments/refunds.service';
 import { recordAuditEvent, type AuditContext } from '@/server/audit';
 import { randomUUID } from 'crypto';
 import { buildSlaSnapshot, defaultDepartmentFor, defaultPriorityFor } from './sla';
@@ -106,7 +107,16 @@ export async function createTicket(requesterUserId: string, requesterRole: UserR
 export async function getTicket(ticketId: string, userId: string, role: UserRole) {
   const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId }, include: detailInclude() });
   if (!ticket || !canView(ticket, userId, role)) throw new NotFoundError('Ticket not found');
-  return ticket;
+
+  // Staff working a ticket about a specific patient can see that patient's
+  // refundable payments right here, rather than needing a separate
+  // payments-search screen — see modules/payments/refunds.service.ts.
+  let refundablePayments: Awaited<ReturnType<typeof listRefundablePayments>> = [];
+  if (role !== 'PATIENT' && ticket.linkedPatientUserId) {
+    refundablePayments = await listRefundablePayments(ticket.linkedPatientUserId);
+  }
+
+  return { ...ticket, refundablePayments };
 }
 
 export async function listMineAsRequester(userId: string) {

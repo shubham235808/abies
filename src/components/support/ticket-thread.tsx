@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Label, Select, Textarea } from '@/components/ui/input';
+import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { SupportTicketPriorityBadge, SupportTicketStatusBadge } from '@/components/ui/badge';
 import { api, ApiError } from '@/lib/api-client';
 
@@ -13,6 +13,15 @@ export interface ThreadMessage {
   body: string;
   createdAt: string;
   author: { id: string; mobile: string; role: string } | null;
+}
+
+export interface RefundablePayment {
+  id: string;
+  purpose: string;
+  amount: number;
+  status: string;
+  createdAt: string;
+  refunds: { id: string; amount: number; status: string }[];
 }
 
 export interface TicketDetail {
@@ -29,6 +38,7 @@ export interface TicketDetail {
   linkedPatient: { id: string; mobile: string; patientProfile: { firstName: string | null; lastName: string | null } | null } | null;
   assignedAgent: { id: string; mobile: string } | null;
   messages: ThreadMessage[];
+  refundablePayments?: RefundablePayment[];
 }
 
 const STATUS_OPTIONS = ['IN_PROGRESS', 'WAITING_CUSTOMER', 'WAITING_PARTNER', 'RESOLVED', 'CLOSED'];
@@ -39,13 +49,17 @@ const PRIORITY_OPTIONS = ['P1', 'P2', 'P3', 'P4'];
 // (Phases 7-9): every mutation here updates this component's own state
 // directly from that call's response, never by hoping a server re-render
 // resets props.
-export function TicketThread({ ticket: initialTicket, viewerIsStaff }: { ticket: TicketDetail; viewerIsStaff: boolean }) {
+export function TicketThread({ ticket: initialTicket, viewerRole }: { ticket: TicketDetail; viewerRole: string }) {
+  const viewerIsStaff = viewerRole !== 'PATIENT';
+  const canHandleRefunds = viewerRole === 'CUSTOMER_SUPPORT' || viewerRole === 'ADMIN';
   const [ticket, setTicket] = useState(initialTicket);
   const [messages, setMessages] = useState(initialTicket.messages);
   const [reply, setReply] = useState('');
   const [nextStatus, setNextStatus] = useState(STATUS_OPTIONS[0]);
   const [department, setDepartment] = useState(ticket.department);
   const [priority, setPriority] = useState(ticket.priority);
+  const [refundablePayments, setRefundablePayments] = useState(initialTicket.refundablePayments ?? []);
+  const [refundAmounts, setRefundAmounts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -88,6 +102,27 @@ export function TicketThread({ ticket: initialTicket, viewerIsStaff }: { ticket:
       setTicket((prev) => ({ ...prev, ...result.ticket }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update status.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRequestRefund(paymentId: string, remaining: number) {
+    const raw = refundAmounts[paymentId];
+    const amount = raw ? Number(raw) : remaining;
+    if (!amount || amount <= 0 || amount > remaining) {
+      setError(`Enter an amount up to the refundable balance (₹${remaining})`);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.post('/api/refunds', { paymentId, amount });
+      setRefundablePayments((prev) =>
+        prev.map((p) => (p.id === paymentId ? { ...p, refunds: [...p.refunds, { id: 'pending', amount, status: 'REQUESTED' }] } : p)),
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not request this refund.');
     } finally {
       setBusy(false);
     }
@@ -195,6 +230,57 @@ export function TicketThread({ ticket: initialTicket, viewerIsStaff }: { ticket:
               Apply
             </Button>
           </div>
+        </Card>
+      )}
+
+      {canHandleRefunds && refundablePayments.length > 0 && (
+        <Card className="mt-4">
+          <h2 className="font-semibold text-brand-neutral-900">Patient&apos;s payments</h2>
+          <ul className="mt-3 space-y-3">
+            {refundablePayments.map((p) => {
+              const committed = p.refunds
+                .filter((r) => r.status !== 'REJECTED')
+                .reduce((sum, r) => sum + r.amount, 0);
+              const remaining = p.amount - committed;
+              return (
+                <li key={p.id} className="rounded-lg border border-brand-neutral-100 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm text-brand-neutral-700">
+                      {p.purpose.replace(/_/g, ' ')} — ₹{p.amount} ({p.status.replace(/_/g, ' ')})
+                    </span>
+                    <span className="text-xs text-brand-neutral-400">
+                      {new Date(p.createdAt).toLocaleDateString('en-IN')}
+                    </span>
+                  </div>
+                  {p.refunds.length > 0 && (
+                    <ul className="mt-2 space-y-0.5 text-xs text-brand-neutral-500">
+                      {p.refunds.map((r) => (
+                        <li key={r.id}>
+                          Refund of ₹{r.amount} — {r.status}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {remaining > 0 && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={remaining}
+                        placeholder={`Up to ₹${remaining}`}
+                        value={refundAmounts[p.id] ?? ''}
+                        onChange={(e) => setRefundAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                        className="w-32"
+                      />
+                      <Button size="sm" variant="secondary" loading={busy} onClick={() => handleRequestRefund(p.id, remaining)}>
+                        Request refund
+                      </Button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </Card>
       )}
 

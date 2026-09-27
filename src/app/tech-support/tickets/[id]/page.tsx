@@ -16,5 +16,5 @@ export default async function TechSupportTicketPage({ params }: { params: Promis
     throw err;
   }
 
-  return <TicketThread ticket={JSON.parse(JSON.stringify(ticket))} viewerIsStaff />;
+  return <TicketThread ticket={JSON.parse(JSON.stringify(ticket))} viewerRole={session.user.role} />;
 }
