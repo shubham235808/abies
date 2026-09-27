@@ -160,6 +160,41 @@ restored from that exact backup (drop/recreate database, replace bucket
 contents), and confirmed the demo patient/admin and all 12 doctor
 documents came back correctly afterward.
 
+## Post-review correction: `upgrade-insecure-requests` broke the LAN review deployment
+
+The CSP as first shipped included `upgrade-insecure-requests`, reasoned
+(incorrectly) to be as harmless as `Strict-Transport-Security` over plain
+HTTP. It isn't: unlike HSTS, which browsers are specified to ignore unless
+the header itself arrives over an already-secure connection,
+`upgrade-insecure-requests` is a CSP directive that takes effect regardless
+of the scheme the *page* loaded over — it rewrites every subresource
+request to `https:` on the same host. This app's only two real deployment
+modes right now (the LAN-exposed review container, and the not-yet-real
+Ubuntu VM target) both serve plain HTTP directly on port 3000 with no TLS
+listener there at all (by design — TLS is meant to terminate at Nginx in
+front, never at the Next.js process itself), so every `_next/static/*`
+asset request got rewritten to `https://<host>:3000/...` and failed
+outright with `ERR_SSL_PROTOCOL_ERROR` — a completely unstyled, broken page.
+
+**Why this session's own verification didn't catch it**: every live check
+in the "Verification" section above was against `http://localhost:3000`.
+Chromium (and browsers generally) treat `localhost`/`127.0.0.1` as an
+always-secure context regardless of scheme, so `upgrade-insecure-requests`
+has nothing to "upgrade" there and silently does nothing — the bug is
+invisible from localhost and only reproduces against a real, non-loopback
+address. Found the moment the user actually opened the LAN address
+(`http://192.168.1.160:3000`) in a real browser. **Lesson applied**:
+security-header verification needs at least one check against a real
+network-reachable address, not just `localhost`, precisely because
+browsers special-case loopback addresses.
+
+**Fix**: removed `upgrade-insecure-requests` from `next.config.mjs`'s CSP
+entirely (see that file's comment for the full explanation) — it's safe to
+add back once Nginx is actually terminating TLS in front of this app, at
+which point it stops being a footgun and starts doing what it's for.
+Rebuilt, redeployed, and reverified against the LAN address with a fresh
+browser context: zero console errors, the page renders fully styled.
+
 ## What this phase did not do, and why
 
 - **No real TLS certificate** — no domain name exists to issue one for in

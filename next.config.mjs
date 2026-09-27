@@ -25,7 +25,17 @@ const CSP = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'self'",
-  'upgrade-insecure-requests',
+  // Deliberately NOT including 'upgrade-insecure-requests': unlike HSTS,
+  // it is not a no-op over plain HTTP — it rewrites every subresource
+  // request to https: regardless of the scheme the page itself loaded
+  // over, so a page reached at http://<host>:3000 (this app's only real
+  // deployment mode right now: the LAN review container, and the real
+  // Nginx+TLS Ubuntu VM target that doesn't exist yet either) had every
+  // asset request rewritten to https://<host>:3000/... and fail outright
+  // with ERR_SSL_PROTOCOL_ERROR, since nothing on that port speaks TLS.
+  // Found live: the very first real browser check against the LAN address
+  // after shipping it. Add it back only once Nginx is actually terminating
+  // TLS in front of this app.
 ].join('; ');
 
 /** @type {import('next').NextConfig} */
