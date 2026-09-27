@@ -1081,6 +1081,15 @@ model Medicine {
   manufacturerName     String?
   brandName            String?
   requiresPrescription Boolean             @default(true)
+  // A static /public path (e.g. /medicines/abies-soap.jpeg), not a
+  // src/lib/storage.ts key — catalogue photos are public marketing
+  // content, not the private-by-default documents/reports that module is
+  // for (its own header comment: "reads are always short-lived signed
+  // URLs, never a permanent public link"), so this matches the existing
+  // next/image-over-a-literal-/public-path pattern (site-header.tsx's
+  // logo) rather than inventing signed-URL machinery for something that
+  // was never meant to be private.
+  imageUrl             String?
   active               Boolean             @default(true)
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Alert } from '@/components/ui/alert';
@@ -73,6 +74,17 @@ export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicin
 
   return (
     <Card>
+      {medicine.imageUrl && (
+        <div className="relative -mx-6 -mt-6 mb-3 aspect-square overflow-hidden rounded-t-card bg-brand-neutral-50">
+          <Image
+            src={medicine.imageUrl}
+            alt={medicine.name}
+            fill
+            sizes="(min-width: 1024px) 240px, 45vw"
+            className="object-contain p-4"
+          />
+        </div>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold text-brand-neutral-900">{medicine.name}</h3>

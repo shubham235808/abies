@@ -125,6 +125,7 @@ export interface PublicMedicineListing {
   form: string | null;
   strength: string | null;
   brandName: string | null;
+  imageUrl: string | null;
   pharmacy: { id: string; name: string | null; serviceAreas: string[] };
   quantityAvailable: number;
   price: number;
@@ -181,6 +182,7 @@ export async function searchPublic(query: PublicSearchQuery): Promise<{ total: n
         form: row.medicine.form,
         strength: row.medicine.strength,
         brandName: row.medicine.brandName,
+        imageUrl: row.medicine.imageUrl,
         pharmacy: row.pharmacy,
         quantityAvailable: row.quantityAvailable,
         price: row.price,

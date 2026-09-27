@@ -35,6 +35,21 @@ const DEV_CLINICS = [
   { city: 'Jaipur', state: 'Rajasthan', postalCode: '302001', addressLine1: 'MI Road' },
 ];
 
+// ABIES's own OTC product line — real product photos in public/medicines/
+// (dropped in by the user), seeded here with a demo approved pharmacy so
+// they actually appear on the public /medicines catalogue (searchPublic
+// only lists medicines with in-stock inventory at an approved pharmacy).
+const ABIES_MEDICINES = [
+  { name: 'Abies Abijoint Capsule (Adults)', form: 'Capsule', image: 'abies-abijoint-capsule-adults.jpeg', price: 320 },
+  { name: 'Abies Baby Powder', form: 'Powder', image: 'abies-baby-powder.jpeg', price: 180 },
+  { name: 'Abies Baby Rash Cream', form: 'Cream', image: 'abies-baby-rash-cream.jpeg', price: 210 },
+  { name: 'Abies Baby Shampoo', form: 'Shampoo', image: 'abies-baby-shampoo.jpeg', price: 195 },
+  { name: 'Abies Madhucare (Adults)', form: 'Tablet', image: 'abies-madhucare-adults.jpeg', price: 280 },
+  { name: 'Abies Pittahar Syrup (Adults)', form: 'Syrup', image: 'abies-pittahar-syrup-adults.jpeg', price: 165 },
+  { name: 'Abies Soap', form: 'Soap', image: 'abies-soap.jpeg', price: 95 },
+  { name: 'Abies Tulasi Syrup (Adults)', form: 'Syrup', image: 'abies-tulasi-syrup-adults.jpeg', price: 175 },
+];
+
 async function main() {
   for (const field of ASSESSMENT_TEMPLATE_FIELDS) {
     await prisma.assessmentTemplateField.upsert({
@@ -109,10 +124,66 @@ async function main() {
     },
   });
 
+  const pharmacyUser = await prisma.user.upsert({
+    where: { mobile: '+919876543212' },
+    update: {},
+    create: {
+      mobile: '+919876543212',
+      role: UserRole.PHARMACY,
+      pharmacy: {
+        create: {
+          name: 'ABIES Wellness Pharmacy',
+          licenseNumbers: ['MH-PHM-DEV-0001'],
+          serviceAreas: ['Pune', 'Bengaluru', 'Jaipur'],
+          verificationStatus: 'APPROVED',
+          submittedAt: new Date(),
+          reviewedAt: new Date(),
+        },
+      },
+    },
+  });
+  const pharmacy = await prisma.pharmacy.findUniqueOrThrow({ where: { userId: pharmacyUser.id } });
+
+  for (const item of ABIES_MEDICINES) {
+    // Medicine.name has no unique constraint (it's a lazily-grown, find-
+    // or-create-by-name catalogue per modules/medicines/orders.service.ts's
+    // resolveMedicineByName), so this is a manual find-then-write rather
+    // than prisma's upsert(), which needs a unique `where`.
+    const existing = await prisma.medicine.findFirst({ where: { name: item.name } });
+    const medicine = existing
+      ? await prisma.medicine.update({
+          where: { id: existing.id },
+          data: { imageUrl: `/medicines/${item.image}`, form: item.form, brandName: 'Abies', requiresPrescription: false, active: true },
+        })
+      : await prisma.medicine.create({
+          data: {
+            name: item.name,
+            form: item.form,
+            brandName: 'Abies',
+            manufacturerName: 'Abies Ayurveda',
+            requiresPrescription: false,
+            imageUrl: `/medicines/${item.image}`,
+          },
+        });
+    await prisma.pharmacyInventory.upsert({
+      where: { pharmacyId_medicineId_batchNumber: { pharmacyId: pharmacy.id, medicineId: medicine.id, batchNumber: 'DEV-BATCH-1' } },
+      update: { quantityAvailable: 100, price: item.price, expiryDate: new Date('2028-01-01') },
+      create: {
+        pharmacyId: pharmacy.id,
+        medicineId: medicine.id,
+        batchNumber: 'DEV-BATCH-1',
+        quantityAvailable: 100,
+        price: item.price,
+        expiryDate: new Date('2028-01-01'),
+      },
+    });
+  }
+
   console.log('Seeded dev accounts (dev-only, OTP = 123456, admin MFA = 654321):');
   console.log(`  patient: ${patient.mobile}`);
   console.log(`  doctor:  ${doctorUser.mobile} (dr-meera-iyer, approved + discoverable)`);
   console.log(`  admin:   ${admin.mobile}`);
+  console.log(`  pharmacy: ${pharmacyUser.mobile} (ABIES Wellness Pharmacy, approved, ${ABIES_MEDICINES.length} products stocked)`);
 }
 
 main()
