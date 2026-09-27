@@ -60,6 +60,28 @@ services:
       - "127.0.0.1:9000:9000"
       - "127.0.0.1:9001:9001"
 
+  # One-shot: creates STORAGE_BUCKET if it doesn't already exist, then
+  # exits. Nothing else in this repo ever creates the bucket — a fresh
+  # `docker compose up` on a brand-new environment (a real deploy, CI) had
+  # no automated way to get one until this existed; it was only ever
+  # present here because it got created by hand at some point. Idempotent
+  # (--ignore-existing), so safe to run on every `up`.
+  storage-init:
+    image: quay.io/minio/mc:latest
+    container_name: abies-storage-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:-abies-dev}
+      STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:?set STORAGE_SECRET_ACCESS_KEY in .env}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-abies-private}
+    entrypoint: >
+      sh -c "mc alias set target http://minio:9000 \"$$STORAGE_ACCESS_KEY_ID\" \"$$STORAGE_SECRET_ACCESS_KEY\" &&
+             mc mb --ignore-existing target/\"$$STORAGE_BUCKET\""
+    networks: [abies]
+    restart: "no"
+
   app:
     build:
       context: .
@@ -78,6 +100,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
     ports:
       # Bound to all interfaces (not just localhost) for LAN access during
       # development review. docker-compose.prod.yml strips this back to

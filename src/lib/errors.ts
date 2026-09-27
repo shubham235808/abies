@@ -1,4 +1,5 @@
 import { ZodError } from 'zod';
+import { logger } from './logger';
 
 // Shared error types so every route handler maps failures to HTTP responses
 // the same way, instead of each module inventing its own shape.
@@ -60,7 +61,7 @@ export function errorResponse(error: unknown): Response {
   }
   // Unexpected errors: never leak internals (stack traces, DB error text) to
   // the client — log server-side, return a generic message.
-  console.error('[unhandled]', error);
+  logger.error('http', 'unhandled error in route handler', error);
   return Response.json({ error: 'Something went wrong' }, { status: 500 });
 }
 

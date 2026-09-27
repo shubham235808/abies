@@ -1,6 +1,7 @@
 import { Prisma, type UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getEnv } from '@/lib/env';
+import { logger } from '@/lib/logger';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, ServiceUnavailableError } from '@/lib/errors';
 import { createOrder, isConfigured, verifySignature } from '@/lib/payments/razorpay';
 import { notify } from '@/modules/notifications/notifications.service';
@@ -194,7 +195,7 @@ export async function bookOrder(patientUserId: string, dto: BookOrderInput) {
     return { order, payment: updatedPayment, razorpayOrder: gatewayOrder, razorpayKeyId: getEnv().RAZORPAY_KEY_ID };
   } catch (err) {
     await releaseOrder(order.id, 'Payment gateway error while starting checkout');
-    console.error('[medicines] razorpay order creation failed', err);
+    logger.error('medicines', 'razorpay order creation failed', err, { orderId: order.id });
     throw new ServiceUnavailableError('Could not start payment — please try again.');
   }
 }

@@ -2,6 +2,7 @@ import { ConsultationMode, Prisma, type UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getEnv } from '@/lib/env';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, ServiceUnavailableError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { createOrder, isConfigured, verifySignature } from '@/lib/payments/razorpay';
 import { notify } from '@/modules/notifications/notifications.service';
 import { recordAuditEvent } from '@/server/audit';
@@ -256,7 +257,7 @@ export async function holdSlot(userId: string, dto: HoldSlotInput) {
     return { appointment, payment: updatedPayment, razorpayOrder: order, razorpayKeyId: getEnv().RAZORPAY_KEY_ID };
   } catch (err) {
     await releaseAppointment(appointment.id, 'Payment gateway error while starting checkout');
-    console.error('[appointments] razorpay order creation failed', err);
+    logger.error('appointments', 'razorpay order creation failed', err, { appointmentId: appointment.id });
     throw new ServiceUnavailableError('Could not start payment — please try again.');
   }
 }
@@ -346,7 +347,7 @@ export async function handleRazorpayWebhookPayment(payment: { order_id?: string;
   try {
     await finalizePaymentSuccessByOrder({ gatewayOrderId: payment.order_id, gatewayPaymentId: payment.id, gatewaySignature: 'webhook' });
   } catch (err) {
-    console.error('[appointments] webhook finalize failed', err);
+    logger.error('appointments', 'webhook finalize failed', err, { gatewayOrderId: payment.order_id });
   }
 }
 

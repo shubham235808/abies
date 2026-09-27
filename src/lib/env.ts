@@ -20,6 +20,16 @@ const envSchema = z.object({
   OTP_TTL_SECONDS: z.coerce.number().default(300),
   OTP_COOLDOWN_SECONDS: z.coerce.number().default(30),
   OTP_MAX_ATTEMPTS: z.coerce.number().default(5),
+  // IP-scoped Redis rate limits (src/proxy.ts) — defense-in-depth on top of
+  // OTP_COOLDOWN_SECONDS's per-mobile check (docs/SECURITY-MODEL.md's
+  // "Rate limiting... implemented via Redis counters" promise, not actually
+  // wired up until Phase 12).
+  RATE_LIMIT_OTP_REQUEST_MAX: z.coerce.number().default(20),
+  RATE_LIMIT_OTP_REQUEST_WINDOW_SECONDS: z.coerce.number().default(300),
+  RATE_LIMIT_TICKET_CREATE_MAX: z.coerce.number().default(30),
+  RATE_LIMIT_TICKET_CREATE_WINDOW_SECONDS: z.coerce.number().default(600),
+  RATE_LIMIT_WEBHOOK_MAX: z.coerce.number().default(120),
+  RATE_LIMIT_WEBHOOK_WINDOW_SECONDS: z.coerce.number().default(60),
   SESSION_TTL_DAYS: z.coerce.number().default(7),
   ADMIN_MFA_REQUIRED: z.coerce.boolean().default(true),
   OTP_DEV_CODE: z.string().optional(),

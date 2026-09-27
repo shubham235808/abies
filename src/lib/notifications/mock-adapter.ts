@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import type { NotificationAdapter, NotificationRecipient, SendResult } from './types';
 
 // Logs to the server console instead of calling a real provider. This is
@@ -10,7 +11,7 @@ export function createMockAdapter(channel: string): NotificationAdapter {
   return {
     async send(recipient: NotificationRecipient, templateKey: string, payload: Record<string, unknown>): Promise<SendResult> {
       const to = recipient.mobile ?? recipient.email ?? recipient.userId;
-      console.log(`[notifications:mock:${channel}] to=${to} template=${templateKey}`, payload);
+      logger.info('notifications', `mock ${channel} to=${to} template=${templateKey}`, { payload });
       return { ok: true, providerRef: `mock:${channel}:${Date.now()}` };
     },
   };

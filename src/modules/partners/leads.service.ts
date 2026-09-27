@@ -33,6 +33,10 @@ export async function listLeads(stage?: UpdateLeadInput['stage']) {
     where: stage ? { stage } : undefined,
     include: { owner: { select: { mobile: true } } },
     orderBy: [{ nextFollowUpAt: 'asc' }, { createdAt: 'desc' }],
+    // Same unbounded-lifetime-list concern as tickets.service.ts's
+    // listQueue — a hard ceiling, not full pagination, since a stage
+    // filter already keeps the common case well under this.
+    take: 200,
   });
 }
 

@@ -12,6 +12,14 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
+FROM builder AS migrator
+# Runs from the builder stage (it already has the full node_modules with the
+# prisma CLI, unlike the runner stage below which only ships @prisma/client)
+# — docker-compose.prod.yml's one-shot `migrate` service uses this stage
+# so `prisma migrate deploy` runs safely on every deploy instead of relying
+# on someone remembering to run it by hand against a prod database.
+CMD ["npx", "prisma", "migrate", "deploy"]
+
 FROM base AS runner
 ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs

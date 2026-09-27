@@ -1,10 +1,12 @@
 import { prisma } from '@/lib/db';
 import { redis } from '@/lib/redis';
+import { checkStorageHealth } from '@/lib/storage';
 
-// Readiness probe: process is up AND its dependencies (database, cache) are
-// reachable. Deployment tooling should wait for this before routing traffic.
+// Readiness probe: process is up AND its dependencies (database, cache,
+// object storage) are reachable. Deployment tooling should wait for this
+// before routing traffic.
 export async function GET() {
-  const checks: Record<string, 'ok' | 'error'> = { database: 'error', redis: 'error' };
+  const checks: Record<string, 'ok' | 'error'> = { database: 'error', redis: 'error', storage: 'error' };
 
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -19,6 +21,8 @@ export async function GET() {
   } catch {
     // left as 'error'
   }
+
+  checks.storage = (await checkStorageHealth()) ? 'ok' : 'error';
 
   const ready = Object.values(checks).every((v) => v === 'ok');
   return Response.json({ ready, checks }, { status: ready ? 200 : 503 });

@@ -133,6 +133,11 @@ export async function listQueue(role: UserRole, status?: SupportTicketStatus) {
     where: { ...(department ? { department } : {}), ...(status ? { status } : {}) },
     include: { requester: { select: { mobile: true } }, assignedAgent: { select: { mobile: true } } },
     orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+    // A department's unfiltered lifetime queue could otherwise grow
+    // unbounded — filtering to a specific status (OPEN, etc.) already
+    // keeps day-to-day usage small; this is the hard ceiling for the
+    // unfiltered "everything" view.
+    take: 200,
   });
 }
 

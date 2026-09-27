@@ -1,5 +1,6 @@
 import Redis from 'ioredis';
 import { getEnv } from './env';
+import { logger } from './logger';
 
 declare global {
   var __redis: Redis | undefined;
@@ -12,7 +13,7 @@ function createClient() {
   // errors. The first real command (e.g. in /api/ready) connects on demand.
   const client = new Redis(getEnv().REDIS_URL, { maxRetriesPerRequest: null, lazyConnect: true });
   client.on('error', (err) => {
-    console.error('[redis] connection error', err.message);
+    logger.error('redis', 'connection error', err);
   });
   return client;
 }

@@ -29,6 +29,26 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+      # bitnami's image (not the official quay.io/minio/minio one
+      # docker-compose.yml uses) because GitHub Actions service containers
+      # can't override CMD to pass `server /data` — bitnami's entrypoint
+      # reads env vars instead, including MINIO_DEFAULT_BUCKETS to create
+      # the bucket automatically (docker-compose.yml's `storage-init`
+      # service does the equivalent for local/prod). Several integration
+      # tests exercise file upload (doctor documents, reports, ...) via
+      # src/lib/storage.ts, which needs a real S3-compatible endpoint.
+      minio:
+        image: bitnami/minio:latest
+        ports: ['9000:9000']
+        env:
+          MINIO_ROOT_USER: ci
+          MINIO_ROOT_PASSWORD: ci-only-password
+          MINIO_DEFAULT_BUCKETS: abies-private
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
 
     env:
       NODE_ENV: test

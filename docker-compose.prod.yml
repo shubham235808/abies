@@ -2,17 +2,27 @@
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # Differences from docker-compose.yml:
-#   - postgres/redis/minio/app do NOT publish ports to the host; only Nginx
-#     (run on the host, see infra/nginx/abies.conf) reaches the app, over
-#     the internal Docker network.
+#   - postgres/redis/minio publish no host ports at all — only the app
+#     container reaches them, over the internal Docker network.
+#   - app keeps a single 127.0.0.1-only binding (not docker-compose.yml's
+#     dev "3000:3000" bound to every interface) — Nginx runs on the host
+#     (infra/nginx/abies.conf) and proxies to 127.0.0.1:3000, so that
+#     binding has to survive the overlay; only Nginx's own :80/:443 are
+#     ever reachable from outside the host.
 #   - restart policy is "always" for unattended recovery after VM reboot.
+#   - a one-shot `migrate` service runs `prisma migrate deploy` (Dockerfile's
+#     `migrator` stage) before `app` starts, so a deploy never depends on
+#     someone remembering to run migrations by hand against the prod
+#     database — docs/TARGET-ARCHITECTURE.md's "migrations run automatically
+#     and safely on deploy" line, finalized here.
 #
-# Compose merges `ports:` across files by concatenation, not replacement, so
-# listing an empty `ports: !reset []` here is required to actually remove
-# docker-compose.yml's dev-only host bindings (Compose Specification's
-# !reset merge tag, supported by the Compose CLI version pinned in
-# docs/TARGET-ARCHITECTURE.md). This is finalized alongside the real
-# deployment script in Phase 12 — treat this file as a stub until then.
+# Compose merges `ports:` across files by concatenation, not replacement.
+# `!reset` clears a key to empty (postgres/redis/minio below); to *replace*
+# app's dev binding with a different one, `!override` is the right tag —
+# `!reset` with a non-empty value was tried first and silently produced no
+# ports at all (verified live: `docker compose config` showed the `app`
+# service with no `ports:` key whatsoever), which would have left app
+# completely unreachable from the host in a real deployment.
 
 services:
   postgres:
@@ -27,6 +37,29 @@ services:
     restart: always
     ports: !reset []
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-abies}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-abies_ayurveda}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [abies]
+    restart: "no"
+
   app:
     restart: always
-    ports: !reset []
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports: !override ["127.0.0.1:3000:3000"]

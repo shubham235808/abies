@@ -3,6 +3,7 @@ import type { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { BadRequestError, ConflictError, NotFoundError } from '@/lib/errors';
 import { isConfigured, refundPayment } from '@/lib/payments/razorpay';
+import { logger } from '@/lib/logger';
 import { notify } from '@/modules/notifications/notifications.service';
 import { recordAuditEvent, type AuditContext } from '@/server/audit';
 import type { rejectRefundSchema, requestRefundSchema } from './refunds.schemas';
@@ -111,7 +112,7 @@ export async function approveRefund(adminUserId: string, refundId: string, audit
         metadata: { gatewayRefundRef: gatewayRefund.id },
       });
     } catch (err) {
-      console.error('[refunds] gateway refund failed, leaving refund at PROCESSING', err);
+      logger.error('refunds', 'gateway refund failed, leaving refund at PROCESSING', err, { refundId });
     }
   }
 

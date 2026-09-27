@@ -1113,15 +1113,105 @@ the support ticket, the seeded payment, and the refund it cascaded away
 with) cleaned up afterward — verified back to zero across every Phase 11
 table.
 
-## Next up
+## Phase 12 — Security hardening, performance, observability, backup, deployment
 
-Phase 12: Security hardening, performance, observability, backup,
-deployment (`docs/IMPLEMENTATION-PLAN.md` row 12) — the final phase, not
-yet started, pending explicit go-ahead. Outstanding, still unresolved:
-real Ubuntu ESXi VM SSH details for the actual deployment target, and
-real (even test-mode) Razorpay/SMS/email/WhatsApp/video credentials so
-every payment-dependent flow built across Phases 4-11 can be exercised
-fully live rather than stopping at honest "not configured" messages —
-Phase 12's own scope (the 9 mandatory end-to-end tests run against a
-deployed environment) makes at least the payment gateway credential a
-likely hard blocker, not just a nice-to-have, for finishing it for real.
+No new domain entities — this phase closes gaps in the *cross-cutting*
+contracts (`docs/SECURITY-MODEL.md`, `docs/TARGET-ARCHITECTURE.md`'s
+deployment topology) that every earlier phase promised but the actual
+Phase-12-scoped work — rate limiting, an audit-log reader, backup/restore,
+finishing `docker-compose.prod.yml` — had, until now, only ever been
+described, not built. Full detail (the OWASP walkthrough, the npm audit
+finding and why it was accepted rather than fixed, exactly what was
+verified live and how) is in the new `docs/SECURITY-REVIEW.md`; this entry
+is the summary.
+
+**What got built:**
+- `src/proxy.ts` (Next.js 16 renamed `middleware.ts` → `proxy.ts`, Node.js
+  runtime by default in this version — checked
+  `node_modules/next/dist/docs/` before writing it, per this repo's own
+  standing instruction) + `src/server/rate-limit.ts` — Redis-backed,
+  IP-scoped rate limiting on OTP requests, ticket creation, and the
+  payment webhook, closing a gap `docs/SECURITY-MODEL.md` described since
+  Phase 1 and no phase had actually implemented.
+- `Content-Security-Policy` + `Strict-Transport-Security` added to
+  `next.config.mjs`'s existing header set (the "without nonces" CSP
+  recipe, deliberately — nonces would force every page dynamic, regressing
+  this app's genuinely-static pages).
+- `src/lib/logger.ts` — structured JSON logging; every one of the
+  codebase's 10 `console.error`/`.log` call sites now goes through it.
+  `/api/ready` now also checks object storage, not just database + Redis.
+- `Refund`'s counterpart on the deployment side: `docker-compose.prod.yml`
+  finalized from a stub into a real overlay, with a one-shot `migrate`
+  service running `prisma migrate deploy` automatically before `app`
+  starts (previously: nothing ran migrations automatically at all — every
+  earlier phase's migration was applied by hand against the dev-exposed
+  Postgres port, which the prod overlay doesn't even publish, so that
+  workflow would have silently failed there).
+- `docker-compose.yml`'s new `storage-init` one-shot service — nothing had
+  ever automated creating `STORAGE_BUCKET`; it only existed locally
+  because it got created by hand at some earlier, unrecorded point this
+  session. A fresh environment had no way to get one.
+- `docs/BACKUP-RESTORE.md` + `scripts/backup.sh`/`scripts/restore.sh` —
+  `pg_dump` + MinIO `mc mirror`, both run for real against the live stack
+  (see verification below), not just written and assumed to work.
+- `infra/nginx/abies.conf` finalized: edge-level rate limiting
+  (`limit_req_zone`), a real explanation of exactly what to run for TLS
+  once a domain exists (`certbot --nginx`) instead of a fake certificate
+  block, and removed a duplicate `gzip` directive that would have failed
+  `nginx -t` against Ubuntu's stock `nginx.conf` (caught by actually
+  installing Nginx and testing it, not just reading the file).
+- `.github/workflows/ci.yml` — added a MinIO service (several integration
+  tests exercise file upload and had no storage backend to run against in
+  a real CI run).
+- Two `take: 200` pagination ceilings (`modules/support/tickets.service.ts`'s
+  `listQueue`, `modules/partners/leads.service.ts`'s `listLeads`) on the
+  two lists with no natural bound.
+
+**Verified, live, against the actual built container** — not just
+read-through: the full OWASP Top 10 pass (see `docs/SECURITY-REVIEW.md`
+for each category); `tsc --noEmit`, `eslint .`, `vitest run` (103/103,
+stable across 3 consecutive runs — was 100/100 before this phase, +3 new
+rate-limit tests) all clean; `next build` locally; a full Docker rebuild;
+**the complete `docker-compose.yml` + `docker-compose.prod.yml` production
+topology brought up together for the first time this session** (every
+prior phase's review deployment used the dev overlay only) — which caught
+two real bugs fixed in the process (`!reset` on a non-empty `ports:` value
+silently produces no binding at all, needed `!override` instead; the
+`storage-init` service's image name doesn't exist under `minio/mc`, needed
+`quay.io/minio/mc`); confirmed the one-shot `migrate` and `storage-init`
+services both ran and gated `app`'s startup correctly; installed Nginx on
+this host and served `infra/nginx/abies.conf` for real, confirming the
+full response header set (including the new CSP/HSTS) and a new
+`x-request-id` pass through the proxy, and that flooding the OTP-request
+endpoint through it returns `429` after the configured limit; ran
+`scripts/backup.sh` for real (1.7MB Postgres dump + 15MB MinIO mirror)
+and then `scripts/restore.sh` from that exact backup (drop/recreate
+database, replace bucket contents) and confirmed the demo patient/admin
+and all 12 doctor documents came back correctly; a live Playwright pass
+watching the browser console for CSP violations through login + public
+doctor discovery + triggering the Razorpay checkout script load — none
+fired.
+
+## What's left, honestly
+
+Two things this phase could not do, both blocked on infrastructure this
+session never had, not on missing code:
+- **No real deployment to the Ubuntu ESXi VM** — no SSH access to that
+  target has existed at any point across all 12 phases. Everything
+  verifiable without it — the exact compose topology that VM would run —
+  was verified locally instead.
+- **No real TLS certificate** — no domain name exists in this session to
+  issue one for. `infra/nginx/abies.conf` documents exactly what to run
+  (`certbot --nginx -d your-domain.example`) the moment one does.
+
+Also still unresolved from every earlier phase: real (even test-mode)
+Razorpay/SMS/email/WhatsApp/video credentials, so every payment- and
+notification-dependent flow built across Phases 4-11 could be exercised
+fully live rather than stopping at an honest "not configured" message —
+this remains true after Phase 12 exactly as it was before it; nothing in
+this phase's scope was about acquiring those.
+
+This closes the 12-phase plan in `docs/IMPLEMENTATION-PLAN.md`. Every
+phase's own scope is now built, tested, and documented; the two items
+above are the only remaining gaps, and both require something outside
+this session's reach to close, not more code.

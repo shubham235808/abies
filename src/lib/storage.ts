@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -58,6 +59,18 @@ export async function getSignedDownloadUrl(key: string, expiresInSeconds = 300):
 export async function deleteObject(key: string): Promise<void> {
   const env = getEnv();
   await s3().send(new DeleteObjectCommand({ Bucket: env.STORAGE_BUCKET, Key: key }));
+}
+
+// Cheap, side-effect-free connectivity check for /api/ready — confirms the
+// endpoint is reachable, credentials are valid, and the bucket exists,
+// without reading or writing any object.
+export async function checkStorageHealth(): Promise<boolean> {
+  try {
+    await s3().send(new HeadBucketCommand({ Bucket: getEnv().STORAGE_BUCKET }));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Upload validation shared by every module that accepts a file (doctor

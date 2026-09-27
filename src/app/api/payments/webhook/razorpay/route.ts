@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import { verifyWebhookSignature } from '@/lib/payments/razorpay';
 import { handleRazorpayWebhookPayment } from '@/modules/appointments/appointments.service';
 import { finalizeOrderPaymentByOrder } from '@/modules/diagnostics/orders.service';
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
         await handleRazorpayWebhookPayment(payment);
       }
     } catch (err) {
-      console.error('[webhook razorpay] finalize failed', err);
+      logger.error('webhook', 'razorpay finalize failed', err, { gatewayOrderId: payment.order_id, purpose: record?.purpose });
     }
   }
 
