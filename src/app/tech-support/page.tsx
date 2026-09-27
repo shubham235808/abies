@@ -1,16 +1,19 @@
-import { TicketQueueList } from '@/components/support/ticket-queue-list';
-import { listQueue } from '@/modules/support/tickets.service';
+import { SupportQueueView } from '@/components/support/support-queue-view';
 import { requireSessionOrRedirect } from '@/server/current-user';
 
-export default async function TechSupportQueuePage() {
+export default async function TechSupportQueuePage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const session = await requireSessionOrRedirect();
-  const tickets = await listQueue(session.user.role);
+  const { tab } = await searchParams;
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold text-brand-neutral-900">Ticket queue</h1>
-      <p className="mt-1 max-w-2xl text-sm text-brand-neutral-600">Technical support / incident tickets, ordered by priority.</p>
-      <TicketQueueList tickets={JSON.parse(JSON.stringify(tickets))} basePath="/tech-support/tickets" />
-    </div>
+    <SupportQueueView
+      role={session.user.role}
+      userId={session.userId}
+      basePath="/tech-support/tickets"
+      queuePath="/tech-support"
+      title="Ticket queue"
+      description="Technical support / incident tickets, ordered by priority."
+      tab={tab}
+    />
   );
 }

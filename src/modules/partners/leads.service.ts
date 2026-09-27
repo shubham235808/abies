@@ -78,6 +78,16 @@ export async function updateLead(id: string, dto: UpdateLeadInput, auditCtx: Aud
   return updated;
 }
 
+// Stage-history timeline for the lead detail page — sourced from the
+// existing AuditEvent trail (every stage change already writes one via
+// updateLead above) rather than a new table.
+export async function listLeadHistory(leadId: string) {
+  return prisma.auditEvent.findMany({
+    where: { resourceType: 'PartnerLead', resourceId: leadId },
+    orderBy: { createdAt: 'asc' },
+  });
+}
+
 export async function addLeadDocument(id: string, uploaderUserId: string, file: UploadedFile, auditCtx: AuditContext) {
   const lead = await prisma.partnerLead.findUnique({ where: { id } });
   if (!lead) throw new NotFoundError('Lead not found');
