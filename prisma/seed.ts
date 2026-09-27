@@ -179,11 +179,94 @@ async function main() {
     });
   }
 
+  const labUser = await prisma.user.upsert({
+    where: { mobile: '+919876543215' },
+    update: {},
+    create: {
+      mobile: '+919876543215',
+      role: UserRole.LAB,
+      diagnosticLab: {
+        create: {
+          name: 'ABIES Diagnostics Pune',
+          licenseNumbers: ['MH-LAB-DEV-0001'],
+          serviceCities: ['Pune', 'Bengaluru'],
+          homeCollectionSupported: true,
+          verificationStatus: 'APPROVED',
+          submittedAt: new Date(),
+          reviewedAt: new Date(),
+        },
+      },
+    },
+  });
+  const lab = await prisma.diagnosticLab.findUniqueOrThrow({ where: { userId: labUser.id } });
+  const DEV_TESTS = [
+    { code: 'CBC', name: 'Complete Blood Count', price: 350, turnaroundHours: 24 },
+    { code: 'LFT', name: 'Liver Function Test', price: 550, turnaroundHours: 24 },
+    { code: 'HBA1C', name: 'HbA1c (Diabetes)', price: 450, turnaroundHours: 24 },
+  ];
+  for (const t of DEV_TESTS) {
+    const existing = await prisma.diagnosticTest.findFirst({ where: { labId: lab.id, code: t.code } });
+    if (!existing) await prisma.diagnosticTest.create({ data: { labId: lab.id, ...t } });
+  }
+
+  const centreUser = await prisma.user.upsert({
+    where: { mobile: '+919876543216' },
+    update: {},
+    create: {
+      mobile: '+919876543216',
+      role: UserRole.PANCHAKARMA_CENTRE,
+      panchakarmaCentre: {
+        create: {
+          name: 'ABIES Panchakarma Centre',
+          addressLine1: 'MG Road',
+          city: 'Bengaluru',
+          state: 'Karnataka',
+          postalCode: '560001',
+          supervisingPractitioner: 'Dr. Meera Iyer',
+          licenseNumbers: ['KA-PKC-DEV-0001'],
+          verificationStatus: 'APPROVED',
+          submittedAt: new Date(),
+          reviewedAt: new Date(),
+        },
+      },
+    },
+  });
+  const centre = await prisma.panchakarmaCentre.findUniqueOrThrow({ where: { userId: centreUser.id } });
+  const existingTherapy = await prisma.therapy.findFirst({ where: { centreId: centre.id, name: 'Abhyanga' } });
+  if (!existingTherapy) {
+    await prisma.therapy.create({ data: { centreId: centre.id, name: 'Abhyanga', durationMinutes: 60, price: 1500 } });
+  }
+  const existingTherapist = await prisma.therapist.findFirst({ where: { centreId: centre.id, name: 'Ramesh Nair' } });
+  if (!existingTherapist) {
+    await prisma.therapist.create({ data: { centreId: centre.id, name: 'Ramesh Nair', qualifications: 'Certified Panchakarma therapist' } });
+  }
+
+  // Internal staff (docs/DOMAIN-MODEL.md §12) — don't self-onboard, so a
+  // demo account for each is provisioned here the same way an admin would
+  // via /admin/staff, rather than leaving these four portals unreachable
+  // without a live fixture script.
+  const STAFF_ACCOUNTS = [
+    { mobile: '+919876543217', role: UserRole.CUSTOMER_SUPPORT, department: 'CUSTOMER_SUPPORT' as const, title: 'L1 Support Agent' },
+    { mobile: '+919876543218', role: UserRole.TECH_SUPPORT, department: 'TECH_SUPPORT' as const, title: 'TechOps Engineer' },
+    { mobile: '+919876543219', role: UserRole.SALES, department: 'SALES' as const, title: 'Partner Sales Rep' },
+    { mobile: '+919876543220', role: UserRole.CARE_COORDINATOR, department: 'CARE_COORDINATION' as const, title: 'Care Coordinator' },
+  ];
+  for (const s of STAFF_ACCOUNTS) {
+    await prisma.user.upsert({
+      where: { mobile: s.mobile },
+      update: {},
+      create: { mobile: s.mobile, role: s.role, staffProfile: { create: { department: s.department, title: s.title } } },
+    });
+  }
+
   console.log('Seeded dev accounts (dev-only, OTP = 123456, admin MFA = 654321):');
   console.log(`  patient: ${patient.mobile}`);
   console.log(`  doctor:  ${doctorUser.mobile} (dr-meera-iyer, approved + discoverable)`);
   console.log(`  admin:   ${admin.mobile}`);
   console.log(`  pharmacy: ${pharmacyUser.mobile} (ABIES Wellness Pharmacy, approved, ${ABIES_MEDICINES.length} products stocked)`);
+  console.log(`  lab:      ${labUser.mobile} (ABIES Diagnostics Pune, approved, ${DEV_TESTS.length} tests)`);
+  console.log(`  centre:   ${centreUser.mobile} (ABIES Panchakarma Centre, approved, 1 therapy + 1 therapist)`);
+  for (const s of STAFF_ACCOUNTS) console.log(`  ${s.role.toLowerCase().padEnd(9)}: ${s.mobile} (${s.title})`);
 }
 
 main()
