@@ -1,5 +1,16 @@
 # Portal UX Specification
 
+**2026-09-28 note**: this document was written for UX-1 through UX-11 (all
+now complete and verified — see `docs/UX-12-QA-REPORT.md`) and remains
+accurate for that scope; it is extended, not replaced, by a new
+"Enterprise-0 additions" section at the end of this file, covering the
+capabilities the enterprise-transformation brief asks for beyond the
+original UX redesign (location/language ranking, promotions, POS/GST,
+configuration platform, etc.), classified per `docs/ENTERPRISE-GAP-ANALYSIS.md`.
+Updating in place rather than rewriting preserves the parts of this contract
+(dashboard information, data-required citations, empty/error states) that
+are still exactly correct.
+
 The UX contract for UX-1 through UX-11, written after `docs/UI-UX-AUDIT.md`
 so every "Data Required" line below cites a field that actually exists in
 `prisma/schema.prisma` today — nothing here requires inventing data to look
@@ -461,4 +472,142 @@ once here rather than repeated 8 times:
    here" text), `CarePlanProgress` (Patient dashboard + Doctor consultation
    + Panchakarma booking detail all need a progress-bar pattern),
    `Tabs` (Customer/Tech Support queue segmentation, Sales pipeline).
+
+---
+
+# Enterprise-0 additions (2026-09-28)
+
+Everything above is unchanged and still the contract for UX-1..11's scope
+(all shipped). What follows covers only the *delta* the enterprise brief
+adds — new sections, new data-required lines, new empty/error states — per
+portal, in the same format as above but terser, since each entry links back
+to a `docs/ENTERPRISE-GAP-ANALYSIS.md` classification rather than
+re-arguing it. Anything not mentioned here is unchanged from the spec
+above.
+
+## Public Website — additions
+
+**New sections**: promotional hero/banner slots (`PATIENT_HOME_HERO`-style
+placements per §5), each driven by a `Promotion` row filtered to
+`portal=PUBLIC`, active date range, and (once §3 lands) target location.
+**Data required**: `Promotion` (NEW — see `docs/ENTERPRISE-DATA-MODEL-CHANGES.md`).
+**Empty state**: no active promotion in a placement → the placement simply
+doesn't render (never a placeholder graphic) — same "don't show fake
+content" discipline as every other empty state in this app.
+
+## Patient Portal — additions
+
+**New top task**: "see and manage my delivery/service location" — a
+"Services near: {pin} {city}" chip near the top of the dashboard, editable,
+sourced from `PatientProfile.pin`/`city` today (no schema change needed for
+a first pass) with an explicit "change location" action; geolocation
+autofill is **out of scope until `Permissions-Policy: geolocation=()` in
+`next.config.mjs` is deliberately revisited** — not a UI gap, a standing
+security decision (`docs/ENTERPRISE-CURRENT-STATE.md` §6).
+**New dashboard sections**: "Find Doctors" (ranked, not just filtered —
+depends on §4's language-match scoring), "Panchakarma Near You",
+"Diagnostics Near You" (both depend on §3's location engine for genuine
+"near you" framing; a plain unranked list is buildable today without it),
+"ABIES Medicines" (already buildable today, `searchPublic` exists),
+"Promotions" (depends on §5).
+**Nav change**: remove the standalone "Reports" tab; fold diagnostic
+reports into Diagnostics and prescriptions/consultation documents into
+Appointments — mechanical, no data dependency.
+**New page**: `/patient/payments` — consolidated financial view across
+`Payment`/`Refund` for this patient, filterable by service type, linking
+into the underlying Appointment/DiagnosticOrder/MedicineOrder/
+PanchakarmaBooking. All fields already exist; this is a pure read-
+aggregation page, same shape as Admin's dashboard.
+**Header change**: patient's name instead of mobile number in the top bar —
+applies once, in `PortalShell`, not per-page.
+
+## Doctor Portal — additions
+
+No new dashboard sections needed — §14-18's asks are almost entirely
+already built (`docs/ENTERPRISE-GAP-ANALYSIS.md` §14-18). **Documents page**:
+richer status vocabulary (7 states vs. today's 3) once
+`DoctorDocumentStatus` is extended — same page, same layout, more badge
+states.
+
+## Diagnostic Lab Portal — additions
+
+**Test catalogue**: add a "Packages" tab alongside the existing Tests tab,
+once `DiagnosticPackage` exists (§10/§21 gap). Nothing else changes.
+
+## Pharmacy Portal — additions (the largest delta in this document)
+
+This effectively becomes a second portal-within-a-portal, per
+`docs/ENTERPRISE-GAP-ANALYSIS.md` §25-34:
+**New primary nav items**: POS/Billing, Purchases/Stock Inward, Stock
+Adjustments, Invoices, Financial Dashboard (alongside the existing
+Dashboard/Orders/Prescriptions/Inventory/Profile).
+**POS/Billing screen** (net-new): product search-or-scan, quantity,
+optional customer, optional prescription attach, payment method (Cash/UPI/
+Card), generates a GST invoice, decrements inventory via a `StockMovement`
+row (never a bare `quantityAvailable` write, closing the gap confirmed in
+`docs/ENTERPRISE-CURRENT-STATE.md` §2).
+**Invoice viewer/PDF**: legal name/GSTIN/invoice number/HSN/CGST/SGST/IGST
+breakdown, computed server-side only (§64's own principle, already the
+house rule for every other financial number in this app).
+**Financial dashboard**: gross/taxable/net sales, tax collected, payment-
+method split, online-vs-physical split — date-range filterable, same
+pattern as Admin's `getDashboardMetrics()`.
+**Empty/error states**: "No sales recorded for this period" (not a fake
+₹0 chart); "GST settings not configured — invoices cannot be generated
+until your pharmacy's GSTIN and invoice prefix are set" (honest block,
+matching the existing "payments not configured" pattern rather than
+silently generating a non-compliant invoice).
+**Compliance flag**: this entire addition needs real GST/pharma regulatory
+review before the tax-calculation logic ships, per §72/§31 — the UI and
+schema can be built and tested with placeholder rates, but the rate table
+itself is a business/legal decision, not an engineering one.
+
+## Panchakarma Centre Portal — additions
+
+**Therapy management**: multi-photo support (`Therapy.images: String[]`,
+additive). **New nav item**: none needed — Therapists page already exists,
+gains a document-upload/verification-status subsection per §37-38, same
+shape as the Doctor portal's existing Documents page (direct pattern reuse,
+not a new design).
+
+## Customer Support Portal — additions
+
+**New page**: Customer 360 view — opens from a ticket's linked patient,
+shows appointments/orders/bookings/payments/open-tickets summary (§42).
+Pure aggregation over existing data; excludes clinical notes by design
+(least-privilege, already the norm elsewhere in this app).
+
+## Technical Support Portal — additions
+
+Genuinely blocked pending a schema decision (`docs/ENTERPRISE-GAP-ANALYSIS.md`
+§41-45): incident-specific fields (module, correlation ID, browser/device,
+integration, error classification) don't exist on `SupportTicket` today.
+Two honest options, not resolved here: (a) extend `SupportTicket` with
+nullable technical-incident fields used only when `department=TECH_SUPPORT`,
+or (b) a small separate `TechnicalIncident` table 1:1 with a ticket. Either
+is a real schema change requiring a decision before this portal can
+genuinely differentiate from Customer Support — flagged, not silently
+picked.
+
+## Sales Portal — additions
+
+Stage-list reconciliation: current `PartnerLeadStage` (7 values) vs. brief's
+9-value pipeline — a naming/scope decision (do NEW+CONTACTED collapse into
+today's single LEAD stage, or does the enum grow by two values?), not an
+architecture change either way.
+
+## Care Coordinator Portal — additions
+
+None required — §49-50 is already fully matched by the existing rebuilt
+dashboard.
+
+## Administrator Portal — additions
+
+**New nav section**: "Promotions" (Promotion Manager, §54, depends on §5)
+and "Configuration" (§55, depends on §2) — the two largest net-new admin
+surfaces. **Verification Centre consolidation**: today's four separate
+per-partner-type queue pages (`/admin/doctors`, `/admin/labs`,
+`/admin/pharmacies`, `/admin/panchakarma-centres`) become tabs of one page,
+plus a fifth tab for Therapists once §38 exists — a UI consolidation over
+already-working queries, not new backend logic.
    Full list and build order in `docs/UI-REDESIGN-PLAN.md`'s UX-1 section.
