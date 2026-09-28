@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,6 +15,7 @@ type Order = {
   labName: string | null;
   testNames: string[];
   reportReady: boolean;
+  reportId: string | null;
   criticalFlag: boolean;
 };
 
@@ -32,6 +32,7 @@ const STATUS_TONE: Record<string, 'neutral' | 'blue' | 'orange' | 'success' | 'd
 export function OrderList({ initial }: { initial: Order[] }) {
   const [orders, setOrders] = useState(initial);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleCancel(id: string) {
@@ -44,6 +45,22 @@ export function OrderList({ initial }: { initial: Order[] }) {
       setError(err instanceof ApiError ? err.message : 'Could not cancel this order.');
     } finally {
       setCancellingId(null);
+    }
+  }
+
+  // Diagnostic reports live in Diagnostics now, not a separate Reports tab
+  // (brief §6: "Reports belong to their business context") — downloads the
+  // same signed URL the old standalone /patient/reports page used.
+  async function handleDownloadReport(reportId: string) {
+    setDownloadingId(reportId);
+    setError(null);
+    try {
+      const { url } = await api.get<{ url: string }>(`/api/reports/${reportId}/download`);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not open this report.');
+    } finally {
+      setDownloadingId(null);
     }
   }
 
@@ -72,10 +89,16 @@ export function OrderList({ initial }: { initial: Order[] }) {
             </div>
           </div>
 
-          {o.reportReady && (
-            <Link href="/patient/reports" className="mt-3 inline-block text-sm font-medium text-brand-purple-700 underline">
-              View report →
-            </Link>
+          {o.reportReady && o.reportId && (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="mt-3"
+              loading={downloadingId === o.reportId}
+              onClick={() => handleDownloadReport(o.reportId!)}
+            >
+              View report
+            </Button>
           )}
 
           {CANCELLABLE.has(o.status) && (

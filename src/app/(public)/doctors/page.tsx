@@ -1,4 +1,6 @@
 import { facets, searchPublic } from '@/modules/doctors/doctors.service';
+import { prisma } from '@/lib/db';
+import { getCurrentSession } from '@/server/current-user';
 import { DoctorCard } from './doctor-card';
 import { DoctorFilters } from './filters';
 
@@ -6,6 +8,17 @@ export const metadata = { title: 'Find a verified Ayurveda doctor — ABIES' };
 // Live search results — must render per-request, never prerendered at
 // build time (the build stage has no DB to query).
 export const dynamic = 'force-dynamic';
+
+async function currentPatientLanguages(): Promise<string[] | undefined> {
+  const session = await getCurrentSession();
+  if (!session || session.user.role !== 'PATIENT') return undefined;
+  const profile = await prisma.patientProfile.findUnique({
+    where: { userId: session.userId },
+    select: { preferredLanguage: true, additionalLanguages: true },
+  });
+  if (!profile) return undefined;
+  return [profile.preferredLanguage, ...profile.additionalLanguages].filter(Boolean);
+}
 
 export default async function DoctorsPage({
   searchParams,
@@ -20,6 +33,7 @@ export default async function DoctorsPage({
       specialty: params.specialty,
       language: params.language,
       mode: params.mode === 'VIDEO' || params.mode === 'CLINIC' ? params.mode : undefined,
+      patientLanguages: await currentPatientLanguages(),
     }),
     facets(),
   ]);

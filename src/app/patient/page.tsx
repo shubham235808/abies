@@ -5,11 +5,17 @@ import { AppointmentStatusBadge, MedicineOrderStatusBadge, PanchakarmaBookingSta
 import { listMineAsPatient as listAppointments } from '@/modules/appointments/appointments.service';
 import { listMineAsPatient as listCarePlans } from '@/modules/care-plans/care-plans.service';
 import { listMineAsPatient as listDiagnosticOrders } from '@/modules/diagnostics/orders.service';
+import { searchPublic as searchTests } from '@/modules/diagnostics/catalogue.service';
 import { listMineAsPatient as listMedicineOrders } from '@/modules/medicines/orders.service';
 import { listMineAsPatient as listPanchakarmaBookings } from '@/modules/panchakarma/bookings.service';
+import { searchPublic as searchTherapies } from '@/modules/panchakarma/catalogue.service';
+import { searchPublic as searchDoctors } from '@/modules/doctors/doctors.service';
 import { listMineAsRequester as listSupportTickets } from '@/modules/support/tickets.service';
 import { getMyProfile } from '@/modules/patients/patients.service';
 import { requireSessionOrRedirect } from '@/server/current-user';
+import { DoctorCard } from '@/app/(public)/doctors/doctor-card';
+import { TherapyCard } from '@/app/(public)/panchakarma/therapy-card';
+import { TestCard } from '@/app/(public)/diagnostics/test-card';
 
 // Replaces the old hardcoded "Coming Soon" cards (docs/UI-UX-AUDIT.md
 // Finding 2) — Care Plans, Diagnostics, Medicines and Panchakarma have all
@@ -25,6 +31,17 @@ export default async function PatientDashboardPage() {
     listMedicineOrders(session.userId),
     listPanchakarmaBookings(session.userId),
     listSupportTickets(session.userId),
+  ]);
+
+  // docs/ENTERPRISE-GAP-ANALYSIS.md §6-8's discovery sections — ranked/
+  // filtered by the patient's own city and languages where set, with an
+  // honest unranked fallback (no city on file) rather than hiding results,
+  // per the brief's own "do not completely hide" instruction.
+  const patientLanguages = [profile.preferredLanguage, ...profile.additionalLanguages].filter(Boolean);
+  const [{ doctors: nearbyDoctors }, { therapies: nearbyTherapies }, { tests: nearbyTests }] = await Promise.all([
+    searchDoctors({ city: profile.city ?? undefined, patientLanguages, limit: 3 }),
+    searchTherapies({ city: profile.city ?? undefined, limit: 3 }),
+    searchTests({ city: profile.city ?? undefined, limit: 3 }),
   ]);
 
   const name = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'there';
@@ -158,6 +175,60 @@ export default async function PatientDashboardPage() {
           </Link>
         </Card>
       </div>
+
+      {nearbyDoctors.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-neutral-400">
+              Doctors for you{profile.city ? ` in ${profile.city}` : ''}
+            </h2>
+            <Link href="/doctors" className="text-sm font-medium text-brand-purple-600">
+              View all →
+            </Link>
+          </div>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {nearbyDoctors.map((d) => (
+              <DoctorCard key={d.slug} doctor={d} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {nearbyTherapies.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-neutral-400">
+              Panchakarma near you{profile.city ? ` in ${profile.city}` : ''}
+            </h2>
+            <Link href="/panchakarma" className="text-sm font-medium text-brand-purple-600">
+              View all →
+            </Link>
+          </div>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            {nearbyTherapies.map((t) => (
+              <TherapyCard key={t.id} therapy={t} viewerRole="PATIENT" />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {nearbyTests.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-neutral-400">
+              Diagnostics near you{profile.city ? ` in ${profile.city}` : ''}
+            </h2>
+            <Link href="/diagnostics" className="text-sm font-medium text-brand-purple-600">
+              View all →
+            </Link>
+          </div>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            {nearbyTests.map((t) => (
+              <TestCard key={t.id} test={t} viewerRole="PATIENT" />
+            ))}
+          </div>
+        </div>
+      )}
 
       {openTickets.length > 0 && (
         <div className="mt-6">

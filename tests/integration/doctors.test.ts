@@ -52,18 +52,18 @@ async function registerAdmin() {
 
 const pdf = { mimeType: 'application/pdf', size: 1024, buffer: Buffer.from('%PDF-1.4 test') };
 
-async function completeAndSubmitDoctor(userId: string) {
+async function completeAndSubmitDoctor(userId: string, overrides?: { languages?: string[]; lastName?: string }) {
   await updateMe(
     userId,
     {
       firstName: 'Meera',
-      lastName: 'Iyer',
+      lastName: overrides?.lastName ?? 'Iyer',
       registrationCouncil: 'Test Council',
       registrationNumber: `REG-${randomInt(100000000, 999999999)}`,
       primaryQualification: 'BAMS',
       yearsExperience: 10,
       specialties: ['Digestive Health'],
-      languages: ['English'],
+      languages: overrides?.languages ?? ['English'],
       consultationModes: ['VIDEO'],
       videoFee: 500,
     },
@@ -72,6 +72,15 @@ async function completeAndSubmitDoctor(userId: string) {
   await addDocument(userId, 'REGISTRATION_CERTIFICATE', { originalName: 'reg.pdf', ...pdf }, { userId });
   await addDocument(userId, 'DEGREE_CERTIFICATE', { originalName: 'degree.pdf', ...pdf }, { userId });
   return submit(userId, true, { userId });
+}
+
+async function approveDoctor(profileId: string) {
+  const adminId = await registerAdmin();
+  const docs = await prisma.doctorDocument.findMany({ where: { doctorProfileId: profileId } });
+  for (const doc of docs) {
+    await reviewDocument(profileId, doc.id, { userId: adminId }, true);
+  }
+  await approve(profileId, { userId: adminId });
 }
 
 afterAll(async () => {
@@ -200,5 +209,41 @@ describe('admin verification workflow', () => {
     const afterSuspend = await searchPublic({ q: 'Meera Iyer' });
     expect(afterSuspend.doctors.some((d) => d.slug === submitted.slug)).toBe(false);
     await expect(publicProfile(submitted.slug)).rejects.toThrow(/not found/i);
+  });
+});
+
+// docs/ENTERPRISE-GAP-ANALYSIS.md §4 — language-matching ranks, never hides.
+describe('language-matching ranking (ENTERPRISE-4)', () => {
+  it('ranks a language-matching doctor first without hiding a non-matching one', async () => {
+    const marker = `Lang${randomInt(100000, 999999)}`;
+    const hindiUserId = await registerDoctor();
+    const { profile: hindiDoctor } = await completeAndSubmitDoctor(hindiUserId, { languages: ['English', 'Hindi'], lastName: marker });
+    await approveDoctor(hindiDoctor.id);
+
+    const englishOnlyUserId = await registerDoctor();
+    const { profile: englishDoctor } = await completeAndSubmitDoctor(englishOnlyUserId, { languages: ['English'], lastName: marker });
+    await approveDoctor(englishDoctor.id);
+
+    const ranked = await searchPublic({ q: marker, patientLanguages: ['Hindi'] });
+    const slugs = ranked.doctors.map((d) => d.slug);
+    expect(slugs).toContain(hindiDoctor.slug);
+    expect(slugs).toContain(englishDoctor.slug); // never hidden
+    expect(slugs.indexOf(hindiDoctor.slug)).toBeLessThan(slugs.indexOf(englishDoctor.slug));
+
+    const hindiCard = ranked.doctors.find((d) => d.slug === hindiDoctor.slug);
+    const englishCard = ranked.doctors.find((d) => d.slug === englishDoctor.slug);
+    expect(hindiCard?.languageMatch).toBe(true);
+    expect(englishCard?.languageMatch).toBe(false);
+  });
+
+  it('leaves ordering untouched when the patient has no language preference', async () => {
+    const marker = `NoPref${randomInt(100000, 999999)}`;
+    const userId = await registerDoctor();
+    const { profile } = await completeAndSubmitDoctor(userId, { languages: ['Tamil'], lastName: marker });
+    await approveDoctor(profile.id);
+
+    const result = await searchPublic({ q: marker });
+    const card = result.doctors.find((d) => d.slug === profile.slug);
+    expect(card?.languageMatch).toBeUndefined();
   });
 });

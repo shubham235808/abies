@@ -3,12 +3,24 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { listMineAsPatient as listRecommendations } from '@/modules/diagnostics/recommendations.service';
 import { listMineAsPatient as listOrders } from '@/modules/diagnostics/orders.service';
+import { listMineAsPatient as listReports } from '@/modules/diagnostics/reports.service';
 import { requireSessionOrRedirect } from '@/server/current-user';
 import { OrderList } from './order-list';
 
 export default async function PatientDiagnosticsPage() {
   const session = await requireSessionOrRedirect();
-  const [recommendations, orders] = await Promise.all([listRecommendations(session.userId), listOrders(session.userId)]);
+  const [recommendations, orders, reports] = await Promise.all([
+    listRecommendations(session.userId),
+    listOrders(session.userId),
+    listReports(session.userId),
+  ]);
+  // Report.sourceEntityId points at the DiagnosticOrder it was released
+  // from (reports.service.ts's only current population path) — resolved
+  // here so the order list can link straight to the file instead of
+  // routing through a separate Reports page (brief §6).
+  const reportIdByOrderId = new Map(
+    reports.filter((r) => r.kind === 'DIAGNOSTIC_REPORT' && r.sourceEntityId).map((r) => [r.sourceEntityId as string, r.id]),
+  );
 
   return (
     <div>
@@ -61,6 +73,7 @@ export default async function PatientDiagnosticsPage() {
               labName: o.lab.name,
               testNames: o.items.map((i) => i.test?.name).filter((n): n is string => Boolean(n)),
               reportReady: Boolean(o.report?.releasedToPatientAt),
+              reportId: reportIdByOrderId.get(o.id) ?? null,
               criticalFlag: o.report?.criticalFlag ?? false,
             }))}
           />

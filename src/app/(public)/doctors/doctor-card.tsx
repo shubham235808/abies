@@ -14,6 +14,7 @@ export interface PublicDoctorSummary {
   rating: number;
   reviewCount: number;
   clinics: { city: string }[];
+  languageMatch?: boolean;
 }
 
 export function DoctorCard({ doctor }: { doctor: PublicDoctorSummary }) {
@@ -35,6 +36,7 @@ export function DoctorCard({ doctor }: { doctor: PublicDoctorSummary }) {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
+        {doctor.languageMatch && <Badge tone="blue">Speaks your language</Badge>}
         {doctor.specialties.slice(0, 3).map((s) => (
           <Badge key={s} tone="purple">
             {s}

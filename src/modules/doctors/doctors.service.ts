@@ -385,7 +385,10 @@ export async function submit(userId: string, declarationAccepted: boolean, audit
   return { profile: updated, message: 'Application submitted for ABIES verification' };
 }
 
-function publicDoctor(d: Prisma.DoctorProfileGetPayload<{ include: { clinics: true; availability: true } }>) {
+function publicDoctor(
+  d: Prisma.DoctorProfileGetPayload<{ include: { clinics: true; availability: true } }>,
+  patientLanguages?: string[],
+) {
   const fullName = [d.title || 'Dr.', d.firstName, d.lastName].filter(Boolean).join(' ');
   const modes = d.consultationModes;
   const fees = [
@@ -417,6 +420,11 @@ function publicDoctor(d: Prisma.DoctorProfileGetPayload<{ include: { clinics: tr
     availability: d.availability,
     verified: true,
     acceptingNewPatients: d.isAcceptingNewPatients,
+    // docs/ENTERPRISE-GAP-ANALYSIS.md §4 — set only when the caller passed
+    // the viewing patient's own languages, so a card can show "Speaks your
+    // language" without the ranking itself leaking into the public API
+    // shape for anonymous/no-preference callers.
+    languageMatch: patientLanguages?.length ? d.languages.some((l) => patientLanguages.includes(l)) : undefined,
   };
 }
 
@@ -429,7 +437,20 @@ export interface PublicSearchQuery {
   accepting?: 'true' | 'false';
   limit?: number;
   offset?: number;
+  // docs/ENTERPRISE-GAP-ANALYSIS.md §4's language-matching engine: ranks
+  // (never hides) doctors sharing at least one language with the patient.
+  // Deliberately separate from `language` above — that's an explicit,
+  // patient-chosen filter (only matching doctors returned at all);
+  // this is a soft ranking signal over the patient's own profile.
+  patientLanguages?: string[];
 }
+
+// Ranking result cap — full-result-set ranking needs the whole matching
+// set in memory before pagination (Prisma can't express "boost rows
+// sharing an array value" in orderBy without raw SQL), same practical
+// scale ceiling as modules/support/tickets.service.ts's listQueue and
+// modules/partners/leads.service.ts's listLeads.
+const RANKING_POOL_SIZE = 500;
 
 // Trust rule (docs/DECISIONS.md D3): a doctor is returned by the public API
 // only when verificationStatus=APPROVED AND isDiscoverable=true.
@@ -462,21 +483,60 @@ export async function searchPublic(query: PublicSearchQuery) {
     where.AND = words.map((word) => ({ OR: fieldsForWord(word) }));
   }
 
-  const [total, rows] = await prisma.$transaction([
+  const dbOrderBy: Prisma.DoctorProfileOrderByWithRelationInput[] = [
+    { rating: 'desc' },
+    { yearsExperience: 'desc' },
+    { createdAt: 'asc' },
+  ];
+  // No explicit `language` filter (which already guarantees every result
+  // shares that language — nothing left to rank by) and a patient with
+  // known languages: rank matches first over the whole result set, then
+  // paginate — never filters non-matching doctors out, per the brief's
+  // explicit "do NOT completely hide other doctors" instruction.
+  const needsLanguageRanking = !query.language && (query.patientLanguages?.length ?? 0) > 0;
+
+  if (!needsLanguageRanking) {
+    const [total, rows] = await prisma.$transaction([
+      prisma.doctorProfile.count({ where }),
+      prisma.doctorProfile.findMany({
+        where,
+        skip,
+        take,
+        orderBy: dbOrderBy,
+        include: {
+          clinics: { where: { active: true }, orderBy: { createdAt: 'asc' } },
+          availability: { where: { active: true }, orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }] },
+        },
+      }),
+    ]);
+    return { total, offset: skip, limit: take, doctors: rows.map((d) => publicDoctor(d, query.patientLanguages)) };
+  }
+
+  const [total, pool] = await prisma.$transaction([
     prisma.doctorProfile.count({ where }),
     prisma.doctorProfile.findMany({
       where,
-      skip,
-      take,
-      orderBy: [{ rating: 'desc' }, { yearsExperience: 'desc' }, { createdAt: 'asc' }],
+      take: RANKING_POOL_SIZE,
+      orderBy: dbOrderBy,
       include: {
         clinics: { where: { active: true }, orderBy: { createdAt: 'asc' } },
         availability: { where: { active: true }, orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }] },
       },
     }),
   ]);
+  const patientLanguages = query.patientLanguages!;
+  const ranked = [...pool].sort((a, b) => {
+    const aMatch = a.languages.some((l) => patientLanguages.includes(l)) ? 1 : 0;
+    const bMatch = b.languages.some((l) => patientLanguages.includes(l)) ? 1 : 0;
+    return bMatch - aMatch; // Array.sort is stable — ties keep the DB's rating/experience order.
+  });
 
-  return { total, offset: skip, limit: take, doctors: rows.map(publicDoctor) };
+  return {
+    total,
+    offset: skip,
+    limit: take,
+    doctors: ranked.slice(skip, skip + take).map((d) => publicDoctor(d, patientLanguages)),
+  };
 }
 
 export async function publicProfile(slug: string) {
