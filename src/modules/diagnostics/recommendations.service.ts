@@ -25,6 +25,7 @@ export async function createRecommendation(doctorUserId: string, consultationId:
       doctorProfileId: consultation.doctorProfileId,
       patientUserId: consultation.patientUserId,
       testId: dto.testId,
+      packageId: dto.packageId,
       carePlanItemId: dto.carePlanItemId,
       clinicalReason: dto.clinicalReason,
       targetCompletionDate: dto.targetCompletionDate ? new Date(dto.targetCompletionDate) : undefined,
@@ -60,6 +61,7 @@ export async function listMineAsPatient(patientUserId: string) {
     include: {
       doctorProfile: { select: { slug: true, title: true, firstName: true, lastName: true } },
       test: { select: { name: true } },
+      package: { select: { name: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -68,7 +70,7 @@ export async function listMineAsPatient(patientUserId: string) {
 export async function listForConsultation(consultationId: string) {
   return prisma.diagnosticRecommendation.findMany({
     where: { consultationId },
-    include: { test: { select: { name: true } } },
+    include: { test: { select: { name: true } }, package: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
   });
 }
@@ -81,6 +83,7 @@ export async function listMineAsDoctor(doctorUserId: string) {
     include: {
       patientUser: { select: { mobile: true, patientProfile: { select: { firstName: true, lastName: true } } } },
       test: { select: { name: true } },
+      package: { select: { name: true } },
       orders: { include: { report: true }, orderBy: { createdAt: 'desc' }, take: 1 },
     },
     orderBy: { createdAt: 'desc' },

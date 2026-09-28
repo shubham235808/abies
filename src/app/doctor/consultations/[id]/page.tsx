@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { resolveJoinInfo } from '@/lib/video';
 import { listForDoctorPatientPair } from '@/modules/care-plans/care-plans.service';
-import { listActiveForRecommendation } from '@/modules/diagnostics/catalogue.service';
+import { listActiveForRecommendation, listActivePackagesForRecommendation } from '@/modules/diagnostics/catalogue.service';
 import { listForConsultation } from '@/modules/diagnostics/recommendations.service';
 import { listActiveForRecommendation as listActiveTherapiesForRecommendation } from '@/modules/panchakarma/catalogue.service';
 import { listForConsultation as listPanchakarmaForConsultation } from '@/modules/panchakarma/recommendations.service';
@@ -28,6 +28,7 @@ export default async function DoctorConsultationPage({ params }: { params: Promi
   const fields = await listActiveAssessmentFields();
   const carePlans = await listForDoctorPatientPair(session.userId, consultation.patientUserId);
   const diagnosticTests = await listActiveForRecommendation();
+  const diagnosticPackages = await listActivePackagesForRecommendation();
   const diagnosticRecommendations = await listForConsultation(consultation.id);
   const therapies = await listActiveTherapiesForRecommendation();
   const panchakarmaRecommendations = await listPanchakarmaForConsultation(consultation.id);
@@ -91,11 +92,12 @@ export default async function DoctorConsultationPage({ params }: { params: Promi
       patientUserId={consultation.patientUserId}
       carePlans={carePlans.map((p) => ({ id: p.id, status: p.status, summary: p.summary, createdAt: p.createdAt.toISOString() }))}
       diagnosticTests={diagnosticTests}
+      diagnosticPackages={diagnosticPackages}
       diagnosticRecommendations={diagnosticRecommendations.map((r) => ({
         id: r.id,
         status: r.status,
         clinicalReason: r.clinicalReason,
-        testName: r.test?.name ?? null,
+        testName: r.test?.name ?? r.package?.name ?? null,
       }))}
       therapies={therapies}
       panchakarmaRecommendations={panchakarmaRecommendations.map((r) => ({

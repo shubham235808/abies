@@ -34,7 +34,7 @@ export default async function LabOrderPage({ params }: { params: Promise<{ id: s
         <ul className="mt-2 space-y-1 text-sm text-brand-neutral-700">
           {order.items.map((item) => (
             <li key={item.id}>
-              {item.test?.name ?? 'Removed test'} — ₹{item.price}
+              {item.test?.name ?? item.package?.name ?? 'Removed item'} — ₹{item.price}
             </li>
           ))}
         </ul>

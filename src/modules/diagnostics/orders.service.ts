@@ -1,4 +1,4 @@
-import type { UserRole } from '@prisma/client';
+import type { Prisma, UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getEnv } from '@/lib/env';
 import { logger } from '@/lib/logger';
@@ -56,9 +56,23 @@ export async function bookOrder(patientUserId: string, dto: BookOrderInput) {
     throw new BadRequestError('Invalid or past scheduled time');
   }
 
-  const tests = await prisma.diagnosticTest.findMany({ where: { id: { in: dto.testIds }, labId: lab.id, active: true } });
-  if (tests.length !== dto.testIds.length) throw new BadRequestError('One or more tests are unavailable at this lab');
-  const totalPrice = tests.reduce((sum, t) => sum + t.price, 0);
+  // ENTERPRISE-6 — mutually exclusive per bookOrderSchema's refine: either
+  // a set of individual tests (one order item each) or a single bundled
+  // package (one order item, the package's own price — not the sum of its
+  // tests, which is typically a discount off that sum).
+  let totalPrice: number;
+  let orderItemsData: Prisma.DiagnosticOrderItemCreateManyDiagnosticOrderInput[];
+  if (dto.packageId) {
+    const pkg = await prisma.diagnosticPackage.findFirst({ where: { id: dto.packageId, labId: lab.id, active: true } });
+    if (!pkg) throw new BadRequestError('This package is unavailable at this lab');
+    totalPrice = pkg.price;
+    orderItemsData = [{ packageId: pkg.id, price: pkg.price }];
+  } else {
+    const tests = await prisma.diagnosticTest.findMany({ where: { id: { in: dto.testIds }, labId: lab.id, active: true } });
+    if (tests.length !== dto.testIds!.length) throw new BadRequestError('One or more tests are unavailable at this lab');
+    totalPrice = tests.reduce((sum, t) => sum + t.price, 0);
+    orderItemsData = tests.map((t) => ({ testId: t.id, price: t.price }));
+  }
 
   if (dto.recommendationId) {
     // Checked in this order deliberately: a BOOKED recommendation still
@@ -88,7 +102,7 @@ export async function bookOrder(patientUserId: string, dto: BookOrderInput) {
         collectionMode: dto.collectionMode,
         scheduledAt,
         address: dto.collectionMode === 'HOME' ? dto.address : undefined,
-        items: { create: tests.map((t) => ({ testId: t.id, price: t.price })) },
+        items: { create: orderItemsData },
       },
     });
     const payment = await tx.payment.create({
@@ -325,7 +339,7 @@ function detailInclude() {
   return {
     lab: { select: { id: true, name: true, serviceCities: true } },
     patientUser: { select: { mobile: true, patientProfile: { select: { firstName: true, lastName: true } } } },
-    items: { include: { test: { select: { name: true, code: true } } } },
+    items: { include: { test: { select: { name: true, code: true } }, package: { select: { name: true } } } },
     sampleCollection: true,
     report: true,
     payment: { select: { status: true, amount: true } },
@@ -344,7 +358,11 @@ export async function getOrder(userId: string, role: UserRole, orderId: string) 
 export async function listMineAsPatient(patientUserId: string) {
   return prisma.diagnosticOrder.findMany({
     where: { patientUserId },
-    include: { lab: { select: { name: true } }, items: { include: { test: { select: { name: true } } } }, report: { select: { releasedToPatientAt: true, criticalFlag: true } } },
+    include: {
+      lab: { select: { name: true } },
+      items: { include: { test: { select: { name: true } }, package: { select: { name: true } } } },
+      report: { select: { releasedToPatientAt: true, criticalFlag: true } },
+    },
     orderBy: { createdAt: 'desc' },
   });
 }
@@ -356,7 +374,7 @@ export async function listMineAsLab(labUserId: string) {
     where: { labId: lab.id, status: { not: 'BOOKED' } },
     include: {
       patientUser: { select: { mobile: true, patientProfile: { select: { firstName: true, lastName: true } } } },
-      items: { include: { test: { select: { name: true } } } },
+      items: { include: { test: { select: { name: true } }, package: { select: { name: true } } } },
       report: { select: { criticalFlag: true, doctorAcknowledgedAt: true } },
     },
     orderBy: { scheduledAt: 'asc' },

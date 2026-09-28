@@ -902,6 +902,7 @@ model DiagnosticLab {
   updatedAt               DateTime                        @updatedAt
   user                    User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
   tests                   DiagnosticTest[]
+  packages                DiagnosticPackage[]
   orders                  DiagnosticOrder[]
 
   @@index([verificationStatus, active])
@@ -923,8 +924,47 @@ model DiagnosticTest {
   lab                     DiagnosticLab              @relation(fields: [labId], references: [id], onDelete: Cascade)
   orderItems              DiagnosticOrderItem[]
   recommendations         DiagnosticRecommendation[]
+  packageTests            DiagnosticPackageTest[]
 
   @@index([labId, active])
+}
+
+// ENTERPRISE-6 (docs/ENTERPRISE-DATA-MODEL-CHANGES.md §6) — the
+// DiagnosticPackage the brief's "Full Body Health Check"-style bundled
+// packages need. testId/packageId were already both nullable on
+// recommendations/order-items specifically so this could land without a
+// schema change later (Phase 7's own comment) — this is that change. A
+// package carries its own price (typically a discount off the sum of its
+// tests), so booking one creates a single DiagnosticOrderItem with
+// packageId set rather than expanding to N individual test line items —
+// the constituent tests are still derivable via packageTests for display.
+model DiagnosticPackage {
+  id              String                     @id @default(cuid())
+  labId           String
+  name            String
+  description     String?
+  price           Int
+  active          Boolean                    @default(true)
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  lab             DiagnosticLab              @relation(fields: [labId], references: [id], onDelete: Cascade)
+  tests           DiagnosticPackageTest[]
+  orderItems      DiagnosticOrderItem[]
+  recommendations DiagnosticRecommendation[]
+
+  @@index([labId, active])
+}
+
+// Explicit join table (not a testIds: String[]) so a package's test list
+// stays referentially valid — a test removed from the catalogue can't
+// silently orphan a package that still names it.
+model DiagnosticPackageTest {
+  packageId String
+  testId    String
+  package   DiagnosticPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  test      DiagnosticTest    @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@id([packageId, testId])
 }
 
 enum DiagnosticRecommendationStatus {
@@ -941,6 +981,7 @@ model DiagnosticRecommendation {
   doctorProfileId      String
   patientUserId        String
   testId               String?
+  packageId            String?
   clinicalReason       String?
   targetCompletionDate DateTime?
   status               DiagnosticRecommendationStatus @default(RECOMMENDED)
@@ -951,6 +992,7 @@ model DiagnosticRecommendation {
   doctorProfile        DoctorProfile                  @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
   patientUser          User                           @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
   test                 DiagnosticTest?                @relation(fields: [testId], references: [id], onDelete: SetNull)
+  package              DiagnosticPackage?             @relation(fields: [packageId], references: [id], onDelete: SetNull)
   orders               DiagnosticOrder[]
 
   @@index([patientUserId, status])
@@ -1004,13 +1046,15 @@ model DiagnosticOrder {
 }
 
 model DiagnosticOrderItem {
-  id                String          @id @default(cuid())
+  id                String             @id @default(cuid())
   diagnosticOrderId String
   testId            String?
+  packageId         String?
   price             Int
-  createdAt         DateTime        @default(now())
-  diagnosticOrder   DiagnosticOrder @relation(fields: [diagnosticOrderId], references: [id], onDelete: Cascade)
-  test              DiagnosticTest? @relation(fields: [testId], references: [id], onDelete: SetNull)
+  createdAt         DateTime           @default(now())
+  diagnosticOrder   DiagnosticOrder    @relation(fields: [diagnosticOrderId], references: [id], onDelete: Cascade)
+  test              DiagnosticTest?    @relation(fields: [testId], references: [id], onDelete: SetNull)
+  package           DiagnosticPackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
 
   @@index([diagnosticOrderId])
 }

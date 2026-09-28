@@ -44,6 +44,7 @@ const EDITABLE_STATUSES = new Set(['SCHEDULED', 'IN_PROGRESS']);
 
 type CarePlanSummary = { id: string; status: string; summary: string | null; createdAt: string };
 type DiagnosticTestOption = { id: string; name: string; labName: string | null };
+type DiagnosticPackageOption = { id: string; name: string; labName: string | null };
 type DiagnosticRecommendationSummary = { id: string; status: string; clinicalReason: string | null; testName: string | null };
 type TherapyOption = { id: string; name: string; centreName: string | null };
 type PanchakarmaRecommendationSummary = {
@@ -61,6 +62,7 @@ export function ConsultationWorkspace({
   patientUserId,
   carePlans: initialCarePlans,
   diagnosticTests,
+  diagnosticPackages,
   diagnosticRecommendations: initialRecommendations,
   therapies,
   panchakarmaRecommendations: initialPanchakarmaRecommendations,
@@ -71,6 +73,7 @@ export function ConsultationWorkspace({
   patientUserId: string;
   carePlans: CarePlanSummary[];
   diagnosticTests: DiagnosticTestOption[];
+  diagnosticPackages: DiagnosticPackageOption[];
   diagnosticRecommendations: DiagnosticRecommendationSummary[];
   therapies: TherapyOption[];
   panchakarmaRecommendations: PanchakarmaRecommendationSummary[];
@@ -188,7 +191,13 @@ export function ConsultationWorkspace({
 
       <Card className="mt-6">
         <h2 className="font-semibold text-brand-neutral-900">Diagnostics</h2>
-        <DiagnosticsSection consultationId={consultation.id} tests={diagnosticTests} initial={initialRecommendations} editable={editable} />
+        <DiagnosticsSection
+          consultationId={consultation.id}
+          tests={diagnosticTests}
+          packages={diagnosticPackages}
+          initial={initialRecommendations}
+          editable={editable}
+        />
       </Card>
 
       <Card className="mt-6">
@@ -202,18 +211,24 @@ export function ConsultationWorkspace({
 function DiagnosticsSection({
   consultationId,
   tests,
+  packages,
   initial,
   editable,
 }: {
   consultationId: string;
   tests: DiagnosticTestOption[];
+  packages: DiagnosticPackageOption[];
   initial: DiagnosticRecommendationSummary[];
   editable: boolean;
 }) {
   const [recommendations, setRecommendations] = useState(initial);
   const [showForm, setShowForm] = useState(false);
   const [clinicalReason, setClinicalReason] = useState('');
-  const [testId, setTestId] = useState('');
+  // Encodes either a test or a package selection in one dropdown — the two
+  // are mutually exclusive per createRecommendationSchema's refine, so a
+  // single "test:<id>" / "package:<id>" value avoids a two-dropdown UI
+  // where picking one silently has to clear the other.
+  const [selection, setSelection] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -221,14 +236,15 @@ function DiagnosticsSection({
     setSubmitting(true);
     setError(null);
     try {
+      const [kind, id] = selection ? selection.split(':') : [undefined, undefined];
       const { recommendation } = await api.post<{ recommendation: { id: string; status: string; clinicalReason: string | null } }>(
         `/api/consultations/${consultationId}/diagnostic-recommendations`,
-        { clinicalReason, testId: testId || undefined },
+        { clinicalReason, testId: kind === 'test' ? id : undefined, packageId: kind === 'package' ? id : undefined },
       );
-      const test = tests.find((t) => t.id === testId);
-      setRecommendations((prev) => [{ ...recommendation, testName: test?.name ?? null }, ...prev]);
+      const name = kind === 'test' ? tests.find((t) => t.id === id)?.name : packages.find((p) => p.id === id)?.name;
+      setRecommendations((prev) => [{ ...recommendation, testName: name ?? null }, ...prev]);
       setClinicalReason('');
-      setTestId('');
+      setSelection('');
       setShowForm(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not recommend this test.');
@@ -258,14 +274,27 @@ function DiagnosticsSection({
             <Textarea id="clinicalReason" rows={2} value={clinicalReason} onChange={(e) => setClinicalReason(e.target.value)} />
           </div>
           <div>
-            <Label htmlFor="testId">Suggested test (optional)</Label>
-            <Select id="testId" value={testId} onChange={(e) => setTestId(e.target.value)}>
+            <Label htmlFor="testId">Suggested test or package (optional)</Label>
+            <Select id="testId" value={selection} onChange={(e) => setSelection(e.target.value)}>
               <option value="">Any lab / unspecified</option>
-              {tests.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} {t.labName ? `— ${t.labName}` : ''}
-                </option>
-              ))}
+              {tests.length > 0 && (
+                <optgroup label="Individual tests">
+                  {tests.map((t) => (
+                    <option key={t.id} value={`test:${t.id}`}>
+                      {t.name} {t.labName ? `— ${t.labName}` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {packages.length > 0 && (
+                <optgroup label="Packages">
+                  {packages.map((p) => (
+                    <option key={p.id} value={`package:${p.id}`}>
+                      {p.name} {p.labName ? `— ${p.labName}` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </Select>
           </div>
           <div className="flex gap-2">

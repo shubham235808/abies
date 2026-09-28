@@ -21,7 +21,8 @@ vi.mock('@/lib/payments/razorpay', () => razorpayMock);
 
 import { holdSlot, verifyPayment } from '@/modules/appointments/appointments.service';
 import { approve as approveLab } from '@/modules/diagnostics/admin-labs.service';
-import { createTest, searchPublic } from '@/modules/diagnostics/catalogue.service';
+import { createPackage, createTest, searchPackagesPublic, searchPublic } from '@/modules/diagnostics/catalogue.service';
+import { bookOrderSchema } from '@/modules/diagnostics/orders.schemas';
 import { ensureLabProfile, submitLab, updateMyLab } from '@/modules/diagnostics/labs.service';
 import { createRecommendation } from '@/modules/diagnostics/recommendations.service';
 import {
@@ -137,6 +138,19 @@ async function approvedLabWithTest(priceRupees = 400) {
 
   const test = await createTest(labUserId, { code: `CBC-${randomInt(1000, 9999)}`, name: 'Complete Blood Count', price: priceRupees });
   return { labUserId, labId: lab.id, testId: test.id, price: priceRupees };
+}
+
+async function approvedLabWithPackage(testPriceRupees = 400, packagePriceRupees = 650) {
+  const { labUserId, labId, testId } = await approvedLabWithTest(testPriceRupees);
+  const secondTest = await createTest(labUserId, { code: `LFT-${randomInt(1000, 9999)}`, name: 'Liver Function Test', price: 300 });
+  const pkg = await createPackage(labUserId, {
+    name: 'Full Body Health Check',
+    description: 'CBC + LFT bundle',
+    price: packagePriceRupees,
+    active: true,
+    testIds: [testId, secondTest.id],
+  });
+  return { labUserId, labId, packageId: pkg.id, price: packagePriceRupees };
 }
 
 afterAll(async () => {
@@ -344,5 +358,76 @@ describe('lab fulfilment', () => {
     const { orderId } = await scheduledOrder();
     const strangerPatientId = await registerUser('PATIENT');
     await expect(cancelOrder(strangerPatientId, 'PATIENT', orderId, {}, { userId: strangerPatientId })).rejects.toThrow(ForbiddenError);
+  });
+});
+
+describe('diagnostic packages (ENTERPRISE-6)', () => {
+  it('only shows packages from an approved, active lab on the public catalogue', async () => {
+    const { packageId } = await approvedLabWithPackage();
+    const { packages } = await searchPackagesPublic({ q: 'Full Body' });
+    expect(packages.some((p) => p.id === packageId)).toBe(true);
+  });
+
+  it('books a package at its own bundled price, not the sum of its tests', async () => {
+    const { patientId } = await confirmedAppointment();
+    const { labId, packageId, price } = await approvedLabWithPackage(400, 650);
+
+    const { order, razorpayOrder } = await bookOrder(patientId, {
+      labId,
+      packageId,
+      collectionMode: 'LAB_VISIT',
+      scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    });
+    expect(order.status).toBe('BOOKED');
+
+    await verifyOrderPayment(
+      patientId,
+      { orderId: order.id, razorpayOrderId: razorpayOrder.id, razorpayPaymentId: `pay_${randomInt(1000, 9999)}`, razorpaySignature: 'sig' },
+      { userId: patientId },
+    );
+
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { id: order.paymentId! } });
+    expect(payment.amount).toBe(price);
+
+    const fullOrder = await getOrder(patientId, 'PATIENT', order.id);
+    expect(fullOrder.items[0]?.package?.name).toBe('Full Body Health Check');
+  });
+
+  it('rejects a booking payload that mixes testIds and packageId at the schema layer', () => {
+    const result = bookOrderSchema.safeParse({
+      labId: 'lab_1',
+      packageId: 'pkg_1',
+      testIds: ['test_1'],
+      collectionMode: 'LAB_VISIT',
+      scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('lets a doctor recommend a package on their own consultation', async () => {
+    const { doctorUserId, patientId, consultationId } = await confirmedAppointment();
+    const { labId, packageId } = await approvedLabWithPackage();
+
+    const recommendation = await createRecommendation(
+      doctorUserId,
+      consultationId,
+      { clinicalReason: 'Preventive screening', packageId },
+      { userId: doctorUserId },
+    );
+    expect(recommendation.packageId).toBe(packageId);
+
+    const { order } = await bookOrder(patientId, {
+      labId,
+      packageId,
+      recommendationId: recommendation.id,
+      collectionMode: 'LAB_VISIT',
+      scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    const updatedRecommendation = await prisma.diagnosticRecommendation.findUniqueOrThrow({ where: { id: recommendation.id } });
+    expect(updatedRecommendation.status).toBe('BOOKED');
+
+    const fullOrder = await getOrder(patientId, 'PATIENT', order.id);
+    expect(fullOrder.items[0]?.package?.name).toBeDefined();
   });
 });

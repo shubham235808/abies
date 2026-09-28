@@ -43,7 +43,7 @@ export default async function PatientDiagnosticsPage() {
                 <Card key={r.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="font-medium text-brand-neutral-900">{r.test?.name ?? 'Unspecified test'}</p>
+                      <p className="font-medium text-brand-neutral-900">{r.test?.name ?? r.package?.name ?? 'Unspecified test'}</p>
                       <p className="mt-1 text-sm text-brand-neutral-600">{r.clinicalReason}</p>
                       <p className="mt-1 text-xs text-brand-neutral-400">Recommended by {doctorName}</p>
                     </div>
@@ -71,7 +71,7 @@ export default async function PatientDiagnosticsPage() {
               scheduledAt: o.scheduledAt?.toISOString() ?? null,
               collectionMode: o.collectionMode,
               labName: o.lab.name,
-              testNames: o.items.map((i) => i.test?.name).filter((n): n is string => Boolean(n)),
+              testNames: o.items.map((i) => i.test?.name ?? i.package?.name).filter((n): n is string => Boolean(n)),
               reportReady: Boolean(o.report?.releasedToPatientAt),
               reportId: reportIdByOrderId.get(o.id) ?? null,
               criticalFlag: o.report?.criticalFlag ?? false,

@@ -94,7 +94,12 @@ export default async function LabOverviewPage() {
               </CardTitle>
               <div className="mt-2 space-y-2">
                 {critical.map((o) => (
-                  <ListRow key={o.id} href={`/lab/orders/${o.id}`} title={patientName(o)} subtitle={o.items.map((i) => i.test?.name).filter(Boolean).join(', ')} />
+                  <ListRow
+                    key={o.id}
+                    href={`/lab/orders/${o.id}`}
+                    title={patientName(o)}
+                    subtitle={o.items.map((i) => i.test?.name ?? i.package?.name).filter(Boolean).join(', ')}
+                  />
                 ))}
               </div>
             </Card>
@@ -120,7 +125,7 @@ export default async function LabOverviewPage() {
                     key={o.id}
                     href={`/lab/orders/${o.id}`}
                     title={patientName(o)}
-                    subtitle={o.items.map((i) => i.test?.name).filter(Boolean).join(', ')}
+                    subtitle={o.items.map((i) => i.test?.name ?? i.package?.name).filter(Boolean).join(', ')}
                     meta={o.collectionMode === 'HOME' ? 'Home collection' : 'Lab visit'}
                   />
                 ))}

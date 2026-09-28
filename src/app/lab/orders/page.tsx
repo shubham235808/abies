@@ -32,7 +32,9 @@ export default async function LabOrdersPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3 rounded-card border border-brand-neutral-200 bg-white p-4 shadow-sm transition-colors hover:border-brand-purple-300">
                   <div>
                     <p className="font-medium text-brand-neutral-900">{patientName}</p>
-                    <p className="mt-1 text-sm text-brand-neutral-600">{o.items.map((i) => i.test?.name).filter(Boolean).join(', ')}</p>
+                    <p className="mt-1 text-sm text-brand-neutral-600">
+                      {o.items.map((i) => i.test?.name ?? i.package?.name).filter(Boolean).join(', ')}
+                    </p>
                     <p className="mt-1 text-xs text-brand-neutral-400">
                       {o.scheduledAt ? new Date(o.scheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'Not scheduled'} ·{' '}
                       {o.collectionMode === 'HOME' ? 'Home collection' : 'Lab visit'}

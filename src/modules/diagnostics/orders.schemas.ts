@@ -1,13 +1,21 @@
 import { z } from 'zod';
 
-export const bookOrderSchema = z.object({
-  labId: z.string().min(1),
-  testIds: z.array(z.string().min(1)).min(1).max(10),
-  recommendationId: z.string().optional(),
-  collectionMode: z.enum(['HOME', 'LAB_VISIT']),
-  scheduledAt: z.string().datetime(),
-  address: z.string().max(500).optional(),
-});
+// ENTERPRISE-6 — testIds and packageId are mutually exclusive: a booking
+// is either a set of individual tests or one bundled package, never both
+// in the same order (a package's own price already covers its tests).
+export const bookOrderSchema = z
+  .object({
+    labId: z.string().min(1),
+    testIds: z.array(z.string().min(1)).min(1).max(10).optional(),
+    packageId: z.string().min(1).optional(),
+    recommendationId: z.string().optional(),
+    collectionMode: z.enum(['HOME', 'LAB_VISIT']),
+    scheduledAt: z.string().datetime(),
+    address: z.string().max(500).optional(),
+  })
+  .refine((v) => Boolean(v.testIds?.length) !== Boolean(v.packageId), {
+    message: 'Provide either testIds or packageId, not both',
+  });
 
 export const verifyOrderPaymentSchema = z.object({
   orderId: z.string().min(1),

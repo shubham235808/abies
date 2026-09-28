@@ -1,6 +1,7 @@
-import { facets, searchPublic } from '@/modules/diagnostics/catalogue.service';
+import { facets, searchPackagesPublic, searchPublic } from '@/modules/diagnostics/catalogue.service';
 import { getCurrentSession } from '@/server/current-user';
 import { DiagnosticsFilters } from './filters';
+import { PackageCard } from './package-card';
 import { TestCard } from './test-card';
 
 export const metadata = { title: 'Diagnostics — ABIES' };
@@ -14,8 +15,9 @@ export default async function DiagnosticsPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const params = await searchParams;
-  const [{ tests, total }, facetData, session] = await Promise.all([
+  const [{ tests, total }, { packages, total: packageTotal }, facetData, session] = await Promise.all([
     searchPublic({ q: params.q, city: params.city }),
+    searchPackagesPublic({ q: params.q, city: params.city }),
     facets(),
     getCurrentSession(),
   ]);
@@ -33,7 +35,20 @@ export default async function DiagnosticsPage({
         <DiagnosticsFilters facets={facetData} />
       </div>
 
-      <p className="mt-6 text-sm text-brand-neutral-500">{total} test(s) found</p>
+      {packageTotal > 0 && (
+        <>
+          <h2 className="mt-10 text-lg font-semibold text-brand-neutral-900">Health packages</h2>
+          <p className="mt-1 text-sm text-brand-neutral-500">{packageTotal} package(s) found</p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            {packages.map((p) => (
+              <PackageCard key={p.id} diagnosticPackage={p} viewerRole={session?.user.role ?? null} />
+            ))}
+          </div>
+        </>
+      )}
+
+      <h2 className="mt-10 text-lg font-semibold text-brand-neutral-900">Individual tests</h2>
+      <p className="mt-1 text-sm text-brand-neutral-500">{total} test(s) found</p>
       <div className="mt-3 grid gap-4 sm:grid-cols-2">
         {tests.map((t) => (
           <TestCard key={t.id} test={t} viewerRole={session?.user.role ?? null} />
