@@ -1,6 +1,9 @@
+import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { BadRequestError, NotFoundError } from '@/lib/errors';
+import { assertUploadAllowed, deleteObject, getSignedDownloadUrl, putObject } from '@/lib/storage';
+import { recordAuditEvent, type AuditContext } from '@/server/audit';
 import { ensureCentreProfile } from './centres.service';
 import type { createTherapistSchema, createTherapySchema, publicTherapySearchSchema, updateTherapistSchema, updateTherapySchema } from './catalogue.schemas';
 import type { z } from 'zod';
@@ -65,6 +68,80 @@ export async function removeTherapist(userId: string, therapistId: string) {
   const activeSession = await prisma.panchakarmaSession.findFirst({ where: { therapistId: therapist.id, attendedAt: null } });
   if (activeSession) throw new BadRequestError('Reassign this therapist’s upcoming sessions before removing them');
   await prisma.therapist.delete({ where: { id: therapist.id } });
+}
+
+// ENTERPRISE-8 — direct pattern reuse of doctors.service.ts's document
+// upload/list/remove/download functions (Phase 3), including the
+// ENTERPRISE-5 documentsEditable-style relaxation: a therapist has no
+// account-level lock to begin with (the centre manages this roster
+// entry, not a self-onboarding user), so there's nothing to relax —
+// the centre can always add/remove a therapist's documents.
+
+export interface UploadedTherapistFile {
+  originalName: string;
+  mimeType: string;
+  size: number;
+  buffer: Buffer;
+}
+
+export async function addTherapistDocument(userId: string, therapistId: string, type: string, file: UploadedTherapistFile, auditCtx: AuditContext) {
+  const therapist = await ownedTherapist(userId, therapistId);
+  assertUploadAllowed({ mimetype: file.mimeType, size: file.size });
+
+  const storedName = `${randomUUID()}-${file.originalName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  const storagePath = `therapist-documents/${therapist.id}/${storedName}`;
+  await putObject({ key: storagePath, body: file.buffer, contentType: file.mimeType });
+
+  const document = await prisma.therapistDocument.create({
+    data: {
+      therapistId: therapist.id,
+      type,
+      originalName: file.originalName,
+      storedName,
+      mimeType: file.mimeType,
+      sizeBytes: file.size,
+      storagePath,
+    },
+  });
+
+  await recordAuditEvent(auditCtx, {
+    eventType: 'THERAPIST_PROFILE',
+    action: 'DOCUMENT_UPLOAD',
+    resourceType: 'TherapistDocument',
+    resourceId: document.id,
+    metadata: { therapistId: therapist.id, type },
+  });
+  return document;
+}
+
+export async function listTherapistDocuments(userId: string, therapistId: string) {
+  const therapist = await ownedTherapist(userId, therapistId);
+  return prisma.therapistDocument.findMany({ where: { therapistId: therapist.id }, orderBy: { createdAt: 'desc' } });
+}
+
+async function therapistDocumentForOwner(userId: string, therapistId: string, documentId: string) {
+  const therapist = await ownedTherapist(userId, therapistId);
+  const document = await prisma.therapistDocument.findFirst({ where: { id: documentId, therapistId: therapist.id } });
+  if (!document) throw new NotFoundError('Document not found');
+  return document;
+}
+
+export async function getTherapistDocumentDownloadUrl(userId: string, therapistId: string, documentId: string): Promise<string> {
+  const document = await therapistDocumentForOwner(userId, therapistId, documentId);
+  return getSignedDownloadUrl(document.storagePath);
+}
+
+export async function removeTherapistDocument(userId: string, therapistId: string, documentId: string, auditCtx: AuditContext) {
+  const document = await therapistDocumentForOwner(userId, therapistId, documentId);
+  await prisma.therapistDocument.delete({ where: { id: document.id } });
+  await deleteObject(document.storagePath).catch(() => undefined);
+
+  await recordAuditEvent(auditCtx, {
+    eventType: 'THERAPIST_PROFILE',
+    action: 'DOCUMENT_REMOVE',
+    resourceType: 'TherapistDocument',
+    resourceId: documentId,
+  });
 }
 
 export interface PublicTherapy {

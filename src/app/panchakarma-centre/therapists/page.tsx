@@ -12,7 +12,13 @@ export default async function PanchakarmaCentreTherapistsPage() {
       <p className="mt-1 max-w-2xl text-sm text-brand-neutral-600">Your practitioner roster, for assigning to scheduled sessions.</p>
       <div className="mt-6">
         <TherapistsManager
-          initial={therapists.map((t) => ({ id: t.id, name: t.name, qualifications: t.qualifications, active: t.active }))}
+          initial={therapists.map((t) => ({
+            id: t.id,
+            name: t.name,
+            qualifications: t.qualifications,
+            languages: t.languages,
+            active: t.active,
+          }))}
         />
       </div>
     </div>

@@ -16,12 +16,21 @@ export const updateTherapySchema = createTherapySchema.partial();
 export const createTherapistSchema = z.object({
   name: z.string().min(1).max(200),
   qualifications: z.string().max(500).optional(),
+  languages: z.array(z.string().min(1).max(40)).optional(),
 });
 
 export const updateTherapistSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   qualifications: z.string().max(500).optional(),
+  languages: z.array(z.string().min(1).max(40)).optional(),
   active: z.boolean().optional(),
+});
+
+export const therapistDocumentTypeSchema = z.enum(['ID_PROOF', 'QUALIFICATION_CERTIFICATE', 'PROFILE_PHOTO', 'OTHER']);
+
+export const therapistDocumentReviewSchema = z.object({
+  outcome: z.enum(['VERIFY', 'REJECT', 'REQUEST_RESUBMISSION']),
+  note: z.string().max(2000).optional(),
 });
 
 export const publicTherapySearchSchema = z.object({

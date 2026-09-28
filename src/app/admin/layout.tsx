@@ -6,6 +6,7 @@ const NAV = [
   { href: '/admin/labs', label: 'Lab Verification' },
   { href: '/admin/pharmacies', label: 'Pharmacy Verification' },
   { href: '/admin/panchakarma-centres', label: 'Panchakarma Verification' },
+  { href: '/admin/therapists', label: 'Therapist Verification' },
   { href: '/admin/staff', label: 'Staff' },
   { href: '/admin/refunds', label: 'Refunds' },
   { href: '/admin/audit', label: 'Audit Log' },

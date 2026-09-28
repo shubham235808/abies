@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import type { z } from 'zod';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,8 +11,8 @@ import { FieldError, Input, Label } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api-client';
 import { createTherapistSchema } from '@/modules/panchakarma/catalogue.schemas';
 
-type Therapist = { id: string; name: string; qualifications: string | null; active: boolean };
-type FormValues = z.infer<typeof createTherapistSchema>;
+type Therapist = { id: string; name: string; qualifications: string | null; languages: string[]; active: boolean };
+type FormValues = { name: string; qualifications?: string; languagesText?: string };
 
 export function TherapistsManager({ initial }: { initial: Therapist[] }) {
   const [therapists, setTherapists] = useState(initial);
@@ -55,13 +54,21 @@ export function TherapistsManager({ initial }: { initial: Therapist[] }) {
         {therapists.map((t) => (
           <Card key={t.id} className="flex items-center justify-between py-4">
             <div>
-              <p className="font-medium text-brand-neutral-900">{t.name}</p>
+              <Link href={`/panchakarma-centre/therapists/${t.id}`} className="font-medium text-brand-neutral-900 hover:underline">
+                {t.name}
+              </Link>
               <div className="mt-1 flex items-center gap-2">
                 <Badge tone={t.active ? 'success' : 'neutral'}>{t.active ? 'Active' : 'Inactive'}</Badge>
                 {t.qualifications && <span className="text-xs text-brand-neutral-500">{t.qualifications}</span>}
+                {t.languages.length > 0 && <span className="text-xs text-brand-neutral-400">{t.languages.join(', ')}</span>}
               </div>
             </div>
             <div className="flex gap-2">
+              <Link href={`/panchakarma-centre/therapists/${t.id}`}>
+                <Button variant="secondary" size="sm">
+                  Documents
+                </Button>
+              </Link>
               <Button variant="ghost" size="sm" onClick={() => toggleActive(t)}>
                 {t.active ? 'Deactivate' : 'Activate'}
               </Button>
@@ -96,13 +103,23 @@ function NewTherapistForm({ onCreated, onCancel }: { onCreated: (therapist: Ther
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(createTherapistSchema) });
+  } = useForm<FormValues>();
   const [error, setError] = useState<string | null>(null);
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     try {
-      const { therapist } = await api.post<{ therapist: Therapist }>('/api/panchakarma-centres/me/therapists', values);
+      const dto = createTherapistSchema.parse({
+        name: values.name,
+        qualifications: values.qualifications || undefined,
+        languages: values.languagesText
+          ? values.languagesText
+              .split(',')
+              .map((l) => l.trim())
+              .filter(Boolean)
+          : undefined,
+      });
+      const { therapist } = await api.post<{ therapist: Therapist }>('/api/panchakarma-centres/me/therapists', dto);
       onCreated(therapist);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not add this therapist.');
@@ -114,12 +131,16 @@ function NewTherapistForm({ onCreated, onCancel }: { onCreated: (therapist: Ther
       {error && <Alert tone="error">{error}</Alert>}
       <div>
         <Label htmlFor="name">Name</Label>
-        <Input id="name" {...register('name')} />
-        <FieldError>{errors.name?.message}</FieldError>
+        <Input id="name" {...register('name', { required: true })} />
+        <FieldError>{errors.name ? 'Name is required' : undefined}</FieldError>
       </div>
       <div>
         <Label htmlFor="qualifications">Qualifications</Label>
         <Input id="qualifications" placeholder="e.g. BAMS, certified Panchakarma therapist" {...register('qualifications')} />
+      </div>
+      <div>
+        <Label htmlFor="languagesText">Languages</Label>
+        <Input id="languagesText" placeholder="e.g. English, Hindi" {...register('languagesText')} />
       </div>
       <div className="flex gap-3">
         <Button type="button" variant="secondary" onClick={onCancel}>

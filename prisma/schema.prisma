@@ -1310,13 +1310,51 @@ model Therapist {
   centreId       String
   name           String
   qualifications String?
+  // ENTERPRISE-8 (docs/ENTERPRISE-DATA-MODEL-CHANGES.md §7) — additive.
+  languages      String[]             @default([])
   active         Boolean              @default(true)
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
   centre         PanchakarmaCentre    @relation(fields: [centreId], references: [id], onDelete: Cascade)
   sessions       PanchakarmaSession[]
+  documents      TherapistDocument[]
 
   @@index([centreId, active])
+}
+
+// Direct pattern reuse of DoctorDocument (Phase 3) — same upload/review
+// shape, including the ENTERPRISE-5 RESUBMISSION_REQUIRED outcome, since
+// a therapist's document verification is the same real-world workflow as
+// a doctor's, just for a centre-managed roster entry rather than a
+// self-onboarding account. No separate "verification status" field on
+// Therapist itself — docs/ENTERPRISE-IMPLEMENTATION-PLAN.md's ENTERPRISE-8
+// scope deliberately keeps this at document granularity, same as the
+// doctor admin review panel, rather than inventing an aggregate rule the
+// brief never specifies.
+enum TherapistDocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  RESUBMISSION_REQUIRED
+}
+
+model TherapistDocument {
+  id           String                  @id @default(cuid())
+  therapistId  String
+  type         String
+  status       TherapistDocumentStatus @default(PENDING)
+  originalName String
+  storedName   String
+  mimeType     String
+  sizeBytes    Int
+  storagePath  String
+  reviewNote   String?
+  verifiedAt   DateTime?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  therapist    Therapist               @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+
+  @@index([therapistId, type])
 }
 
 enum PanchakarmaRecommendationStatus {
