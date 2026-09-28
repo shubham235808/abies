@@ -1592,9 +1592,20 @@ enum PartnerLeadKind {
   CORPORATE
 }
 
+// ENTERPRISE-11 (docs/ENTERPRISE-GAP-ANALYSIS.md §46-48) — reconciled
+// against the brief's 9-stage pipeline (NEW/CONTACTED/QUALIFIED/
+// DOCUMENTATION/VERIFICATION/COMMERCIAL/ENABLEMENT/ACTIVATED/LOST):
+// LEAD split into NEW + CONTACTED, DOCUMENTATION added between QUALIFIED
+// and VERIFICATION, and the brief's LOST folded into the existing REJECTED
+// (same concept, this codebase's existing name) rather than adding a
+// tenth near-duplicate value. Safe to apply directly, not as an additive
+// enum-grow-alongside-legacy: confirmed via a direct query before this
+// migration that zero PartnerLead rows referenced LEAD at the time.
 enum PartnerLeadStage {
-  LEAD
+  NEW
+  CONTACTED
   QUALIFIED
+  DOCUMENTATION
   VERIFICATION
   COMMERCIAL
   ENABLEMENT
@@ -1611,7 +1622,7 @@ model PartnerLead {
   contactEmail   String?
   city           String?
   ownerUserId    String?
-  stage          PartnerLeadStage @default(LEAD)
+  stage          PartnerLeadStage @default(NEW)
   nextFollowUpAt DateTime?
   notes          String?
   documentKeys   String[]         @default([])

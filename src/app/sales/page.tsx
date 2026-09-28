@@ -4,8 +4,10 @@ import { NewLeadForm } from './new-lead-form';
 import type { PartnerLeadStage } from '@prisma/client';
 
 const COLUMNS: { stage: PartnerLeadStage; label: string }[] = [
-  { stage: 'LEAD', label: 'Lead' },
+  { stage: 'NEW', label: 'New' },
+  { stage: 'CONTACTED', label: 'Contacted' },
   { stage: 'QUALIFIED', label: 'Qualified' },
+  { stage: 'DOCUMENTATION', label: 'Documentation' },
   { stage: 'VERIFICATION', label: 'Verification' },
   { stage: 'COMMERCIAL', label: 'Commercial' },
   { stage: 'ENABLEMENT', label: 'Enablement' },
@@ -20,8 +22,8 @@ export default async function SalesLeadsPage() {
     <div>
       <h1 className="text-2xl font-semibold text-brand-neutral-900">Partner leads</h1>
       <p className="mt-1 max-w-2xl text-sm text-brand-neutral-600">
-        Lead → Qualified → Verification → Commercial → Enablement → Activated pipeline for doctors, clinics, labs,
-        pharmacies, Panchakarma centres and corporate accounts.
+        New → Contacted → Qualified → Documentation → Verification → Commercial → Enablement → Activated pipeline
+        for doctors, clinics, labs, pharmacies, Panchakarma centres and corporate accounts.
       </p>
 
       <NewLeadForm />

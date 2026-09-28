@@ -152,8 +152,10 @@ export function SupportTicketPriorityBadge({ priority }: { priority: string }) {
 }
 
 const PARTNER_LEAD_STAGE_TONE: Record<string, Tone> = {
-  LEAD: 'neutral',
+  NEW: 'neutral',
+  CONTACTED: 'neutral',
   QUALIFIED: 'blue',
+  DOCUMENTATION: 'blue',
   VERIFICATION: 'orange',
   COMMERCIAL: 'purple',
   ENABLEMENT: 'purple',

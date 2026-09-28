@@ -1,7 +1,17 @@
 import { z } from 'zod';
 
 export const partnerLeadKindSchema = z.enum(['DOCTOR', 'CLINIC', 'LAB', 'PHARMACY', 'PANCHAKARMA_CENTRE', 'CORPORATE']);
-export const partnerLeadStageSchema = z.enum(['LEAD', 'QUALIFIED', 'VERIFICATION', 'COMMERCIAL', 'ENABLEMENT', 'ACTIVATED', 'REJECTED']);
+export const partnerLeadStageSchema = z.enum([
+  'NEW',
+  'CONTACTED',
+  'QUALIFIED',
+  'DOCUMENTATION',
+  'VERIFICATION',
+  'COMMERCIAL',
+  'ENABLEMENT',
+  'ACTIVATED',
+  'REJECTED',
+]);
 
 export const createLeadSchema = z.object({
   kind: partnerLeadKindSchema,

@@ -212,7 +212,7 @@ describe('partner leads', () => {
   it('moves a lead through the pipeline stages', async () => {
     const salesId = await createUser('SALES');
     const lead = await createLead(salesId, 'SALES', { kind: 'PANCHAKARMA_CENTRE', contactName: 'Test Centre', contactPhone: '9800000001' }, { userId: salesId });
-    expect(lead.stage).toBe('LEAD');
+    expect(lead.stage).toBe('NEW');
 
     const updated = await updateLead(lead.id, { stage: 'QUALIFIED' }, { userId: salesId });
     expect(updated.stage).toBe('QUALIFIED');

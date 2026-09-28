@@ -8,7 +8,17 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { PartnerLeadStageBadge } from '@/components/ui/badge';
 import { api, ApiError } from '@/lib/api-client';
 
-const STAGE_OPTIONS = ['LEAD', 'QUALIFIED', 'VERIFICATION', 'COMMERCIAL', 'ENABLEMENT', 'ACTIVATED', 'REJECTED'];
+const STAGE_OPTIONS = [
+  'NEW',
+  'CONTACTED',
+  'QUALIFIED',
+  'DOCUMENTATION',
+  'VERIFICATION',
+  'COMMERCIAL',
+  'ENABLEMENT',
+  'ACTIVATED',
+  'REJECTED',
+];
 
 export interface LeadDetail {
   id: string;
