@@ -1806,3 +1806,52 @@ model NotificationTemplate {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 }
+
+// ENTERPRISE-13 — the Promotion Manager's backing model, built here (not
+// retrofitted from ENTERPRISE-3/4) since Admin is the actual owner of
+// promotion content per docs/ENTERPRISE-DATA-MODEL-CHANGES.md §3.
+enum PromotionPlacement {
+  PUBLIC_HOME_HERO
+  PUBLIC_HOME_SERVICES
+  PATIENT_HOME_HERO
+  PATIENT_HOME_DOCTORS
+  PATIENT_HOME_DIAGNOSTICS
+  PATIENT_HOME_MEDICINES
+  PATIENT_HOME_PANCHAKARMA
+}
+
+enum PromotionEntityType {
+  DOCTOR
+  PANCHAKARMA_CENTRE
+  DIAGNOSTIC_LAB
+  DIAGNOSTIC_TEST
+  MEDICINE
+  CAMPAIGN
+}
+
+model Promotion {
+  id              String               @id @default(cuid())
+  title           String
+  subtitle        String?
+  description     String?
+  desktopImageKey String
+  mobileImageKey  String?
+  ctaLabel        String?
+  ctaHref         String?
+  placement       PromotionPlacement
+  entityType      PromotionEntityType?
+  entityId        String?
+  startAt         DateTime
+  endAt           DateTime
+  priority        Int                  @default(0)
+  active          Boolean              @default(true)
+  targetLocations String[]             @default([])
+  targetLanguages String[]             @default([])
+  createdByUserId String
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  impressions     Int                  @default(0)
+  clicks          Int                  @default(0)
+
+  @@index([placement, active, startAt, endAt])
+}

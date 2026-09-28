@@ -5,6 +5,13 @@
 // requires Razorpay keys to be configured in this environment; that's
 // surfaced honestly on the doctor profile page, not hidden here.
 import Link from 'next/link';
+import { PromotionBanner } from '@/components/promotions/promotion-banner';
+import { activePromotionsForPlacement } from '@/modules/promotions/promotions.service';
+
+// Promotions change over time and read from the database — never
+// prerendered at build time (the build stage has no DB to query), same
+// rule already applied to /diagnostics and /doctors.
+export const dynamic = 'force-dynamic';
 
 type Accent = 'purple' | 'magenta' | 'blue' | 'orange';
 
@@ -100,7 +107,9 @@ const HOW_IT_WORKS = [
   { step: '6', title: 'Track your health journey', body: 'Every visit, report and order in one patient dashboard.' },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const [heroPromotion] = await activePromotionsForPlacement('PUBLIC_HOME_HERO', {}, 1);
+
   return (
     <main>
       <div className="bg-gradient-to-br from-brand-purple-50 via-white to-brand-blue-50">
@@ -138,6 +147,12 @@ export default function HomePage() {
       </div>
 
       <div className="mx-auto max-w-5xl px-6 pb-16">
+        {heroPromotion && (
+          <div className="mt-4">
+            <PromotionBanner promotion={heroPromotion ?? null} />
+          </div>
+        )}
+
         <h2 className="mt-4 text-2xl font-semibold text-brand-neutral-900">Everything your care needs, in one place</h2>
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {SERVICES.map((service) => (

@@ -1,10 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import HomePage from '@/app/(public)/page';
 
+// HomePage is an async Server Component (it fetches the PUBLIC_HOME_HERO
+// promotion, ENTERPRISE-13) — RTL can't render async components directly,
+// so the component function is awaited first and its resolved JSX is what
+// gets rendered. The promotions lookup itself is mocked out: this is a
+// presentational test of the always-static parts of the page, not a check
+// of promotion-serving logic (that's covered in the promotions module's own
+// tests), and mocking it keeps this test independent of live DB state.
+vi.mock('@/modules/promotions/promotions.service', () => ({
+  activePromotionsForPlacement: vi.fn(async () => []),
+}));
+
 describe('HomePage', () => {
-  it('renders the platform promise with live CTAs for what is real', () => {
-    render(<HomePage />);
+  it('renders the platform promise with live CTAs for what is real', async () => {
+    render(await HomePage());
     expect(screen.getByRole('heading', { name: /trusted, coordinated ayurveda care/i })).toBeInTheDocument();
     // Sign-in, doctor discovery, and appointment booking (via the doctor
     // profile page) are all real (Phase 1/3/4) — they link out.

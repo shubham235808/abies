@@ -2,6 +2,7 @@ import type { UserRole } from '@prisma/client';
 import { cookies } from 'next/headers';
 import type { NextResponse } from 'next/server';
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
+import { hasPermission, type Permission } from './permissions';
 import {
   SESSION_COOKIE_NAME,
   getSessionByToken,
@@ -53,6 +54,19 @@ export async function optionalSession(req: Request): Promise<RequestContext | nu
 export function requireRole(ctx: RequestContext, ...roles: UserRole[]): void {
   if (!roles.includes(ctx.session.user.role)) {
     throw new ForbiddenError('Role is not allowed for this operation');
+  }
+}
+
+// Permission-string layer on top of the role check above
+// (docs/ENTERPRISE-DATA-MODEL-CHANGES.md §9) — call sites use this instead
+// of requireRole when the operation maps to a specific named capability
+// (e.g. 'pharmacy.product.create') rather than "any user with this role."
+// Still role-derived today (src/server/permissions.ts), so this doesn't
+// replace requireRole elsewhere — it's an additive, more precise gate for
+// the call sites that opt into it.
+export function requirePermission(ctx: RequestContext, permission: Permission): void {
+  if (!hasPermission(ctx.session.user.role, permission)) {
+    throw new ForbiddenError('This account does not have the required permission for this operation');
   }
 }
 

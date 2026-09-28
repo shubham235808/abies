@@ -25,11 +25,23 @@ export default async function AdminOverviewPage() {
   // not just a count they have to click through to see (docs/UI-UX-AUDIT.md's
   // Admin section). queue() already returns this; it just wasn't rendered
   // here before.
-  const queues: { title: string; href: string; items: { id: string; name: string | null; mobile: string }[]; total: number }[] = [
-    { title: 'Doctors', href: '/admin/doctors', items: doctors.doctors, total: doctors.total },
-    { title: 'Labs', href: '/admin/labs', items: labs.labs, total: labs.total },
-    { title: 'Pharmacies', href: '/admin/pharmacies', items: pharmacies.pharmacies, total: pharmacies.total },
-    { title: 'Panchakarma centres', href: '/admin/panchakarma-centres', items: centres.centres, total: centres.total },
+  const queues: { title: string; href: string; detailBase: string; items: { id: string; name: string | null; mobile: string }[]; total: number }[] = [
+    { title: 'Doctors', href: '/admin/verification?entity=doctors', detailBase: '/admin/doctors', items: doctors.doctors, total: doctors.total },
+    { title: 'Labs', href: '/admin/verification?entity=labs', detailBase: '/admin/labs', items: labs.labs, total: labs.total },
+    {
+      title: 'Pharmacies',
+      href: '/admin/verification?entity=pharmacies',
+      detailBase: '/admin/pharmacies',
+      items: pharmacies.pharmacies,
+      total: pharmacies.total,
+    },
+    {
+      title: 'Panchakarma centres',
+      href: '/admin/verification?entity=panchakarma-centres',
+      detailBase: '/admin/panchakarma-centres',
+      items: centres.centres,
+      total: centres.total,
+    },
   ];
   const pendingTotal = queues.reduce((sum, q) => sum + q.total, 0);
 
@@ -57,7 +69,7 @@ export default async function AdminOverviewPage() {
                   <ul className="mt-1.5 space-y-1">
                     {q.items.slice(0, 3).map((item) => (
                       <li key={item.id}>
-                        <Link href={`${q.href}/${item.id}`} className="text-sm text-brand-purple-600 underline decoration-brand-purple-200 underline-offset-2 hover:decoration-brand-purple-600">
+                        <Link href={`${q.detailBase}/${item.id}`} className="text-sm text-brand-purple-600 underline decoration-brand-purple-200 underline-offset-2 hover:decoration-brand-purple-600">
                           {item.name || item.mobile}
                         </Link>
                       </li>

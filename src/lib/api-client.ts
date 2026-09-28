@@ -38,4 +38,10 @@ export const api = {
       if (!res.ok) throw new ApiError(body.error ?? 'Request failed', res.status, body.issues);
       return body as T;
     }),
+  patchForm: <T>(path: string, formData: FormData) =>
+    fetch(path, { method: 'PATCH', body: formData }).then(async (res) => {
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new ApiError(body.error ?? 'Request failed', res.status, body.issues);
+      return body as T;
+    }),
 };

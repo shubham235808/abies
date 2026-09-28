@@ -12,6 +12,8 @@ import { searchPublic as searchTherapies } from '@/modules/panchakarma/catalogue
 import { searchPublic as searchDoctors } from '@/modules/doctors/doctors.service';
 import { listMineAsRequester as listSupportTickets } from '@/modules/support/tickets.service';
 import { getMyProfile } from '@/modules/patients/patients.service';
+import { PromotionBanner } from '@/components/promotions/promotion-banner';
+import { activePromotionsForPlacement } from '@/modules/promotions/promotions.service';
 import { requireSessionOrRedirect } from '@/server/current-user';
 import { DoctorCard } from '@/app/(public)/doctors/doctor-card';
 import { TherapyCard } from '@/app/(public)/panchakarma/therapy-card';
@@ -38,10 +40,11 @@ export default async function PatientDashboardPage() {
   // honest unranked fallback (no city on file) rather than hiding results,
   // per the brief's own "do not completely hide" instruction.
   const patientLanguages = [profile.preferredLanguage, ...profile.additionalLanguages].filter(Boolean);
-  const [{ doctors: nearbyDoctors }, { therapies: nearbyTherapies }, { tests: nearbyTests }] = await Promise.all([
+  const [{ doctors: nearbyDoctors }, { therapies: nearbyTherapies }, { tests: nearbyTests }, promotions] = await Promise.all([
     searchDoctors({ city: profile.city ?? undefined, patientLanguages, limit: 3 }),
     searchTherapies({ city: profile.city ?? undefined, limit: 3 }),
     searchTests({ city: profile.city ?? undefined, limit: 3 }),
+    activePromotionsForPlacement('PATIENT_HOME_HERO', { city: profile.city ?? undefined, languages: patientLanguages as string[] }, 2),
   ]);
 
   const name = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'there';
@@ -242,6 +245,17 @@ export default async function PatientDashboardPage() {
               View support →
             </Link>
           </Card>
+        </div>
+      )}
+
+      {promotions.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-neutral-400">For you</h2>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            {promotions.map((p) => (
+              <PromotionBanner key={p.id} promotion={p} />
+            ))}
+          </div>
         </div>
       )}
 

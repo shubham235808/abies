@@ -1,6 +1,6 @@
 import { cn } from '@/lib/cn';
 
-type Tone = 'neutral' | 'purple' | 'magenta' | 'blue' | 'orange' | 'success' | 'danger';
+export type Tone = 'neutral' | 'purple' | 'magenta' | 'blue' | 'orange' | 'success' | 'danger';
 
 const TONE_CLASSES: Record<Tone, string> = {
   neutral: 'bg-brand-neutral-100 text-brand-neutral-700',

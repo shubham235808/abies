@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { errorResponse } from '@/lib/errors';
 import { addInventorySchema } from '@/modules/medicines/catalogue.schemas';
 import { addInventory, listMyInventory } from '@/modules/medicines/catalogue.service';
-import { applyRotatedCookie, requireRole, requireSession } from '@/server/rbac';
+import { applyRotatedCookie, requirePermission, requireRole, requireSession } from '@/server/rbac';
 
 export async function GET(req: Request) {
   try {
@@ -19,6 +19,7 @@ export async function POST(req: Request) {
   try {
     const ctx = await requireSession(req);
     requireRole(ctx, 'PHARMACY');
+    requirePermission(ctx, 'pharmacy.product.create');
     const dto = addInventorySchema.parse(await req.json());
     const item = await addInventory(ctx.session.userId, dto);
     return applyRotatedCookie(NextResponse.json({ item }, { status: 201 }), ctx);
