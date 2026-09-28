@@ -84,7 +84,7 @@ async function approvedVideoDoctor(feeRupees = 500) {
   const adminId = await registerUser('ADMIN');
   const doctorProfile = await prisma.doctorProfile.findUniqueOrThrow({ where: { userId: doctorUserId } });
   const docs = await prisma.doctorDocument.findMany({ where: { doctorProfileId: doctorProfile.id } });
-  for (const doc of docs) await reviewDocument(doctorProfile.id, doc.id, { userId: adminId }, true);
+  for (const doc of docs) await reviewDocument(doctorProfile.id, doc.id, { userId: adminId }, 'VERIFY');
   await approveDoctor(doctorProfile.id, { userId: adminId });
 
   const slotStart = nextWeekdayAt(9, 0);

@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { ConsultationMode, DoctorDocumentType, DoctorVerificationStatus, Prisma } from '@prisma/client';
+import { ConsultationMode, DoctorDocumentStatus, DoctorDocumentType, DoctorVerificationStatus, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@/lib/errors';
 import { assertUploadAllowed, deleteObject, getSignedDownloadUrl, putObject } from '@/lib/storage';
@@ -134,6 +134,27 @@ function editableStatus(status: DoctorVerificationStatus): boolean {
   return status === DoctorVerificationStatus.DRAFT || status === DoctorVerificationStatus.REJECTED;
 }
 
+// ENTERPRISE-5 — closes the loop on the admin's new REQUEST_RESUBMISSION
+// document-review outcome: without this, an admin could flag a document
+// for resubmission while the profile is SUBMITTED/UNDER_REVIEW, and the
+// doctor would have no way to act on it (documents are otherwise locked
+// outside DRAFT/REJECTED). Scoped to "any flagged document currently
+// exists" rather than per-type — the doctor should upload the corrected
+// copy first (the flagged original stays as an audit trail, same
+// "supersede, don't delete" pattern Prescription corrections already use
+// elsewhere in this codebase), and may then remove the flagged original
+// too since it's still present at that point. Removing the flagged copy
+// first would re-lock editing before a replacement could be added, since
+// this check is evaluated fresh on every call rather than cached per
+// session.
+async function documentsEditable(profile: { id: string; verificationStatus: DoctorVerificationStatus }): Promise<boolean> {
+  if (editableStatus(profile.verificationStatus)) return true;
+  const flagged = await prisma.doctorDocument.count({
+    where: { doctorProfileId: profile.id, status: DoctorDocumentStatus.RESUBMISSION_REQUIRED },
+  });
+  return flagged > 0;
+}
+
 export async function updateMe(userId: string, dto: UpdateProfileInput, auditCtx: AuditContext) {
   const profile = await ensureProfile(userId);
   if (!editableStatus(profile.verificationStatus)) {
@@ -202,8 +223,8 @@ export async function addDocument(
   auditCtx: AuditContext,
 ) {
   const profile = await ensureProfile(userId);
-  if (!editableStatus(profile.verificationStatus)) {
-    throw new ForbiddenError('Documents can be changed only while the application is in Draft or Rejected state');
+  if (!(await documentsEditable(profile))) {
+    throw new ForbiddenError('Documents can be changed only while the application is in Draft or Rejected state, or a document has been flagged for resubmission');
   }
   assertUploadAllowed({ mimetype: file.mimeType, size: file.size });
 
@@ -252,7 +273,7 @@ export async function getDocumentDownloadUrl(userId: string, id: string): Promis
 
 export async function removeDocument(userId: string, id: string, auditCtx: AuditContext) {
   const profile = await ensureProfile(userId);
-  if (!editableStatus(profile.verificationStatus)) {
+  if (!(await documentsEditable(profile))) {
     throw new ForbiddenError('Documents cannot be removed while verification is in progress or approved');
   }
   const document = await documentForOwner(userId, id);

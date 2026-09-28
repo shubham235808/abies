@@ -279,10 +279,21 @@ enum DoctorDocumentType {
   OTHER
 }
 
+// ENTERPRISE-5 (docs/ENTERPRISE-GAP-ANALYSIS.md §14-18): adds
+// RESUBMISSION_REQUIRED as a third reviewer outcome alongside
+// VERIFIED/REJECTED — enum-grow, PENDING kept as-is rather than renamed to
+// the brief's "UPLOADED" (a rename risks a failed migration against
+// existing rows for a purely cosmetic vocabulary change, not worth it).
+// UNDER_REVIEW/EXPIRED from the brief's fuller 7-state list are
+// deliberately not added: UNDER_REVIEW is already covered at the
+// DoctorProfile level (D3's original, deliberate simplification), and
+// EXPIRED would need an expiry-date field this model doesn't have —
+// a real, separate schema decision, not bundled in here.
 enum DoctorDocumentStatus {
   PENDING
   VERIFIED
   REJECTED
+  RESUBMISSION_REQUIRED
 }
 
 enum ConsultationMode {

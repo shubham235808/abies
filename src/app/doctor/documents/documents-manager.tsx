@@ -13,7 +13,7 @@ import { api, ApiError } from '@/lib/api-client';
 type Doc = {
   id: string;
   type: string;
-  status: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  status: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'RESUBMISSION_REQUIRED';
   originalName: string;
   createdAt: string;
   reviewNote: string | null;
@@ -27,10 +27,11 @@ const TYPES = [
   { value: 'OTHER', label: 'Other' },
 ];
 
-const STATUS_TONE: Record<Doc['status'], 'neutral' | 'success' | 'danger'> = {
+const STATUS_TONE: Record<Doc['status'], 'neutral' | 'success' | 'danger' | 'orange'> = {
   PENDING: 'neutral',
   VERIFIED: 'success',
   REJECTED: 'danger',
+  RESUBMISSION_REQUIRED: 'orange',
 };
 
 export function DocumentsManager({ initial, editable }: { initial: Doc[]; editable: boolean }) {
@@ -111,6 +112,11 @@ export function DocumentsManager({ initial, editable }: { initial: Doc[]; editab
                 <span>{doc.originalName}</span>
               </div>
               {doc.reviewNote && <p className="mt-1 text-xs text-brand-neutral-500">Note: {doc.reviewNote}</p>}
+              {doc.status === 'RESUBMISSION_REQUIRED' && (
+                <p className="mt-1 text-xs text-brand-orange-600">
+                  Upload a corrected copy below first, then remove this one.
+                </p>
+              )}
             </div>
             <div className="flex gap-2">
               <Button variant="secondary" size="sm" onClick={() => handleDownload(doc.id)}>

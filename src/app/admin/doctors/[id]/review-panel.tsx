@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Badge, VerificationBadge } from '@/components/ui/badge';
 import { Alert } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/input';
+import { Timeline } from '@/components/ui/timeline';
 import { api, ApiError } from '@/lib/api-client';
 
 type Doctor = {
@@ -27,16 +28,23 @@ type Doctor = {
   verificationStatus: string;
   rejectionReason: string | null;
   user: { mobile: string; email: string | null };
-  documents: { id: string; type: string; status: 'PENDING' | 'VERIFIED' | 'REJECTED'; originalName: string; reviewNote: string | null }[];
+  documents: {
+    id: string;
+    type: string;
+    status: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'RESUBMISSION_REQUIRED';
+    originalName: string;
+    reviewNote: string | null;
+  }[];
   clinics: { id: string; name: string; city: string; state: string }[];
   availability: { id: string; dayOfWeek: number; startTime: string; endTime: string; mode: string }[];
   verificationActions: { id: string; toStatus: string; notes: string | null; createdAt: string }[];
 };
 
-const DOC_STATUS_TONE: Record<string, 'neutral' | 'success' | 'danger'> = {
+const DOC_STATUS_TONE: Record<string, 'neutral' | 'success' | 'danger' | 'orange'> = {
   PENDING: 'neutral',
   VERIFIED: 'success',
   REJECTED: 'danger',
+  RESUBMISSION_REQUIRED: 'orange',
 };
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -60,11 +68,11 @@ export function ReviewPanel({ doctor }: { doctor: Doctor }) {
     }
   }
 
-  async function reviewDocument(documentId: string, verified: boolean) {
+  async function reviewDocument(documentId: string, outcome: 'VERIFY' | 'REJECT' | 'REQUEST_RESUBMISSION') {
     setError(null);
     setBusy(documentId);
     try {
-      await api.post(`/api/admin/doctors/${doctor.id}/documents/${documentId}/review`, { verified });
+      await api.post(`/api/admin/doctors/${doctor.id}/documents/${documentId}/review`, { outcome });
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not review document.');
@@ -182,11 +190,19 @@ export function ReviewPanel({ doctor }: { doctor: Doctor }) {
                   variant="secondary"
                   size="sm"
                   loading={busy === d.id}
-                  onClick={() => reviewDocument(d.id, true)}
+                  onClick={() => reviewDocument(d.id, 'VERIFY')}
                 >
                   Verify
                 </Button>
-                <Button variant="danger" size="sm" loading={busy === d.id} onClick={() => reviewDocument(d.id, false)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  loading={busy === d.id}
+                  onClick={() => reviewDocument(d.id, 'REQUEST_RESUBMISSION')}
+                >
+                  Request resubmission
+                </Button>
+                <Button variant="danger" size="sm" loading={busy === d.id} onClick={() => reviewDocument(d.id, 'REJECT')}>
                   Reject
                 </Button>
               </div>
@@ -223,14 +239,16 @@ export function ReviewPanel({ doctor }: { doctor: Doctor }) {
       {doctor.verificationActions.length > 0 && (
         <Card>
           <h2 className="font-semibold text-brand-neutral-900">History</h2>
-          <ul className="mt-2 space-y-1 text-sm text-brand-neutral-600">
-            {doctor.verificationActions.map((a) => (
-              <li key={a.id}>
-                {new Date(a.createdAt).toLocaleString()} — {a.toStatus.replace(/_/g, ' ')}
-                {a.notes ? ` — ${a.notes}` : ''}
-              </li>
-            ))}
-          </ul>
+          <div className="mt-3">
+            <Timeline
+              entries={doctor.verificationActions.map((a) => ({
+                id: a.id,
+                label: a.toStatus.replace(/_/g, ' '),
+                timestamp: new Date(a.createdAt).toLocaleString(),
+                detail: a.notes ?? undefined,
+              }))}
+            />
+          </div>
         </Card>
       )}
     </div>

@@ -12,8 +12,8 @@ export async function POST(
     const ctx = await requireSession(req);
     requireAdminMfa(ctx);
     const { id, documentId } = await params;
-    const { verified, note } = documentReviewSchema.parse(await req.json());
-    const result = await reviewDocument(id, documentId, { userId: ctx.session.userId, ...ctx }, verified, note);
+    const { outcome, note } = documentReviewSchema.parse(await req.json());
+    const result = await reviewDocument(id, documentId, { userId: ctx.session.userId, ...ctx }, outcome, note);
     return applyRotatedCookie(NextResponse.json(result), ctx);
   } catch (error) {
     return errorResponse(error);

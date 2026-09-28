@@ -5,7 +5,14 @@ import { DocumentsManager } from './documents-manager';
 export default async function DoctorDocumentsPage() {
   const session = await requireSessionOrRedirect();
   const { profile } = await getMe(session.userId);
-  const editable = profile.verificationStatus === 'DRAFT' || profile.verificationStatus === 'REJECTED';
+  // ENTERPRISE-5 — also editable once ANY document has been flagged
+  // RESUBMISSION_REQUIRED, even while the wider application is SUBMITTED/
+  // UNDER_REVIEW, matching the relaxed server-side rule in
+  // doctors.service.ts's documentsEditable().
+  const editable =
+    profile.verificationStatus === 'DRAFT' ||
+    profile.verificationStatus === 'REJECTED' ||
+    profile.documents.some((d) => d.status === 'RESUBMISSION_REQUIRED');
 
   return (
     <div>

@@ -178,11 +178,22 @@ export async function suspend(id: string, adminCtx: AuditContext & { userId: str
   return result;
 }
 
+type DocumentReviewOutcome = 'VERIFY' | 'REJECT' | 'REQUEST_RESUBMISSION';
+
+const STATUS_FOR_OUTCOME: Record<DocumentReviewOutcome, DoctorDocumentStatus> = {
+  VERIFY: DoctorDocumentStatus.VERIFIED,
+  REJECT: DoctorDocumentStatus.REJECTED,
+  // ENTERPRISE-5 — a softer outcome than REJECT: tells the doctor exactly
+  // what to fix and re-upload, rather than treating a fixable issue (a
+  // blurry scan, a name mismatch) the same as a hard rejection.
+  REQUEST_RESUBMISSION: DoctorDocumentStatus.RESUBMISSION_REQUIRED,
+};
+
 export async function reviewDocument(
   doctorId: string,
   documentId: string,
   adminCtx: AuditContext & { userId: string },
-  verified: boolean,
+  outcome: DocumentReviewOutcome,
   note?: string,
 ) {
   const document = await prisma.doctorDocument.findFirst({ where: { id: documentId, doctorProfileId: doctorId } });
@@ -191,15 +202,15 @@ export async function reviewDocument(
   const updated = await prisma.doctorDocument.update({
     where: { id: documentId },
     data: {
-      status: verified ? DoctorDocumentStatus.VERIFIED : DoctorDocumentStatus.REJECTED,
+      status: STATUS_FOR_OUTCOME[outcome],
       reviewNote: note,
-      verifiedAt: verified ? new Date() : null,
+      verifiedAt: outcome === 'VERIFY' ? new Date() : null,
     },
   });
 
   await recordAuditEvent(adminCtx, {
     eventType: 'DOCTOR_DOCUMENT_REVIEW',
-    action: verified ? 'VERIFY' : 'REJECT',
+    action: outcome,
     resourceType: 'DoctorDocument',
     resourceId: documentId,
     metadata: { doctorId, note },

@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "DoctorDocumentStatus" ADD VALUE 'RESUBMISSION_REQUIRED';

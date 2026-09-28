@@ -84,7 +84,7 @@ export const adminDoctorQueueQuerySchema = z.object({
 });
 
 export const documentReviewSchema = z.object({
-  verified: z.boolean(),
+  outcome: z.enum(['VERIFY', 'REJECT', 'REQUEST_RESUBMISSION']),
   note: z.string().max(2000).optional(),
 });
 

@@ -20,6 +20,7 @@ import {
   facets,
   publicProfile,
   removeClinic,
+  removeDocument,
   searchPublic,
   submit,
   updateClinic,
@@ -78,7 +79,7 @@ async function approveDoctor(profileId: string) {
   const adminId = await registerAdmin();
   const docs = await prisma.doctorDocument.findMany({ where: { doctorProfileId: profileId } });
   for (const doc of docs) {
-    await reviewDocument(profileId, doc.id, { userId: adminId }, true);
+    await reviewDocument(profileId, doc.id, { userId: adminId }, 'VERIFY');
   }
   await approve(profileId, { userId: adminId });
 }
@@ -165,11 +166,11 @@ describe('admin verification workflow', () => {
 
     const reg = underReview.documents.find((d) => d.type === 'REGISTRATION_CERTIFICATE')!;
     const degree = underReview.documents.find((d) => d.type === 'DEGREE_CERTIFICATE')!;
-    await reviewDocument(submitted.id, reg.id, { userId: adminId }, true);
+    await reviewDocument(submitted.id, reg.id, { userId: adminId }, 'VERIFY');
     // Only one of two verified — still must fail.
     await expect(approve(submitted.id, { userId: adminId })).rejects.toThrow(/verified before approval/i);
 
-    await reviewDocument(submitted.id, degree.id, { userId: adminId }, true);
+    await reviewDocument(submitted.id, degree.id, { userId: adminId }, 'VERIFY');
     const { doctor: approved } = await approve(submitted.id, { userId: adminId });
     expect(approved.verificationStatus).toBe('APPROVED');
     expect(approved.isDiscoverable).toBe(true);
@@ -192,7 +193,7 @@ describe('admin verification workflow', () => {
 
     const docs = await prisma.doctorDocument.findMany({ where: { doctorProfileId: submitted.id } });
     for (const doc of docs) {
-      await reviewDocument(submitted.id, doc.id, { userId: adminId }, true);
+      await reviewDocument(submitted.id, doc.id, { userId: adminId }, 'VERIFY');
     }
     await approve(submitted.id, { userId: adminId });
 
@@ -209,6 +210,33 @@ describe('admin verification workflow', () => {
     const afterSuspend = await searchPublic({ q: 'Meera Iyer' });
     expect(afterSuspend.doctors.some((d) => d.slug === submitted.slug)).toBe(false);
     await expect(publicProfile(submitted.slug)).rejects.toThrow(/not found/i);
+  });
+});
+
+// docs/ENTERPRISE-GAP-ANALYSIS.md §14-18 — the third document-review outcome.
+describe('document resubmission (ENTERPRISE-5)', () => {
+  it('locks document edits normally, but unlocks once a document is flagged for resubmission', async () => {
+    const userId = await registerDoctor();
+    const { profile: submitted } = await completeAndSubmitDoctor(userId);
+    const adminId = await registerAdmin();
+
+    // SUBMITTED, no flagged documents yet — locked, same as before this change.
+    await expect(
+      addDocument(userId, 'ID_PROOF', { originalName: 'id.pdf', ...pdf }, { userId }),
+    ).rejects.toThrow(ForbiddenError);
+
+    const regCert = submitted.documents.find((d) => d.type === 'REGISTRATION_CERTIFICATE')!;
+    const { document: flagged } = await reviewDocument(submitted.id, regCert.id, { userId: adminId }, 'REQUEST_RESUBMISSION', 'Scan is illegible');
+    expect(flagged.status).toBe('RESUBMISSION_REQUIRED');
+    expect(flagged.reviewNote).toBe('Scan is illegible');
+
+    // Now unlocked, even though the profile itself is still SUBMITTED —
+    // upload the corrected copy first (the flagged original stays as an
+    // audit trail), then the flagged original can also be removed since
+    // it's still present at that point.
+    const reuploaded = await addDocument(userId, 'REGISTRATION_CERTIFICATE', { originalName: 'reg-v2.pdf', ...pdf }, { userId });
+    expect(reuploaded.status).toBe('PENDING');
+    await removeDocument(userId, flagged.id, { userId });
   });
 });
 
