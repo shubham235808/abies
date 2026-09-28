@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -52,6 +53,10 @@ const PRIORITY_OPTIONS = ['P1', 'P2', 'P3', 'P4'];
 export function TicketThread({ ticket: initialTicket, viewerRole }: { ticket: TicketDetail; viewerRole: string }) {
   const viewerIsStaff = viewerRole !== 'PATIENT';
   const canHandleRefunds = viewerRole === 'CUSTOMER_SUPPORT' || viewerRole === 'ADMIN';
+  // ENTERPRISE-9 — same role scope as refund handling; Sales/Tech Support/
+  // Care Coordination don't get a generic "browse everything about this
+  // patient" view, matching least-privilege (docs/ENTERPRISE-GAP-ANALYSIS.md §71).
+  const canView360 = viewerRole === 'CUSTOMER_SUPPORT' || viewerRole === 'ADMIN';
   const [ticket, setTicket] = useState(initialTicket);
   const [messages, setMessages] = useState(initialTicket.messages);
   const [reply, setReply] = useState('');
@@ -154,6 +159,14 @@ export function TicketThread({ ticket: initialTicket, viewerRole }: { ticket: Ti
           <p className="mt-1 text-sm text-brand-neutral-600">
             {ticket.category.replace(/_/g, ' ')} · {ticket.department.replace(/_/g, ' ')} · from {ticket.requester.mobile}
             {patientName ? ` · patient: ${patientName}` : ''}
+            {canView360 && ticket.linkedPatient && (
+              <>
+                {' · '}
+                <Link href={`/customer-support/customers/${ticket.linkedPatient.id}`} className="font-medium text-brand-purple-600 underline">
+                  View customer 360
+                </Link>
+              </>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
