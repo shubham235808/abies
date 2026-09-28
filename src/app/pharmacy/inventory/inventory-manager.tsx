@@ -7,7 +7,7 @@ import type { z } from 'zod';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { FieldError, Input, Label } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api-client';
 import { addInventorySchema } from '@/modules/medicines/catalogue.schemas';
@@ -38,50 +38,62 @@ export function InventoryManager({ initial }: { initial: InventoryRow[] }) {
     }
   }
 
+  const columns: DataTableColumn<InventoryRow>[] = [
+    {
+      key: 'medicine',
+      label: 'Medicine',
+      render: (r) => (
+        <>
+          <p className="font-medium text-brand-neutral-900">{r.medicine.name}</p>
+          <p className="text-xs text-brand-neutral-400">{[r.medicine.form, r.medicine.strength].filter(Boolean).join(' · ')}</p>
+        </>
+      ),
+    },
+    {
+      key: 'type',
+      label: 'Type',
+      render: (r) => (
+        <Badge tone={r.medicine.requiresPrescription ? 'orange' : 'success'}>
+          {r.medicine.requiresPrescription ? 'Rx required' : 'OTC'}
+        </Badge>
+      ),
+    },
+    { key: 'batch', label: 'Batch', render: (r) => r.batchNumber },
+    { key: 'quantity', label: 'Qty', align: 'right', render: (r) => r.quantityAvailable },
+    { key: 'price', label: 'Price', align: 'right', render: (r) => `₹${r.price}` },
+    { key: 'expiry', label: 'Expiry', render: (r) => new Date(r.expiryDate).toLocaleDateString() },
+    {
+      key: 'actions',
+      label: '',
+      align: 'right',
+      render: (r) => (
+        <Button variant="ghost" size="sm" onClick={() => handleRemove(r.id)}>
+          Remove
+        </Button>
+      ),
+    },
+  ];
+
   return (
-    <div className="max-w-2xl">
+    <div>
       {error && (
         <Alert tone="error" className="mb-4">
           {error}
         </Alert>
       )}
 
-      <div className="space-y-3">
-        {rows.map((r) => (
-          <Card key={r.id} className="flex items-center justify-between py-4">
-            <div>
-              <p className="font-medium text-brand-neutral-900">
-                {r.medicine.name}{' '}
-                <span className="text-xs text-brand-neutral-400">
-                  {[r.medicine.form, r.medicine.strength].filter(Boolean).join(' · ')}
-                </span>
-              </p>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <Badge tone={r.medicine.requiresPrescription ? 'orange' : 'success'}>
-                  {r.medicine.requiresPrescription ? 'Rx required' : 'OTC'}
-                </Badge>
-                <span className="text-xs text-brand-neutral-500">Batch {r.batchNumber}</span>
-                <span className="text-xs text-brand-neutral-500">Qty {r.quantityAvailable}</span>
-                <span className="text-xs text-brand-neutral-500">₹{r.price}</span>
-                <span className="text-xs text-brand-neutral-400">Exp {new Date(r.expiryDate).toLocaleDateString()}</span>
-              </div>
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => handleRemove(r.id)}>
-              Remove
-            </Button>
-          </Card>
-        ))}
-        {rows.length === 0 && !showForm && <p className="text-sm text-brand-neutral-500">No inventory yet.</p>}
-      </div>
+      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} emptyMessage="No inventory yet." />
 
       {showForm ? (
-        <NewBatchForm
-          onCreated={(item) => {
-            setRows((prev) => [item, ...prev]);
-            setShowForm(false);
-          }}
-          onCancel={() => setShowForm(false)}
-        />
+        <div className="max-w-2xl">
+          <NewBatchForm
+            onCreated={(item) => {
+              setRows((prev) => [item, ...prev]);
+              setShowForm(false);
+            }}
+            onCancel={() => setShowForm(false)}
+          />
+        </div>
       ) : (
         <Button variant="secondary" className="mt-6" onClick={() => setShowForm(true)}>
           + Add batch

@@ -8,8 +8,10 @@ const TONE_CLASSES: Record<Tone, string> = {
   magenta: 'bg-brand-magenta-100 text-brand-magenta-700',
   blue: 'bg-brand-blue-100 text-brand-blue-700',
   orange: 'bg-brand-orange-100 text-brand-orange-700',
-  success: 'bg-emerald-100 text-emerald-700',
-  danger: 'bg-red-100 text-red-700',
+  // docs/ABIES-DESIGN-SYSTEM.md §1.2 — semantic tokens, not raw Tailwind
+  // color utilities, so a future palette tweak has one place to change.
+  success: 'bg-[var(--color-semantic-success-50)] text-[var(--color-semantic-success-700)]',
+  danger: 'bg-[var(--color-semantic-danger-50)] text-[var(--color-semantic-danger-700)]',
 };
 
 export function Badge({ tone = 'neutral', className, ...props }: { tone?: Tone } & React.HTMLAttributes<HTMLSpanElement>) {

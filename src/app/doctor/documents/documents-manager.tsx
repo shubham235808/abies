@@ -6,6 +6,8 @@ import { Card } from '@/components/ui/card';
 import { Select, Label } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Alert } from '@/components/ui/alert';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { useToast } from '@/components/ui/toast';
 import { api, ApiError } from '@/lib/api-client';
 
 type Doc = {
@@ -36,7 +38,10 @@ export function DocumentsManager({ initial, editable }: { initial: Doc[]; editab
   const [type, setType] = useState(TYPES[0]!.value);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const toast = useToast();
 
   async function handleUpload() {
     const file = fileInput.current?.files?.[0];
@@ -53,6 +58,7 @@ export function DocumentsManager({ initial, editable }: { initial: Doc[]; editab
       const { document } = await api.postForm<{ document: Doc }>('/api/doctors/me/documents', formData);
       setDocuments((prev) => [document, ...prev]);
       if (fileInput.current) fileInput.current.value = '';
+      toast.show('Document uploaded.', 'success');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Upload failed.');
     } finally {
@@ -62,11 +68,16 @@ export function DocumentsManager({ initial, editable }: { initial: Doc[]; editab
 
   async function handleRemove(id: string) {
     setError(null);
+    setRemoving(true);
     try {
       await api.delete(`/api/doctors/me/documents/${id}`);
       setDocuments((prev) => prev.filter((d) => d.id !== id));
+      toast.show('Document removed.', 'info');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not remove document.');
+    } finally {
+      setRemoving(false);
+      setPendingRemoveId(null);
     }
   }
 
@@ -106,7 +117,7 @@ export function DocumentsManager({ initial, editable }: { initial: Doc[]; editab
                 View
               </Button>
               {editable && (
-                <Button variant="ghost" size="sm" onClick={() => handleRemove(doc.id)}>
+                <Button variant="ghost" size="sm" onClick={() => setPendingRemoveId(doc.id)}>
                   Remove
                 </Button>
               )}
@@ -137,6 +148,17 @@ export function DocumentsManager({ initial, editable }: { initial: Doc[]; editab
           </Button>
         </div>
       )}
+
+      <ConfirmationDialog
+        open={pendingRemoveId !== null}
+        onClose={() => setPendingRemoveId(null)}
+        onConfirm={() => pendingRemoveId && handleRemove(pendingRemoveId)}
+        title="Remove this document?"
+        description="You can upload a replacement afterward, but this copy will be deleted immediately."
+        confirmLabel="Remove"
+        tone="danger"
+        busy={removing}
+      />
     </div>
   );
 }
