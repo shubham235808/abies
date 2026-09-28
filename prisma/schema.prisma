@@ -1612,3 +1612,83 @@ model Refund {
   @@index([paymentId])
   @@index([status])
 }
+
+// ---------------------------------------------------------------------------
+// Configuration platform (docs/ENTERPRISE-DATA-MODEL-CHANGES.md §1,
+// ENTERPRISE-2). Generalizes the one existing precedent for admin-editable-
+// without-a-migration content, AssessmentTemplateField (Phase 5) — plain
+// lookup tables, not a fancier abstraction. Existing free-text/enum fields
+// (DoctorProfile.specialties, Shipment.carrier, etc.) are deliberately left
+// unchanged here — this only makes the canonical list exist and be
+// admin-editable; wiring each consumer to validate against it is a
+// per-consumer follow-up, not a retroactive rewrite of every existing row.
+// ---------------------------------------------------------------------------
+
+// domain examples: "SPECIALTY" | "MEDICINE_CATEGORY" | "DIAGNOSTIC_CATEGORY"
+// | "PANCHAKARMA_CATEGORY" | "SUPPORT_CATEGORY" | "CONSULTATION_MODE" —
+// a plain string, not an enum, since the whole point of this table is that
+// a new domain or a new entry within one never needs a migration.
+model ConfigCategory {
+  id        String   @id @default(cuid())
+  domain    String
+  key       String
+  label     String
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([domain, key])
+  @@index([domain, active])
+}
+
+model ServiceLocation {
+  id        String   @id @default(cuid())
+  city      String
+  state     String
+  pinCodes  String[] @default([])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([city, state])
+}
+
+// partnerType: "DOCTOR" | "LAB" | "PHARMACY" | "PANCHAKARMA_CENTRE" |
+// "THERAPIST". documentType is a plain string matching each module's own
+// document-type vocabulary (e.g. DoctorDocumentType's values) rather than a
+// shared enum, since each partner type's document taxonomy is independent.
+model DocumentRequirement {
+  id           String   @id @default(cuid())
+  partnerType  String
+  documentType String
+  required     Boolean  @default(true)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([partnerType, documentType])
+}
+
+// Backs docs/ENTERPRISE-GAP-ANALYSIS.md §11 — Shipment.carrier stays a
+// plain string (unchanged), this just constrains what the pharmacy
+// dispatch UI offers as choices instead of free text.
+model CourierProvider {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  label     String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NotificationTemplate {
+  id          String              @id @default(cuid())
+  templateKey String              @unique
+  channel     NotificationChannel
+  subject     String?
+  body        String
+  active      Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
