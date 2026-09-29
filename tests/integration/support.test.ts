@@ -3,7 +3,16 @@ import { randomInt } from 'crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/db';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@/lib/errors';
-import { addMessage, claimTicket, createTicket, getTicket, triageTicket, updateStatus } from '@/modules/support/tickets.service';
+import {
+  addMessage,
+  browserContextFromUserAgent,
+  claimTicket,
+  createTicket,
+  getTicket,
+  technicalIncidentBreakdown,
+  triageTicket,
+  updateStatus,
+} from '@/modules/support/tickets.service';
 import { createStaffAccount } from '@/modules/staff/staff.service';
 import { claimLead, createLead, updateLead } from '@/modules/partners/leads.service';
 
@@ -216,5 +225,81 @@ describe('partner leads', () => {
 
     const updated = await updateLead(lead.id, { stage: 'QUALIFIED' }, { userId: salesId });
     expect(updated.stage).toBe('QUALIFIED');
+  });
+});
+
+describe('technical incident detail (ENTERPRISE-10)', () => {
+  it('records incident detail only for TECHNICAL_ISSUE tickets, routed to Tech Support / P2', async () => {
+    const patientId = await createUser('PATIENT');
+    const ticket = await createTicket(
+      patientId,
+      'PATIENT',
+      {
+        category: 'TECHNICAL_ISSUE',
+        subject: 'Booking page is blank',
+        description: 'The doctor search page shows nothing after I select a specialty.',
+        technicalModule: 'APPOINTMENTS',
+        errorClassification: 'PAGE_WONT_LOAD',
+        correlationRequestId: 'req-test-12345',
+      },
+      { userId: patientId, userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/128.0 Safari/537.36' },
+    );
+    expect(ticket.department).toBe('TECH_SUPPORT');
+    expect(ticket.priority).toBe('P2');
+
+    const detail = await prisma.technicalIncidentDetail.findUnique({ where: { ticketId: ticket.id } });
+    expect(detail?.technicalModule).toBe('APPOINTMENTS');
+    expect(detail?.errorClassification).toBe('PAGE_WONT_LOAD');
+    expect(detail?.correlationRequestId).toBe('req-test-12345');
+    expect(detail?.browserContext).toBe('Chrome on macOS');
+  });
+
+  it('does not create an incident-detail row for a non-technical ticket', async () => {
+    const patientId = await createUser('PATIENT');
+    const ticket = await createTicket(
+      patientId,
+      'PATIENT',
+      { category: 'BOOKING', subject: 'Reschedule question', description: 'Can I move my appointment to next week?' },
+      { userId: patientId },
+    );
+    const detail = await prisma.technicalIncidentDetail.findUnique({ where: { ticketId: ticket.id } });
+    expect(detail).toBeNull();
+  });
+
+  it('surfaces incident detail on getTicket and counts it in the module/type breakdown', async () => {
+    const patientId = await createUser('PATIENT');
+    const ticket = await createTicket(
+      patientId,
+      'PATIENT',
+      {
+        category: 'TECHNICAL_ISSUE',
+        subject: 'Payment failed silently',
+        description: 'I tried to pay for a consultation and nothing happened, no error shown.',
+        technicalModule: 'PAYMENTS',
+        errorClassification: 'ACTION_FAILED',
+      },
+      { userId: patientId },
+    );
+
+    const fetched = await getTicket(ticket.id, patientId, 'PATIENT');
+    expect(fetched.technicalIncidentDetail?.technicalModule).toBe('PAYMENTS');
+
+    const breakdown = await technicalIncidentBreakdown();
+    const paymentsRow = breakdown.byModule.find(([key]) => key === 'PAYMENTS');
+    expect(paymentsRow?.[1]).toBeGreaterThanOrEqual(1);
+    const actionFailedRow = breakdown.byClassification.find(([key]) => key === 'ACTION_FAILED');
+    expect(actionFailedRow?.[1]).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('browserContextFromUserAgent (ENTERPRISE-10)', () => {
+  it('extracts only a coarse browser/OS pair, never the raw string', () => {
+    expect(browserContextFromUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1')).toBe(
+      'Safari on iOS',
+    );
+    expect(browserContextFromUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36')).toBe(
+      'Chrome on Windows',
+    );
+    expect(browserContextFromUserAgent(undefined)).toBeUndefined();
   });
 });

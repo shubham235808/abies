@@ -1,12 +1,13 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FieldError, Input, Label, Select, Textarea } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api-client';
+import { recentFailedRequestId } from '@/lib/error-correlation';
 
 const CATEGORY_OPTIONS = [
   { value: 'BOOKING', label: 'Booking & scheduling' },
@@ -15,7 +16,26 @@ const CATEGORY_OPTIONS = [
   { value: 'MEDICINE', label: 'Medicine order' },
   { value: 'THERAPY', label: 'Panchakarma therapy' },
   { value: 'CLINICAL_CONCERN', label: 'Clinical safety concern' },
+  { value: 'TECHNICAL_ISSUE', label: 'Something not working' },
   { value: 'GENERAL', label: 'General enquiry' },
+];
+
+const MODULE_OPTIONS = [
+  { value: 'APPOINTMENTS', label: 'Appointments' },
+  { value: 'DIAGNOSTICS', label: 'Diagnostics' },
+  { value: 'MEDICINES', label: 'Medicines' },
+  { value: 'PANCHAKARMA', label: 'Panchakarma' },
+  { value: 'PAYMENTS', label: 'Payments' },
+  { value: 'ACCOUNT', label: 'Account / login' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+const ERROR_TYPE_OPTIONS = [
+  { value: 'PAGE_WONT_LOAD', label: "A page won't load" },
+  { value: 'ACTION_FAILED', label: 'An action failed / showed an error' },
+  { value: 'SLOW_PERFORMANCE', label: 'The app is slow' },
+  { value: 'DATA_LOOKS_WRONG', label: 'Something looks wrong or missing' },
+  { value: 'OTHER', label: 'Other' },
 ];
 
 export default function NewTicketPage() {
@@ -23,15 +43,33 @@ export default function NewTicketPage() {
   const [category, setCategory] = useState('BOOKING');
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
+  const [technicalModule, setTechnicalModule] = useState(MODULE_OPTIONS[0]!.value);
+  const [errorClassification, setErrorClassification] = useState(ERROR_TYPE_OPTIONS[0]!.value);
+  const [correlationRequestId, setCorrelationRequestId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    // Deferred to a microtask rather than called synchronously in the
+    // effect body — same shape as this app's other mount-time client-only
+    // reads (e.g. booking-widget.tsx's family-member fetch), which all
+    // resolve setState from a .then() callback, not the effect body itself.
+    Promise.resolve(recentFailedRequestId()).then(setCorrelationRequestId);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const result = await api.post<{ ticket: { id: string } }>('/api/support/tickets', { category, subject, description });
+      const result = await api.post<{ ticket: { id: string } }>('/api/support/tickets', {
+        category,
+        subject,
+        description,
+        ...(category === 'TECHNICAL_ISSUE'
+          ? { technicalModule, errorClassification, correlationRequestId: correlationRequestId ?? undefined }
+          : {}),
+      });
       router.push(`/patient/support/${result.ticket.id}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not open this ticket.');
@@ -65,6 +103,38 @@ export default function NewTicketPage() {
               ))}
             </Select>
           </div>
+
+          {category === 'TECHNICAL_ISSUE' && (
+            <>
+              <div>
+                <Label htmlFor="technicalModule">Where did this happen?</Label>
+                <Select id="technicalModule" value={technicalModule} onChange={(e) => setTechnicalModule(e.target.value)}>
+                  {MODULE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="errorClassification">What went wrong?</Label>
+                <Select id="errorClassification" value={errorClassification} onChange={(e) => setErrorClassification(e.target.value)}>
+                  {ERROR_TYPE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              {correlationRequestId && (
+                <Alert tone="info">
+                  We found a recent error from your session and will attach it automatically ({correlationRequestId}) —
+                  this helps engineering find exactly what happened.
+                </Alert>
+              )}
+            </>
+          )}
+
           <div>
             <Label htmlFor="subject">Subject</Label>
             <Input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} minLength={3} maxLength={200} required />

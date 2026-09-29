@@ -40,7 +40,31 @@ export interface TicketDetail {
   assignedAgent: { id: string; mobile: string } | null;
   messages: ThreadMessage[];
   refundablePayments?: RefundablePayment[];
+  technicalIncidentDetail?: {
+    technicalModule: string | null;
+    correlationRequestId: string | null;
+    browserContext: string | null;
+    errorClassification: string | null;
+  } | null;
 }
+
+const MODULE_LABELS: Record<string, string> = {
+  APPOINTMENTS: 'Appointments',
+  DIAGNOSTICS: 'Diagnostics',
+  MEDICINES: 'Medicines',
+  PANCHAKARMA: 'Panchakarma',
+  PAYMENTS: 'Payments',
+  ACCOUNT: 'Account',
+  OTHER: 'Other',
+};
+
+const CLASSIFICATION_LABELS: Record<string, string> = {
+  PAGE_WONT_LOAD: "Page won't load",
+  ACTION_FAILED: 'Action failed',
+  SLOW_PERFORMANCE: 'Slow performance',
+  DATA_LOOKS_WRONG: 'Data looks wrong',
+  OTHER: 'Other',
+};
 
 const STATUS_OPTIONS = ['IN_PROGRESS', 'WAITING_CUSTOMER', 'WAITING_PARTNER', 'RESOLVED', 'CLOSED'];
 const DEPARTMENT_OPTIONS = ['CUSTOMER_SUPPORT', 'TECH_SUPPORT', 'SALES', 'CARE_COORDINATION'];
@@ -188,6 +212,40 @@ export function TicketThread({ ticket: initialTicket, viewerRole }: { ticket: Ti
           {ticket.channel.replace(/_/g, ' ')}
         </p>
       </Card>
+
+      {ticket.technicalIncidentDetail && (
+        <Card className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-neutral-400">Incident details</p>
+          <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+            {ticket.technicalIncidentDetail.technicalModule && (
+              <div className="flex justify-between gap-2 sm:justify-start">
+                <dt className="text-brand-neutral-500">Module</dt>
+                <dd className="text-brand-neutral-900">{MODULE_LABELS[ticket.technicalIncidentDetail.technicalModule] ?? ticket.technicalIncidentDetail.technicalModule}</dd>
+              </div>
+            )}
+            {ticket.technicalIncidentDetail.errorClassification && (
+              <div className="flex justify-between gap-2 sm:justify-start">
+                <dt className="text-brand-neutral-500">Type</dt>
+                <dd className="text-brand-neutral-900">
+                  {CLASSIFICATION_LABELS[ticket.technicalIncidentDetail.errorClassification] ?? ticket.technicalIncidentDetail.errorClassification}
+                </dd>
+              </div>
+            )}
+            {ticket.technicalIncidentDetail.browserContext && (
+              <div className="flex justify-between gap-2 sm:justify-start">
+                <dt className="text-brand-neutral-500">Browser</dt>
+                <dd className="text-brand-neutral-900">{ticket.technicalIncidentDetail.browserContext}</dd>
+              </div>
+            )}
+            {ticket.technicalIncidentDetail.correlationRequestId && (
+              <div className="flex justify-between gap-2 sm:justify-start">
+                <dt className="text-brand-neutral-500">Request ID</dt>
+                <dd className="font-mono text-xs text-brand-neutral-900">{ticket.technicalIncidentDetail.correlationRequestId}</dd>
+              </div>
+            )}
+          </dl>
+        </Card>
+      )}
 
       {viewerIsStaff && (
         <Card className="mt-4 space-y-4">

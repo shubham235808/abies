@@ -1,3 +1,5 @@
+import { recordFailedRequestId } from './error-correlation';
+
 // Thin fetch wrapper for client components calling our own route handlers.
 // Cookies are same-origin, so the browser attaches the session cookie
 // automatically — nothing to pass explicitly. Throws ApiError with the
@@ -20,6 +22,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
+    recordFailedRequestId(res.headers.get('x-request-id'));
     throw new ApiError(body.error ?? 'Request failed', res.status, body.issues);
   }
   return body as T;
@@ -35,13 +38,19 @@ export const api = {
   postForm: <T>(path: string, formData: FormData) =>
     fetch(path, { method: 'POST', body: formData }).then(async (res) => {
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new ApiError(body.error ?? 'Request failed', res.status, body.issues);
+      if (!res.ok) {
+        recordFailedRequestId(res.headers.get('x-request-id'));
+        throw new ApiError(body.error ?? 'Request failed', res.status, body.issues);
+      }
       return body as T;
     }),
   patchForm: <T>(path: string, formData: FormData) =>
     fetch(path, { method: 'PATCH', body: formData }).then(async (res) => {
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new ApiError(body.error ?? 'Request failed', res.status, body.issues);
+      if (!res.ok) {
+        recordFailedRequestId(res.headers.get('x-request-id'));
+        throw new ApiError(body.error ?? 'Request failed', res.status, body.issues);
+      }
       return body as T;
     }),
 };

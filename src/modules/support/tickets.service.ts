@@ -21,6 +21,39 @@ interface UploadedFile {
   buffer: Buffer;
 }
 
+// ENTERPRISE-10 — a short browser+OS name pair, never the raw User-Agent
+// string (docs/ENTERPRISE-DATA-MODEL-CHANGES.md §8 / brief §45's explicit
+// ban on a fingerprinting-capable UA dump). Deliberately coarse: enough for
+// an engineer to spot "every report is Safari on iOS" without capturing
+// device model, exact version, or anything else identifying.
+export function browserContextFromUserAgent(userAgent?: string): string | undefined {
+  if (!userAgent) return undefined;
+  const browser = /Edg\//.test(userAgent)
+    ? 'Edge'
+    : /Chrome\//.test(userAgent)
+      ? 'Chrome'
+      : /Firefox\//.test(userAgent)
+        ? 'Firefox'
+        : /Safari\//.test(userAgent) && !/Chrome\//.test(userAgent)
+          ? 'Safari'
+          : 'Other browser';
+  // iPhone/iPad UAs contain the literal substring "like Mac OS X", so the
+  // iOS check must run before the macOS check or every iOS report gets
+  // misclassified as a desktop Mac.
+  const os = /iPhone|iPad|iOS/.test(userAgent)
+    ? 'iOS'
+    : /Windows/.test(userAgent)
+      ? 'Windows'
+      : /Mac OS X/.test(userAgent)
+        ? 'macOS'
+        : /Android/.test(userAgent)
+          ? 'Android'
+          : /Linux/.test(userAgent)
+            ? 'Linux'
+            : 'Other OS';
+  return `${browser} on ${os}`;
+}
+
 // The one staff role each of the four CRM roles maps to (StaffProfile is
 // provisioned with this same department by modules/staff — see
 // docs/DOMAIN-MODEL.md §12's four-department queue).
@@ -46,6 +79,7 @@ function detailInclude() {
     assignedAgent: { select: { id: true, mobile: true } },
     messages: { orderBy: { createdAt: 'asc' as const }, include: { author: { select: { id: true, mobile: true, role: true } }, attachments: true } },
     attachments: true,
+    technicalIncidentDetail: true,
   };
 }
 
@@ -93,6 +127,21 @@ export async function createTicket(requesterUserId: string, requesterRole: UserR
     },
   });
 
+  if (dto.category === 'TECHNICAL_ISSUE') {
+    const browserContext = browserContextFromUserAgent(auditCtx.userAgent);
+    if (dto.technicalModule || dto.correlationRequestId || dto.errorClassification || browserContext) {
+      await prisma.technicalIncidentDetail.create({
+        data: {
+          ticketId: ticket.id,
+          technicalModule: dto.technicalModule,
+          correlationRequestId: dto.correlationRequestId,
+          errorClassification: dto.errorClassification,
+          browserContext,
+        },
+      });
+    }
+  }
+
   await recordAuditEvent(auditCtx, {
     eventType: 'SUPPORT_TICKET',
     action: 'CREATED',
@@ -139,6 +188,29 @@ export async function listQueue(role: UserRole, status?: SupportTicketStatus) {
     // unfiltered "everything" view.
     take: 200,
   });
+}
+
+// ENTERPRISE-10 — the "differentiated dashboard (module/integration
+// breakdown instead of Customer Support's priority/SLA framing)" the data-
+// model doc's §8 follow-up calls for. Grouped over open TECH_SUPPORT
+// tickets that actually have incident detail recorded — a ticket filed
+// before this shipped, or one without a module selected, simply doesn't
+// contribute a row rather than showing a fabricated "Unknown" bucket.
+export async function technicalIncidentBreakdown() {
+  const details = await prisma.technicalIncidentDetail.findMany({
+    where: { ticket: { department: 'TECH_SUPPORT', status: { notIn: ['RESOLVED', 'CLOSED'] } } },
+    select: { technicalModule: true, errorClassification: true },
+  });
+  const byModule = new Map<string, number>();
+  const byClassification = new Map<string, number>();
+  for (const d of details) {
+    if (d.technicalModule) byModule.set(d.technicalModule, (byModule.get(d.technicalModule) ?? 0) + 1);
+    if (d.errorClassification) byClassification.set(d.errorClassification, (byClassification.get(d.errorClassification) ?? 0) + 1);
+  }
+  return {
+    byModule: [...byModule.entries()].sort((a, b) => b[1] - a[1]),
+    byClassification: [...byClassification.entries()].sort((a, b) => b[1] - a[1]),
+  };
 }
 
 export async function claimTicket(ticketId: string, agentUserId: string, agentRole: UserRole, auditCtx: AuditContext) {

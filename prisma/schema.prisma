@@ -1735,11 +1735,28 @@ model SupportTicket {
   assignedAgent              User?                 @relation("SupportTicketAgent", fields: [assignedAgentUserId], references: [id], onDelete: SetNull)
   messages                   SupportMessage[]
   attachments                SupportAttachment[]
+  technicalIncidentDetail    TechnicalIncidentDetail?
 
   @@index([department, status])
   @@index([requesterUserId])
   @@index([linkedPatientUserId])
   @@index([assignedAgentUserId])
+}
+
+// ENTERPRISE-10 — per user decision, a 1:1 side table rather than nullable
+// columns on SupportTicket (docs/ENTERPRISE-DATA-MODEL-CHANGES.md §8,
+// Option B): only TECHNICAL_ISSUE tickets ever populate these, and
+// SupportTicket is already shared by four departments. browserContext is
+// a short browser/OS name pair, never the raw User-Agent string or a
+// fingerprinting-capable dump (§45's explicit ban).
+model TechnicalIncidentDetail {
+  id                   String        @id @default(cuid())
+  ticketId             String        @unique
+  technicalModule      String?
+  correlationRequestId String?
+  browserContext       String?
+  errorClassification  String?
+  ticket               SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 }
 
 model SupportMessage {
