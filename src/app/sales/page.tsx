@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import { MetricCard } from '@/components/ui/metric-card';
 import { listLeads } from '@/modules/partners/leads.service';
+import { partnerFunnelReport } from '@/modules/admin/reports.service';
 import { NewLeadForm } from './new-lead-form';
 import type { PartnerLeadStage } from '@prisma/client';
 
@@ -16,7 +18,7 @@ const COLUMNS: { stage: PartnerLeadStage; label: string }[] = [
 ];
 
 export default async function SalesLeadsPage() {
-  const leads = await listLeads();
+  const [leads, funnel] = await Promise.all([listLeads(), partnerFunnelReport({ from: new Date(0), to: new Date() })]);
 
   return (
     <div>
@@ -26,7 +28,17 @@ export default async function SalesLeadsPage() {
         for doctors, clinics, labs, pharmacies, Panchakarma centres and corporate accounts.
       </p>
 
-      <NewLeadForm />
+      {/* ENTERPRISE-14 — lifetime conversion, not just the per-stage counts
+          the board below already shows inline. */}
+      <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        <MetricCard title="Lifetime leads" value={funnel.total} />
+        <MetricCard title="Conversion rate" value={`${funnel.conversionRatePercent}%`} description={`${funnel.activated} activated, ${funnel.rejected} rejected`} />
+        <MetricCard title="Avg. days to activate" value={funnel.avgDaysToActivate ?? '—'} />
+      </div>
+
+      <div className="mt-6">
+        <NewLeadForm />
+      </div>
 
       {leads.length === 0 ? (
         <p className="mt-6 text-sm text-brand-neutral-500">No leads yet.</p>

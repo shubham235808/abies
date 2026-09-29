@@ -428,3 +428,41 @@ export async function listMineAsDoctor(userId: string) {
     orderBy: { scheduledAt: 'desc' },
   });
 }
+
+// ENTERPRISE-14 — a real per-doctor practice report ("how is my month
+// going"), not a dashboard-card duplicate: revenue comes from actual
+// Payment rows for this month's appointments, not the current fee
+// schedule multiplied by a count (which could be wrong if fees changed
+// since those appointments were booked).
+export async function myPracticeSummary(userId: string) {
+  const profile = await prisma.doctorProfile.findUnique({ where: { userId } });
+  if (!profile) throw new NotFoundError('Doctor profile not found');
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const monthAppointments = await prisma.appointment.findMany({
+    where: { doctorProfileId: profile.id, scheduledAt: { gte: monthStart, lte: now } },
+    select: { id: true, status: true },
+  });
+  const completed = monthAppointments.filter((a) => a.status === 'COMPLETED').length;
+  const noShow = monthAppointments.filter((a) => a.status === 'NO_SHOW').length;
+  const concluded = completed + noShow + monthAppointments.filter((a) => a.status === 'CANCELLED').length;
+
+  const revenue = await prisma.payment.aggregate({
+    where: {
+      purpose: 'CONSULTATION',
+      purposeEntityId: { in: monthAppointments.map((a) => a.id) },
+      status: { in: ['SUCCESS', 'PARTIALLY_REFUNDED'] },
+    },
+    _sum: { amount: true },
+  });
+
+  return {
+    monthLabel: monthStart.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+    completed,
+    noShow,
+    noShowRatePercent: concluded > 0 ? Math.round((noShow / concluded) * 1000) / 10 : 0,
+    revenue: revenue._sum.amount ?? 0,
+  };
+}

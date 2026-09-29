@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { VerificationBadge } from '@/components/ui/badge';
-import { listMineAsDoctor } from '@/modules/appointments/appointments.service';
+import { listMineAsDoctor, myPracticeSummary } from '@/modules/appointments/appointments.service';
 import { listTasksNeedingAttention } from '@/modules/consultations/consultations.service';
 import { getMe } from '@/modules/doctors/doctors.service';
 import { requireSessionOrRedirect } from '@/server/current-user';
@@ -18,9 +18,9 @@ export default async function DoctorOverviewPage() {
   const editable = profile.verificationStatus === 'DRAFT' || profile.verificationStatus === 'REJECTED';
   const approved = profile.verificationStatus === 'APPROVED';
 
-  const [appointments, tasks] = approved
-    ? await Promise.all([listMineAsDoctor(session.userId), listTasksNeedingAttention(session.userId)])
-    : [[], []];
+  const [appointments, tasks, practiceSummary] = approved
+    ? await Promise.all([listMineAsDoctor(session.userId), listTasksNeedingAttention(session.userId), myPracticeSummary(session.userId)])
+    : [[], [], null];
 
   const today = new Date();
   const todaysSchedule = appointments
@@ -132,6 +132,26 @@ export default async function DoctorOverviewPage() {
               <CardDescription>No confirmed patients waiting today.</CardDescription>
             )}
           </Card>
+
+          {practiceSummary && (
+            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              <Card>
+                <CardTitle className="text-base">Consultations this month</CardTitle>
+                <CardDescription>{practiceSummary.monthLabel}</CardDescription>
+                <p className="mt-2 text-2xl font-semibold text-brand-neutral-900">{practiceSummary.completed}</p>
+              </Card>
+              <Card>
+                <CardTitle className="text-base">Revenue this month</CardTitle>
+                <CardDescription>Successful consultation payments</CardDescription>
+                <p className="mt-2 text-2xl font-semibold text-brand-neutral-900">₹{practiceSummary.revenue.toLocaleString('en-IN')}</p>
+              </Card>
+              <Card>
+                <CardTitle className="text-base">No-show rate</CardTitle>
+                <CardDescription>{practiceSummary.noShow} no-show(s) this month</CardDescription>
+                <p className="mt-2 text-2xl font-semibold text-brand-neutral-900">{practiceSummary.noShowRatePercent}%</p>
+              </Card>
+            </div>
+          )}
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
             <div>

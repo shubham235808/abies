@@ -213,6 +213,35 @@ export async function technicalIncidentBreakdown() {
   };
 }
 
+// ENTERPRISE-14 — Customer Support's own volume/SLA-risk report, distinct
+// from Tech Support's module/type breakdown per docs/PORTAL-UX-SPEC.md's
+// framing split ("the *portal identity* comes from... the SLA-risk
+// framing, not a different ticket UI"). Same "REUSABLE pattern, extends
+// per-role" as every other ENTERPRISE-14 addition — Customer Support had a
+// bare queue with zero aggregate metrics before this.
+export async function supportVolumeBreakdown(department: StaffDepartment) {
+  const openTickets = await prisma.supportTicket.findMany({
+    where: { department, status: { notIn: ['RESOLVED', 'CLOSED'] } },
+    select: { priority: true, category: true, sla: true },
+  });
+  const now = new Date();
+  const byPriority = new Map<string, number>();
+  const byCategory = new Map<string, number>();
+  let slaBreached = 0;
+  for (const t of openTickets) {
+    byPriority.set(t.priority, (byPriority.get(t.priority) ?? 0) + 1);
+    byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + 1);
+    const responseDueAt = (t.sla as { responseDueAt?: string } | null)?.responseDueAt;
+    if (responseDueAt && new Date(responseDueAt) < now) slaBreached += 1;
+  }
+  return {
+    open: openTickets.length,
+    slaBreached,
+    byPriority: (['P1', 'P2', 'P3', 'P4'] as const).map((p) => [p, byPriority.get(p) ?? 0] as const),
+    byCategory: [...byCategory.entries()].sort((a, b) => b[1] - a[1]),
+  };
+}
+
 export async function claimTicket(ticketId: string, agentUserId: string, agentRole: UserRole, auditCtx: AuditContext) {
   const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
   if (!ticket) throw new NotFoundError('Ticket not found');
