@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, ServiceUnavailableError } from '@/lib/errors';
 import { createOrder, isConfigured, verifySignature } from '@/lib/payments/razorpay';
 import { notify } from '@/modules/notifications/notifications.service';
+import { recordStockMovement } from './stock-movements.service';
 import { recordAuditEvent } from '@/server/audit';
 import type { AuditContext } from '@/server/audit';
 import type { bookOrderSchema, cancelOrderSchema, dispatchOrderSchema, verifyOrderPaymentSchema } from './orders.schemas';
@@ -78,22 +79,32 @@ export async function matchPrescriptionAtPharmacy(patientUserId: string, prescri
   });
 }
 
-async function restockItems(tx: Prisma.TransactionClient, orderId: string) {
+async function restockItems(tx: Prisma.TransactionClient, orderId: string, actorUserId: string) {
   const items = await tx.medicineOrderItem.findMany({ where: { medicineOrderId: orderId } });
   const order = await tx.medicineOrder.findUniqueOrThrow({ where: { id: orderId } });
   for (const item of items) {
-    await tx.pharmacyInventory.updateMany({
+    const batch = await tx.pharmacyInventory.findFirst({
       where: { pharmacyId: order.pharmacyId, medicineId: item.medicineId, batchNumber: item.batchNumber },
-      data: { quantityAvailable: { increment: item.quantity } },
+    });
+    if (!batch) continue;
+    await tx.pharmacyInventory.update({ where: { id: batch.id }, data: { quantityAvailable: { increment: item.quantity } } });
+    await recordStockMovement(tx, {
+      pharmacyId: order.pharmacyId,
+      inventoryId: batch.id,
+      type: 'RETURN',
+      quantityDelta: item.quantity,
+      actorUserId,
+      referenceType: 'MedicineOrder',
+      referenceId: orderId,
     });
   }
 }
 
-async function releaseOrder(orderId: string, reason: string) {
+async function releaseOrder(orderId: string, reason: string, actorUserId: string) {
   await prisma.$transaction(async (tx) => {
     const order = await tx.medicineOrder.findUnique({ where: { id: orderId } });
     if (!order) return;
-    await restockItems(tx, orderId);
+    await restockItems(tx, orderId, actorUserId);
     await tx.medicineOrder.update({ where: { id: orderId }, data: { status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason } });
     if (order.paymentId) await tx.payment.update({ where: { id: order.paymentId }, data: { status: 'FAILED' } });
   });
@@ -122,7 +133,7 @@ export async function bookOrder(patientUserId: string, dto: BookOrderInput) {
 
   const prescriptionItemByMedicineId = new Map((prescription?.items ?? []).filter((i) => i.medicineId).map((i) => [i.medicineId as string, i.id]));
 
-  type ResolvedItem = { medicineId: string; medicineName: string; quantity: number; batchNumber: string; unitPrice: number; prescriptionItemId?: string };
+  type ResolvedItem = { medicineId: string; medicineName: string; quantity: number; batchNumber: string; unitPrice: number; prescriptionItemId?: string; inventoryId?: string };
   const resolvedItems: ResolvedItem[] = [];
 
   for (const requested of dto.items) {
@@ -154,6 +165,7 @@ export async function bookOrder(patientUserId: string, dto: BookOrderInput) {
       await tx.pharmacyInventory.update({ where: { id: batch.id }, data: { quantityAvailable: { decrement: item.quantity } } });
       item.batchNumber = batch.batchNumber;
       item.unitPrice = batch.price;
+      item.inventoryId = batch.id;
       totalPrice += batch.price * item.quantity;
     }
 
@@ -179,6 +191,19 @@ export async function bookOrder(patientUserId: string, dto: BookOrderInput) {
       data: { payerUserId: patientUserId, purpose: 'MEDICINE_ORDER', purposeEntityId: created.id, amount: totalPrice, status: 'CREATED' },
     });
     const order = await tx.medicineOrder.update({ where: { id: created.id }, data: { paymentId: payment.id } });
+
+    for (const item of resolvedItems) {
+      await recordStockMovement(tx, {
+        pharmacyId: pharmacy.id,
+        inventoryId: item.inventoryId!,
+        type: 'ONLINE_ORDER',
+        quantityDelta: -item.quantity,
+        actorUserId: patientUserId,
+        referenceType: 'MedicineOrder',
+        referenceId: order.id,
+      });
+    }
+
     return { order, paymentId: payment.id, totalPrice };
   });
 
@@ -194,7 +219,7 @@ export async function bookOrder(patientUserId: string, dto: BookOrderInput) {
     });
     return { order, payment: updatedPayment, razorpayOrder: gatewayOrder, razorpayKeyId: getEnv().RAZORPAY_KEY_ID };
   } catch (err) {
-    await releaseOrder(order.id, 'Payment gateway error while starting checkout');
+    await releaseOrder(order.id, 'Payment gateway error while starting checkout', patientUserId);
     logger.error('medicines', 'razorpay order creation failed', err, { orderId: order.id });
     throw new ServiceUnavailableError('Could not start payment — please try again.');
   }
@@ -272,7 +297,7 @@ export async function cancelOrder(actorUserId: string, role: UserRole, orderId: 
   }
 
   await prisma.$transaction(async (tx) => {
-    await restockItems(tx, orderId);
+    await restockItems(tx, orderId, actorUserId);
     await tx.medicineOrder.update({
       where: { id: orderId },
       data: { status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: dto.reason },

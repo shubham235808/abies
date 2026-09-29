@@ -15,6 +15,12 @@ export const addInventorySchema = z.object({
   manufacturerName: z.string().max(200).optional(),
   brandName: z.string().max(200).optional(),
   requiresPrescription: z.boolean().optional(),
+  // ENTERPRISE-7 — needed to sell this medicine at the POS counter
+  // (GstRateConfig is looked up by hsnCode). Optional here since not every
+  // pharmacy uses the POS; a sale attempt without one fails with a clear
+  // message rather than guessing a rate.
+  category: z.string().max(100).optional(),
+  hsnCode: z.string().max(20).optional(),
   batchNumber: z.string().min(1).max(100),
   expiryDate: z.string().datetime(),
   quantityAvailable: z.number().int().min(0).max(1_000_000),

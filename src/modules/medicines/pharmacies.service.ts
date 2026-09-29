@@ -3,10 +3,11 @@ import { prisma } from '@/lib/db';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@/lib/errors';
 import { recordAuditEvent } from '@/server/audit';
 import type { AuditContext } from '@/server/audit';
-import type { updatePharmacyProfileSchema } from './pharmacies.schemas';
+import type { taxSettingsSchema, updatePharmacyProfileSchema } from './pharmacies.schemas';
 import type { z } from 'zod';
 
 type UpdatePharmacyProfileInput = z.infer<typeof updatePharmacyProfileSchema>;
+type TaxSettingsInput = z.infer<typeof taxSettingsSchema>;
 
 function editableStatus(status: PharmacyVerificationStatus): boolean {
   return status === PharmacyVerificationStatus.DRAFT || status === PharmacyVerificationStatus.REJECTED;
@@ -90,4 +91,28 @@ export async function requireApprovedPharmacy(userId: string) {
     throw new NotFoundError('Pharmacy profile not found or not approved');
   }
   return pharmacy;
+}
+
+// ENTERPRISE-7 — the pharmacy's own GST registration profile. One row per
+// pharmacy, upserted (a pharmacy either hasn't set this up yet or is
+// editing what it already entered — never a list).
+export async function getMyTaxSettings(userId: string) {
+  const pharmacy = await ensurePharmacyProfile(userId);
+  return prisma.taxSettings.findUnique({ where: { pharmacyId: pharmacy.id } });
+}
+
+export async function upsertMyTaxSettings(userId: string, dto: TaxSettingsInput, auditCtx: AuditContext) {
+  const pharmacy = await requireApprovedPharmacy(userId);
+  const settings = await prisma.taxSettings.upsert({
+    where: { pharmacyId: pharmacy.id },
+    create: { pharmacyId: pharmacy.id, ...dto },
+    update: dto,
+  });
+  await recordAuditEvent(auditCtx, {
+    eventType: 'PHARMACY',
+    action: 'TAX_SETTINGS_UPDATED',
+    resourceType: 'TaxSettings',
+    resourceId: settings.id,
+  });
+  return settings;
 }

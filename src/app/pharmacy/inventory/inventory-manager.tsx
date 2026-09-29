@@ -18,7 +18,7 @@ type InventoryRow = {
   expiryDate: string;
   quantityAvailable: number;
   price: number;
-  medicine: { id: string; name: string; form: string | null; strength: string | null; requiresPrescription: boolean };
+  medicine: { id: string; name: string; form: string | null; strength: string | null; requiresPrescription: boolean; hsnCode: string | null };
 };
 
 type FormValues = z.infer<typeof addInventorySchema>;
@@ -58,6 +58,7 @@ export function InventoryManager({ initial }: { initial: InventoryRow[] }) {
         </Badge>
       ),
     },
+    { key: 'hsn', label: 'HSN', render: (r) => r.medicine.hsnCode ?? <span className="text-brand-orange-600">Not set</span> },
     { key: 'batch', label: 'Batch', render: (r) => r.batchNumber },
     { key: 'quantity', label: 'Qty', align: 'right', render: (r) => r.quantityAvailable },
     { key: 'price', label: 'Price', align: 'right', render: (r) => `₹${r.price}` },
@@ -145,6 +146,15 @@ function NewBatchForm({ onCreated, onCancel }: { onCreated: (item: InventoryRow)
         <div>
           <Label htmlFor="strength">Strength</Label>
           <Input id="strength" placeholder="e.g. 500mg" {...register('strength')} />
+        </div>
+        <div>
+          <Label htmlFor="category">Category</Label>
+          <Input id="category" placeholder="e.g. Ayurvedic OTC" {...register('category')} />
+        </div>
+        <div>
+          <Label htmlFor="hsnCode">HSN code</Label>
+          <Input id="hsnCode" placeholder="e.g. 3004" {...register('hsnCode')} />
+          <p className="mt-1 text-xs text-brand-neutral-400">Needed to sell this item at the POS counter — only filled if not already set.</p>
         </div>
         <div>
           <Label htmlFor="batchNumber">Batch number</Label>

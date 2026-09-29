@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { BadRequestError, ConflictError, NotFoundError } from '@/lib/errors';
 import { ensurePharmacyProfile } from './pharmacies.service';
+import { recordStockMovement } from './stock-movements.service';
 import type { addInventorySchema, publicMedicineSearchSchema, updateInventorySchema } from './catalogue.schemas';
 import type { z } from 'zod';
 
@@ -14,7 +15,16 @@ type PublicSearchQuery = z.infer<typeof publicMedicineSearchSchema>;
 // and from addInventory below (a pharmacist stocking a new OTC item).
 export async function resolveMedicineByName(
   name: string,
-  extra?: { genericName?: string; form?: string; strength?: string; manufacturerName?: string; brandName?: string; requiresPrescription?: boolean },
+  extra?: {
+    genericName?: string;
+    form?: string;
+    strength?: string;
+    manufacturerName?: string;
+    brandName?: string;
+    requiresPrescription?: boolean;
+    category?: string;
+    hsnCode?: string;
+  },
 ) {
   const trimmed = name.trim();
   const existing = await prisma.medicine.findFirst({ where: { name: { equals: trimmed, mode: 'insensitive' } } });
@@ -28,6 +38,8 @@ export async function resolveMedicineByName(
     if (extra?.strength && !existing.strength) fill.strength = extra.strength;
     if (extra?.manufacturerName && !existing.manufacturerName) fill.manufacturerName = extra.manufacturerName;
     if (extra?.brandName && !existing.brandName) fill.brandName = extra.brandName;
+    if (extra?.category && !existing.category) fill.category = extra.category;
+    if (extra?.hsnCode && !existing.hsnCode) fill.hsnCode = extra.hsnCode;
     if (Object.keys(fill).length === 0) return existing;
     return prisma.medicine.update({ where: { id: existing.id }, data: fill });
   }
@@ -40,6 +52,8 @@ export async function resolveMedicineByName(
       manufacturerName: extra?.manufacturerName,
       brandName: extra?.brandName,
       requiresPrescription: extra?.requiresPrescription ?? true,
+      category: extra?.category,
+      hsnCode: extra?.hsnCode,
     },
   });
 }
@@ -78,6 +92,8 @@ export async function addInventory(userId: string, dto: AddInventoryInput) {
           manufacturerName: dto.manufacturerName,
           brandName: dto.brandName,
           requiresPrescription: dto.requiresPrescription,
+          category: dto.category,
+          hsnCode: dto.hsnCode,
         })
       : null;
   if (!medicine) throw new BadRequestError('Provide either an existing medicineId or a name to catalogue a new one');
@@ -87,29 +103,53 @@ export async function addInventory(userId: string, dto: AddInventoryInput) {
   });
   if (existingBatch) throw new ConflictError('You already have a batch with this number for this medicine');
 
-  return prisma.pharmacyInventory.create({
-    data: {
+  return prisma.$transaction(async (tx) => {
+    const row = await tx.pharmacyInventory.create({
+      data: {
+        pharmacyId: pharmacy.id,
+        medicineId: medicine.id,
+        batchNumber: dto.batchNumber,
+        expiryDate,
+        quantityAvailable: dto.quantityAvailable,
+        price: dto.price,
+      },
+      include: { medicine: true },
+    });
+    await recordStockMovement(tx, {
       pharmacyId: pharmacy.id,
-      medicineId: medicine.id,
-      batchNumber: dto.batchNumber,
-      expiryDate,
-      quantityAvailable: dto.quantityAvailable,
-      price: dto.price,
-    },
-    include: { medicine: true },
+      inventoryId: row.id,
+      type: 'PURCHASE',
+      quantityDelta: dto.quantityAvailable,
+      actorUserId: userId,
+      reason: 'Initial stock',
+    });
+    return row;
   });
 }
 
 export async function updateInventory(userId: string, inventoryId: string, dto: UpdateInventoryInput) {
   const row = await ownedInventoryRow(userId, inventoryId);
-  return prisma.pharmacyInventory.update({
-    where: { id: row.id },
-    data: {
-      quantityAvailable: dto.quantityAvailable,
-      price: dto.price,
-      expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : undefined,
-    },
-    include: { medicine: true },
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.pharmacyInventory.update({
+      where: { id: row.id },
+      data: {
+        quantityAvailable: dto.quantityAvailable,
+        price: dto.price,
+        expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : undefined,
+      },
+      include: { medicine: true },
+    });
+    if (dto.quantityAvailable !== undefined && dto.quantityAvailable !== row.quantityAvailable) {
+      await recordStockMovement(tx, {
+        pharmacyId: row.pharmacyId,
+        inventoryId: row.id,
+        type: 'MANUAL_CORRECTION',
+        quantityDelta: dto.quantityAvailable - row.quantityAvailable,
+        actorUserId: userId,
+        reason: 'Manual correction via inventory edit',
+      });
+    }
+    return updated;
   });
 }
 

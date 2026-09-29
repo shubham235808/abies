@@ -3,12 +3,14 @@ import {
   listConfigCategories,
   listCourierProviders,
   listDocumentRequirements,
+  listGstRates,
   listNotificationTemplates,
   listServiceLocations,
 } from '@/modules/configuration/configuration.service';
 import { CategoriesManager } from './categories-manager';
 import { CourierProvidersManager } from './courier-providers-manager';
 import { DocumentRequirementsManager } from './document-requirements-manager';
+import { GstRatesManager } from './gst-rates-manager';
 import { LocationsManager } from './locations-manager';
 import { NotificationTemplatesManager } from './notification-templates-manager';
 
@@ -18,6 +20,7 @@ const TAB_DEFS = [
   { key: 'document-requirements', label: 'Document requirements' },
   { key: 'courier-providers', label: 'Courier providers' },
   { key: 'notification-templates', label: 'Notification templates' },
+  { key: 'gst-rates', label: 'GST rates' },
 ] as const;
 type TabKey = (typeof TAB_DEFS)[number]['key'];
 
@@ -43,7 +46,7 @@ export default async function AdminConfigurationPage({ searchParams }: { searchP
       <h1 className="text-2xl font-semibold text-brand-neutral-900">Configuration</h1>
       <p className="mt-1 max-w-2xl text-sm text-brand-neutral-600">
         Database-driven lists every portal can offer without a code deploy — specialties, categories, serviceable
-        locations, partner document requirements, courier providers, and notification templates.
+        locations, partner document requirements, courier providers, notification templates, and GST rates.
       </p>
 
       <div className="mt-4">
@@ -60,6 +63,7 @@ export default async function AdminConfigurationPage({ searchParams }: { searchP
         {activeTab === 'notification-templates' && (
           <NotificationTemplatesManager initial={await listNotificationTemplates()} />
         )}
+        {activeTab === 'gst-rates' && <GstRatesManager initial={await listGstRates()} />}
       </div>
     </div>
   );

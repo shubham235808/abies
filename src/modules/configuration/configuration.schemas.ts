@@ -52,3 +52,16 @@ export const updateNotificationTemplateSchema = z.object({
   body: z.string().min(1).max(2000).optional(),
   active: z.boolean().optional(),
 });
+
+// ENTERPRISE-7 — admin-configurable GST rate table (backs the Pharmacy
+// POS). Indian GST slabs are always whole-number percentages (0/5/12/18/28).
+export const gstRateConfigSchema = z.object({
+  hsnCode: z.string().min(1).max(20),
+  label: z.string().min(1).max(120),
+  ratePercent: z.number().int().min(0).max(100),
+});
+export const updateGstRateConfigSchema = z.object({
+  label: z.string().min(1).max(120).optional(),
+  ratePercent: z.number().int().min(0).max(100).optional(),
+  active: z.boolean().optional(),
+});

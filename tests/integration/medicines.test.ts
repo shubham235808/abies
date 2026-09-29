@@ -22,8 +22,10 @@ vi.mock('@/lib/payments/razorpay', () => razorpayMock);
 import { holdSlot, verifyPayment } from '@/modules/appointments/appointments.service';
 import { createPrescription, finalizePrescription } from '@/modules/consultations/prescriptions.service';
 import { approve as approvePharmacy } from '@/modules/medicines/admin-pharmacies.service';
-import { addInventory, searchPublic } from '@/modules/medicines/catalogue.service';
-import { ensurePharmacyProfile, submitPharmacy, updateMyPharmacy } from '@/modules/medicines/pharmacies.service';
+import { addInventory, searchPublic, updateInventory } from '@/modules/medicines/catalogue.service';
+import { createGstRate } from '@/modules/configuration/configuration.service';
+import { ensurePharmacyProfile, submitPharmacy, updateMyPharmacy, upsertMyTaxSettings } from '@/modules/medicines/pharmacies.service';
+import { recordSale } from '@/modules/medicines/pos.service';
 import {
   acceptOrder,
   bookOrder,
@@ -49,6 +51,7 @@ function nextWeekdayAt(hour: number, minute: number, daysAhead = 2): Date {
 }
 
 const createdUserIds: string[] = [];
+const createdGstRateIds: string[] = [];
 
 async function registerUser(role: 'PATIENT' | 'DOCTOR' | 'ADMIN' | 'PHARMACY') {
   const mobile = freshMobile();
@@ -163,6 +166,11 @@ async function finalizedPrescriptionWithItem(doctorUserId: string, consultationI
 afterAll(async () => {
   if (createdUserIds.length) {
     await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+  }
+  // GstRateConfig is global (no FK to a pharmacy), so it doesn't cascade
+  // away with the test users above — clean it up explicitly.
+  if (createdGstRateIds.length) {
+    await prisma.gstRateConfig.deleteMany({ where: { id: { in: createdGstRateIds } } });
   }
   await prisma.$disconnect();
 });
@@ -384,5 +392,138 @@ describe('pharmacy fulfilment', () => {
     const { orderId } = await paidOrder();
     const { pharmacyUserId: otherPharmacyUserId } = await approvedPharmacy();
     await expect(acceptOrder(otherPharmacyUserId, orderId)).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe('stock movement ledger (ENTERPRISE-7)', () => {
+  it('records a PURCHASE movement when a batch is first added', async () => {
+    const { pharmacyUserId, pharmacyId } = await approvedPharmacy();
+    const stocked = await stockedOtcMedicine(pharmacyUserId, `Ledger-${randomInt(1000, 9999)}`, 40, 25);
+
+    const movements = await prisma.stockMovement.findMany({ where: { pharmacyId, inventoryId: stocked.id } });
+    expect(movements).toHaveLength(1);
+    expect(movements[0]?.type).toBe('PURCHASE');
+    expect(movements[0]?.quantityDelta).toBe(40);
+  });
+
+  it('records a MANUAL_CORRECTION movement only when the quantity actually changes', async () => {
+    const { pharmacyUserId, pharmacyId } = await approvedPharmacy();
+    const stocked = await stockedOtcMedicine(pharmacyUserId, `Correction-${randomInt(1000, 9999)}`, 20, 25);
+
+    await updateInventory(pharmacyUserId, stocked.id, { price: 30 });
+    let movements = await prisma.stockMovement.findMany({ where: { pharmacyId, inventoryId: stocked.id } });
+    expect(movements).toHaveLength(1); // just the initial PURCHASE — price-only edit isn't a stock change
+
+    await updateInventory(pharmacyUserId, stocked.id, { quantityAvailable: 15 });
+    movements = await prisma.stockMovement.findMany({ where: { pharmacyId, inventoryId: stocked.id }, orderBy: { createdAt: 'asc' } });
+    expect(movements).toHaveLength(2);
+    expect(movements[1]?.type).toBe('MANUAL_CORRECTION');
+    expect(movements[1]?.quantityDelta).toBe(-5);
+  });
+
+  it('records ONLINE_ORDER on booking and RETURN on cancellation, both referencing the order', async () => {
+    const patientId = await registerUser('PATIENT');
+    const { pharmacyUserId, pharmacyId } = await approvedPharmacy();
+    const stocked = await stockedOtcMedicine(pharmacyUserId, `Online-${randomInt(1000, 9999)}`, 10, 20);
+
+    const { order } = await bookOrder(patientId, {
+      pharmacyId,
+      deliveryAddress: 'Somewhere',
+      items: [{ medicineId: stocked.medicineId, quantity: 3 }],
+    });
+    let movements = await prisma.stockMovement.findMany({ where: { pharmacyId, inventoryId: stocked.id }, orderBy: { createdAt: 'asc' } });
+    expect(movements[1]?.type).toBe('ONLINE_ORDER');
+    expect(movements[1]?.quantityDelta).toBe(-3);
+    expect(movements[1]?.referenceId).toBe(order.id);
+
+    await cancelOrder(patientId, 'PATIENT', order.id, {}, { userId: patientId });
+    movements = await prisma.stockMovement.findMany({ where: { pharmacyId, inventoryId: stocked.id }, orderBy: { createdAt: 'asc' } });
+    expect(movements[2]?.type).toBe('RETURN');
+    expect(movements[2]?.quantityDelta).toBe(3);
+    expect(movements[2]?.referenceId).toBe(order.id);
+  });
+});
+
+describe('POS / GST (ENTERPRISE-7)', () => {
+  async function pharmacyWithGstReadyItem(ratePercent = 12, quantity = 50, price = 100) {
+    const { pharmacyUserId, pharmacyId } = await approvedPharmacy();
+    const hsnCode = `HSN${randomInt(100000, 999999)}`;
+    const gstRate = await createGstRate({ hsnCode, label: 'Test category', ratePercent }, {});
+    createdGstRateIds.push(gstRate.id);
+    const item = await addInventory(pharmacyUserId, {
+      name: `PosItem-${randomInt(1000, 9999)}`,
+      requiresPrescription: false,
+      category: 'Test',
+      hsnCode,
+      batchNumber: `POS${randomInt(1000, 9999)}`,
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      quantityAvailable: quantity,
+      price,
+    });
+    await upsertMyTaxSettings(
+      pharmacyUserId,
+      { legalBusinessName: 'Test Pharmacy LLP', gstin: '27AAAAA0000A1Z5', registeredState: 'Maharashtra', stateCode: '27', invoicePrefix: `TP${randomInt(100, 999)}` },
+      {},
+    );
+    return { pharmacyUserId, pharmacyId, item, hsnCode };
+  }
+
+  it('records a sale with the correct CGST/SGST split and decrements stock', async () => {
+    const { pharmacyUserId, pharmacyId, item } = await pharmacyWithGstReadyItem(12, 50, 100);
+
+    const sale = await recordSale(
+      pharmacyUserId,
+      { paymentMethod: 'CASH', discountAmount: 0, items: [{ medicineId: item.medicineId, batchNumber: item.batchNumber, quantity: 5 }] },
+      {},
+    );
+
+    expect(sale.subtotal).toBe(500); // 5 * 100
+    expect(sale.taxAmount).toBe(60); // 12% of 500
+    expect(sale.totalAmount).toBe(560);
+    expect(sale.invoice?.cgst).toBe(30);
+    expect(sale.invoice?.sgst).toBe(30);
+    expect(sale.invoice?.igst).toBe(0);
+    expect(sale.invoice?.invoiceNumber).toMatch(/^TP\d{3}-\d{6}$/);
+
+    const row = await prisma.pharmacyInventory.findUniqueOrThrow({ where: { id: item.id } });
+    expect(row.quantityAvailable).toBe(45);
+
+    const movement = await prisma.stockMovement.findFirst({ where: { pharmacyId, inventoryId: item.id, type: 'SALE' } });
+    expect(movement?.quantityDelta).toBe(-5);
+    expect(movement?.referenceType).toBe('PhysicalSale');
+  });
+
+  it('refuses a sale when the pharmacy has no tax settings configured', async () => {
+    const { pharmacyUserId } = await approvedPharmacy();
+    const hsnCode = `HSN${randomInt(100000, 999999)}`;
+    const gstRate = await createGstRate({ hsnCode, label: 'Test category', ratePercent: 5 }, {});
+    createdGstRateIds.push(gstRate.id);
+    const item = await addInventory(pharmacyUserId, {
+      name: `NoTax-${randomInt(1000, 9999)}`,
+      requiresPrescription: false,
+      hsnCode,
+      batchNumber: `NT${randomInt(1000, 9999)}`,
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      quantityAvailable: 10,
+      price: 50,
+    });
+
+    await expect(
+      recordSale(pharmacyUserId, { paymentMethod: 'CASH', discountAmount: 0, items: [{ medicineId: item.medicineId, batchNumber: item.batchNumber, quantity: 1 }] }, {}),
+    ).rejects.toThrow(BadRequestError);
+  });
+
+  it('refuses a sale for a medicine with no HSN code', async () => {
+    const { pharmacyUserId } = await approvedPharmacy();
+    await upsertMyTaxSettings(
+      pharmacyUserId,
+      { legalBusinessName: 'Test Pharmacy LLP', gstin: '27AAAAA0000A1Z5', registeredState: 'Maharashtra', stateCode: '27', invoicePrefix: `TP${randomInt(100, 999)}` },
+      {},
+    );
+    const item = await stockedOtcMedicine(pharmacyUserId, `NoHsn-${randomInt(1000, 9999)}`, 10, 50);
+
+    await expect(
+      recordSale(pharmacyUserId, { paymentMethod: 'CASH', discountAmount: 0, items: [{ medicineId: item.medicineId, batchNumber: item.batchNumber, quantity: 1 }] }, {}),
+    ).rejects.toThrow(BadRequestError);
   });
 });

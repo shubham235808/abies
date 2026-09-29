@@ -13,6 +13,8 @@ import type {
   updateCourierProviderSchema,
   notificationTemplateSchema,
   updateNotificationTemplateSchema,
+  gstRateConfigSchema,
+  updateGstRateConfigSchema,
 } from './configuration.schemas';
 
 // ENTERPRISE-2 — generalizes AssessmentTemplateField's existing "admin-
@@ -180,4 +182,33 @@ export async function removeNotificationTemplate(id: string, auditCtx: AuditCont
   if (!existing) throw new NotFoundError('Notification template not found');
   await prisma.notificationTemplate.delete({ where: { id } });
   await recordAuditEvent(auditCtx, { eventType: 'CONFIGURATION', action: 'DELETED', resourceType: 'NotificationTemplate', resourceId: id, metadata: { templateKey: existing.templateKey } });
+}
+
+// ---- GST rates (ENTERPRISE-7) ----
+
+export async function listGstRates() {
+  return prisma.gstRateConfig.findMany({ orderBy: { hsnCode: 'asc' } });
+}
+
+export async function createGstRate(dto: z.infer<typeof gstRateConfigSchema>, auditCtx: AuditContext) {
+  const existing = await prisma.gstRateConfig.findUnique({ where: { hsnCode: dto.hsnCode } });
+  if (existing) throw new ConflictError('A GST rate for this HSN code already exists');
+  const row = await prisma.gstRateConfig.create({ data: dto });
+  await recordAuditEvent(auditCtx, { eventType: 'CONFIGURATION', action: 'CREATED', resourceType: 'GstRateConfig', resourceId: row.id, metadata: { hsnCode: row.hsnCode, ratePercent: row.ratePercent } });
+  return row;
+}
+
+export async function updateGstRate(id: string, dto: z.infer<typeof updateGstRateConfigSchema>, auditCtx: AuditContext) {
+  const existing = await prisma.gstRateConfig.findUnique({ where: { id } });
+  if (!existing) throw new NotFoundError('GST rate not found');
+  const row = await prisma.gstRateConfig.update({ where: { id }, data: dto });
+  await recordAuditEvent(auditCtx, { eventType: 'CONFIGURATION', action: 'UPDATED', resourceType: 'GstRateConfig', resourceId: id, metadata: { fields: Object.keys(dto) } });
+  return row;
+}
+
+export async function removeGstRate(id: string, auditCtx: AuditContext) {
+  const existing = await prisma.gstRateConfig.findUnique({ where: { id } });
+  if (!existing) throw new NotFoundError('GST rate not found');
+  await prisma.gstRateConfig.delete({ where: { id } });
+  await recordAuditEvent(auditCtx, { eventType: 'CONFIGURATION', action: 'DELETED', resourceType: 'GstRateConfig', resourceId: id, metadata: { hsnCode: existing.hsnCode } });
 }

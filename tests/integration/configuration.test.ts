@@ -7,15 +7,19 @@ import {
   createConfigCategory,
   createCourierProvider,
   createDocumentRequirement,
+  createGstRate,
   createNotificationTemplate,
   createServiceLocation,
   listConfigCategories,
+  listGstRates,
   removeConfigCategory,
   removeCourierProvider,
   removeDocumentRequirement,
+  removeGstRate,
   removeNotificationTemplate,
   removeServiceLocation,
   updateConfigCategory,
+  updateGstRate,
 } from '@/modules/configuration/configuration.service';
 import { listAuditEvents, listDistinctEventTypes } from '@/modules/audit/audit.service';
 
@@ -24,6 +28,7 @@ const createdLocationIds: string[] = [];
 const createdRequirementIds: string[] = [];
 const createdCourierIds: string[] = [];
 const createdTemplateIds: string[] = [];
+const createdGstRateIds: string[] = [];
 const domainTag = `TEST_DOMAIN_${randomInt(100000, 999999)}`;
 
 afterAll(async () => {
@@ -32,6 +37,7 @@ afterAll(async () => {
   await prisma.documentRequirement.deleteMany({ where: { id: { in: createdRequirementIds } } });
   await prisma.courierProvider.deleteMany({ where: { id: { in: createdCourierIds } } });
   await prisma.notificationTemplate.deleteMany({ where: { id: { in: createdTemplateIds } } });
+  await prisma.gstRateConfig.deleteMany({ where: { id: { in: createdGstRateIds } } });
   await prisma.$disconnect();
 });
 
@@ -133,5 +139,26 @@ describe('notification templates', () => {
 
     await removeNotificationTemplate(created.id, {});
     createdTemplateIds.splice(createdTemplateIds.indexOf(created.id), 1);
+  });
+});
+
+describe('GST rates (ENTERPRISE-7)', () => {
+  it('creates, lists, updates and removes a rate, refusing a duplicate HSN code', async () => {
+    const hsnCode = `TEST_HSN_${randomInt(100000, 999999)}`;
+    const created = await createGstRate({ hsnCode, label: 'Test goods', ratePercent: 18 }, {});
+    createdGstRateIds.push(created.id);
+    expect(created.active).toBe(true);
+
+    const listed = await listGstRates();
+    expect(listed.map((r) => r.id)).toContain(created.id);
+
+    await expect(createGstRate({ hsnCode, label: 'Duplicate', ratePercent: 5 }, {})).rejects.toThrow(ConflictError);
+
+    const updated = await updateGstRate(created.id, { ratePercent: 12 }, {});
+    expect(updated.ratePercent).toBe(12);
+
+    await removeGstRate(created.id, {});
+    createdGstRateIds.splice(createdGstRateIds.indexOf(created.id), 1);
+    await expect(updateGstRate(created.id, { ratePercent: 5 }, {})).rejects.toThrow(NotFoundError);
   });
 });

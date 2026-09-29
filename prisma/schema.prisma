@@ -1156,11 +1156,17 @@ model Medicine {
   // was never meant to be private.
   imageUrl             String?
   active               Boolean             @default(true)
+  // ENTERPRISE-7 — additive, for GST classification. hsnCode drives
+  // GstRateConfig lookup at POS sale time; category is a lighter-weight
+  // catalogue grouping, not itself a tax-rate key.
+  category             String?
+  hsnCode              String?
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
   prescriptionItems    PrescriptionItem[]
   inventory            PharmacyInventory[]
   orderItems           MedicineOrderItem[]
+  physicalSaleItems    PhysicalSaleItem[]
 
   @@index([name])
 }
@@ -1192,25 +1198,171 @@ model Pharmacy {
   user               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   inventory          PharmacyInventory[]
   orders             MedicineOrder[]
+  stockMovements     StockMovement[]
+  taxSettings        TaxSettings?
+  physicalSales      PhysicalSale[]
+  invoices           Invoice[]
 
   @@index([verificationStatus, active])
 }
 
 model PharmacyInventory {
-  id                String   @id @default(cuid())
+  id                String              @id @default(cuid())
   pharmacyId        String
   medicineId        String
   batchNumber       String
   expiryDate        DateTime
   quantityAvailable Int
   price             Int
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  pharmacy          Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
-  medicine          Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  pharmacy          Pharmacy            @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  medicine          Medicine            @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  stockMovements    StockMovement[]
 
   @@unique([pharmacyId, medicineId, batchNumber])
   @@index([pharmacyId, medicineId])
+}
+
+// ENTERPRISE-7 — every quantityAvailable mutation (addInventory,
+// updateInventory's manual correction, online-order booking/cancellation,
+// and the new POS sale below) writes one of these in the same transaction,
+// per docs/ENTERPRISE-DATA-MODEL-CHANGES.md §5's rollout instruction.
+enum StockMovementType {
+  PURCHASE
+  SALE
+  ONLINE_ORDER
+  RETURN
+  ADJUSTMENT
+  DAMAGED
+  EXPIRED
+  TRANSFER
+  MANUAL_CORRECTION
+}
+
+model StockMovement {
+  id            String            @id @default(cuid())
+  pharmacyId    String
+  inventoryId   String
+  type          StockMovementType
+  quantityDelta Int
+  reason        String?
+  referenceType String?
+  referenceId   String?
+  actorUserId   String
+  createdAt     DateTime          @default(now())
+  pharmacy      Pharmacy          @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  inventory     PharmacyInventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+
+  @@index([pharmacyId, createdAt])
+  @@index([inventoryId])
+}
+
+// One row per pharmacy — its own GST registration profile. A pharmacy must
+// have an active TaxSettings row before the POS can record a sale (hard
+// fail rather than fabricate a placeholder GSTIN), same "don't fake it"
+// rule this codebase already applies to Razorpay's isConfigured() gate.
+model TaxSettings {
+  id                String   @id @default(cuid())
+  pharmacyId        String   @unique
+  legalBusinessName String
+  gstin             String
+  registeredState   String
+  stateCode         String
+  invoicePrefix     String
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  pharmacy          Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+}
+
+// Admin-configurable GST rate table (per the enterprise configuration
+// principle already established by ENTERPRISE-2's ConfigCategory/
+// ServiceLocation/etc. — tax rates change over time and by product
+// classification, so they belong in the database, not a hardcoded slab
+// list in application code). Keyed by HSN code; a POS sale for a medicine
+// with no hsnCode, or an hsnCode with no matching active rate here, is
+// refused rather than guessing a rate.
+model GstRateConfig {
+  id          String   @id @default(cuid())
+  hsnCode     String   @unique
+  label       String
+  ratePercent Int
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  CARD
+  RAZORPAY
+  OTHER
+}
+
+// The POS counter-sale — deliberately NOT reusing MedicineOrder (see
+// docs/ENTERPRISE-DATA-MODEL-CHANGES.md §5: a MedicineOrder is online-
+// order-shaped with a Payment/delivery-address/patient-account; a walk-in
+// counter sale has none of those and gains a cash-drawer/walk-in-customer
+// shape instead).
+model PhysicalSale {
+  id             String             @id @default(cuid())
+  pharmacyId     String
+  customerName   String?
+  customerPhone  String?
+  paymentMethod  PaymentMethod
+  upiReference   String?
+  subtotal       Int
+  discountAmount Int                @default(0)
+  taxAmount      Int
+  totalAmount    Int
+  invoiceId      String?            @unique
+  soldByUserId   String
+  createdAt      DateTime           @default(now())
+  pharmacy       Pharmacy           @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  invoice        Invoice?           @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  items          PhysicalSaleItem[]
+
+  @@index([pharmacyId, createdAt])
+}
+
+model PhysicalSaleItem {
+  id             String       @id @default(cuid())
+  physicalSaleId String
+  medicineId     String
+  batchNumber    String
+  quantity       Int
+  unitPrice      Int
+  taxRate        Int
+  physicalSale   PhysicalSale @relation(fields: [physicalSaleId], references: [id], onDelete: Cascade)
+  medicine       Medicine     @relation(fields: [medicineId], references: [id], onDelete: Restrict)
+}
+
+// Shared by online MedicineOrders and PhysicalSales — polymorphic source,
+// same convention as Payment.purposeEntityId elsewhere. pdfStorageKey
+// stays null for now: a printable HTML receipt is the honest first cut
+// (docs/ABIES-DESIGN-SYSTEM.md's "no new runtime dependency unless
+// justified" — a PDF library is a real dependency this stage doesn't need
+// yet), same scope discipline already applied to Promotion's impression/
+// click counters in ENTERPRISE-13.
+model Invoice {
+  id            String   @id @default(cuid())
+  pharmacyId    String
+  invoiceNumber String
+  sourceType    String
+  sourceId      String
+  cgst          Int
+  sgst          Int
+  igst          Int
+  totalTax      Int
+  totalAmount   Int
+  pdfStorageKey String?
+  createdAt     DateTime @default(now())
+  pharmacy      Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  physicalSale  PhysicalSale?
+
+  @@unique([pharmacyId, invoiceNumber])
 }
 
 // PENDING | ACCEPTED | PACKING | DISPATCHED | DELIVERED | CANCELLED is the
