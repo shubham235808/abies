@@ -75,6 +75,15 @@ describe('promotion CRUD (ENTERPRISE-13)', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('rejects a ctaHref that is not a relative path or an https:// URL (ENTERPRISE-15)', async () => {
+    const { createPromotionSchema } = await import('@/modules/promotions/promotions.schemas');
+    const base = { title: 'x', placement: 'PUBLIC_HOME_HERO' as const, ...windowNow(0, 1) };
+    expect(createPromotionSchema.safeParse({ ...base, ctaHref: 'javascript:alert(1)' }).success).toBe(false);
+    expect(createPromotionSchema.safeParse({ ...base, ctaHref: 'data:text/html,<script>alert(1)</script>' }).success).toBe(false);
+    expect(createPromotionSchema.safeParse({ ...base, ctaHref: '/doctors' }).success).toBe(true);
+    expect(createPromotionSchema.safeParse({ ...base, ctaHref: 'https://abies.example/offer' }).success).toBe(true);
+  });
 });
 
 describe('activePromotionsForPlacement (ENTERPRISE-13)', () => {

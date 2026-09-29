@@ -15,6 +15,22 @@ const ENTITY_TYPES = ['DOCTOR', 'PANCHAKARMA_CENTRE', 'DIAGNOSTIC_LAB', 'DIAGNOS
 export const promotionPlacementSchema = z.enum(PLACEMENTS);
 export const promotionEntityTypeSchema = z.enum(ENTITY_TYPES);
 
+// ENTERPRISE-15 — ctaHref is admin-supplied but rendered as a real <a href>
+// for every site visitor (PromotionBanner). Unlike every other admin-
+// editable string in this app, an unrestricted value here would let a
+// compromised admin session (not just a malicious admin, who could do
+// worse anyway) plant a javascript:/data: URI that fires for the general
+// public — restricting to a same-site relative path or an https:// link
+// closes that off without limiting any legitimate use (every real CTA
+// target in this app is either an internal page or a normal external link).
+const ctaHrefSchema = z
+  .string()
+  .max(500)
+  .refine((v) => v.startsWith('/') || v.startsWith('https://'), {
+    message: 'CTA link must be a relative path (e.g. /doctors) or an https:// URL',
+  })
+  .optional();
+
 // Shared by create/update — everything except the images, which the
 // multipart route handlers own separately (createPromotion/updatePromotion
 // take a parsed UploadedFile alongside this).
@@ -23,7 +39,7 @@ const basePromotionFields = {
   subtitle: z.string().max(300).optional(),
   description: z.string().max(2000).optional(),
   ctaLabel: z.string().max(60).optional(),
-  ctaHref: z.string().max(500).optional(),
+  ctaHref: ctaHrefSchema,
   placement: promotionPlacementSchema,
   entityType: promotionEntityTypeSchema.optional(),
   entityId: z.string().optional(),
