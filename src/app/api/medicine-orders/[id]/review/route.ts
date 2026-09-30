@@ -1,0 +1,18 @@
+import { NextResponse } from 'next/server';
+import { errorResponse } from '@/lib/errors';
+import { createMedicineReviewSchema } from '@/modules/reviews/reviews.schemas';
+import { reviewMedicine } from '@/modules/reviews/reviews.service';
+import { applyRotatedCookie, requireRole, requireSession } from '@/server/rbac';
+
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const ctx = await requireSession(req);
+    requireRole(ctx, 'PATIENT');
+    const { id } = await params;
+    const dto = createMedicineReviewSchema.parse(await req.json());
+    const review = await reviewMedicine(ctx.session.userId, id, dto);
+    return applyRotatedCookie(NextResponse.json({ review }, { status: 201 }), ctx);
+  } catch (error) {
+    return errorResponse(error);
+  }
+}

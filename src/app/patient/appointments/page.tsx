@@ -1,11 +1,15 @@
 import Link from 'next/link';
 import { listMineAsPatient } from '@/modules/appointments/appointments.service';
+import { listMine as listMyReviews } from '@/modules/reviews/reviews.service';
 import { requireSessionOrRedirect } from '@/server/current-user';
 import { AppointmentList } from './appointment-list';
 
 export default async function PatientAppointmentsPage() {
   const session = await requireSessionOrRedirect();
-  const rows = await listMineAsPatient(session.userId);
+  const [rows, reviews] = await Promise.all([listMineAsPatient(session.userId), listMyReviews(session.userId)]);
+  const reviewedAppointmentIds = new Set(
+    reviews.filter((r) => r.targetType === 'DOCTOR' && r.sourceType === 'APPOINTMENT').map((r) => r.sourceId),
+  );
   const appointments = rows.map((a) => ({
     id: a.id,
     mode: a.mode,
@@ -18,6 +22,7 @@ export default async function PatientAppointmentsPage() {
     payment: a.payment,
     clinic: a.clinic,
     consultation: a.consultation,
+    hasReview: reviewedAppointmentIds.has(a.id),
   }));
 
   return (

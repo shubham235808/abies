@@ -1,15 +1,20 @@
 import { listApprovedPharmacies } from '@/modules/medicines/pharmacies.service';
 import { listFinalizedPrescriptionsForPatient, listMineAsPatient as listOrders } from '@/modules/medicines/orders.service';
+import { listMine as listMyReviews } from '@/modules/reviews/reviews.service';
 import { requireSessionOrRedirect } from '@/server/current-user';
 import { MedicinesDashboard } from './dashboard';
 
 export default async function PatientMedicinesPage() {
   const session = await requireSessionOrRedirect();
-  const [prescriptions, orders, pharmacies] = await Promise.all([
+  const [prescriptions, orders, pharmacies, reviews] = await Promise.all([
     listFinalizedPrescriptionsForPatient(session.userId),
     listOrders(session.userId),
     listApprovedPharmacies(),
+    listMyReviews(session.userId),
   ]);
+  const reviewedMedicineOrderKeys = new Set(
+    reviews.filter((r) => r.targetType === 'MEDICINE' && r.sourceType === 'MEDICINE_ORDER').map((r) => `${r.sourceId}:${r.targetId}`),
+  );
 
   return (
     <div>
@@ -33,6 +38,11 @@ export default async function PatientMedicinesPage() {
           createdAt: o.createdAt.toISOString(),
           pharmacyName: o.pharmacy.name,
           itemNames: o.items.map((i) => `${i.medicine.name} ×${i.quantity}`),
+          items: o.items.map((i) => ({
+            medicineId: i.medicineId,
+            name: i.medicine.name,
+            hasReview: reviewedMedicineOrderKeys.has(`${o.id}:${i.medicineId}`),
+          })),
           shipment: o.shipment
             ? {
                 carrier: o.shipment.carrier,

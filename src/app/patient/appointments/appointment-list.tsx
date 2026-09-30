@@ -21,9 +21,75 @@ type Appointment = {
   payment: { status: string; amount: number } | null;
   clinic: { name: string; city: string } | null;
   consultation: { id: string; status: string } | null;
+  hasReview: boolean;
 };
 
 const CANCELLABLE = new Set(['PENDING_PAYMENT', 'CONFIRMED']);
+
+function StarPicker({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  return (
+    <div role="radiogroup" aria-label="Rating" className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          role="radio"
+          aria-checked={value === n}
+          aria-label={`${n} star${n === 1 ? '' : 's'}`}
+          onClick={() => onChange(n)}
+          className={n <= value ? 'text-lg text-brand-purple-600' : 'text-lg text-brand-neutral-300'}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function DoctorReviewForm({ appointmentId, onSubmitted }: { appointmentId: string; onSubmitted: () => void }) {
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  async function submit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.post(`/api/appointments/${appointmentId}/review`, { rating, comment: comment || undefined });
+      onSubmitted();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not submit your review.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+        Leave a review
+      </Button>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {error && <Alert tone="error">{error}</Alert>}
+      <StarPicker value={rating} onChange={setRating} />
+      <Textarea placeholder="Your experience (optional)" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
+      <div className="flex gap-2">
+        <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>
+          Never mind
+        </Button>
+        <Button size="sm" loading={submitting} onClick={submit}>
+          Submit review
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function AppointmentList({ initial }: { initial: Appointment[]; viewerRole: 'PATIENT' }) {
   const [appointments, setAppointments] = useState(initial);
@@ -31,6 +97,10 @@ export function AppointmentList({ initial }: { initial: Appointment[]; viewerRol
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function handleReviewed(appointmentId: string) {
+    setAppointments((prev) => prev.map((a) => (a.id === appointmentId ? { ...a, hasReview: true } : a)));
+  }
 
   async function confirmCancel(id: string) {
     setSubmitting(true);
@@ -91,6 +161,16 @@ export function AppointmentList({ initial }: { initial: Appointment[]; viewerRol
                 <Link href={`/patient/consultations/${a.consultation.id}`} className="text-sm font-medium text-brand-purple-700 hover:underline">
                   {a.consultation.status === 'COMPLETED' ? 'View consultation notes & prescription' : 'View consultation'} →
                 </Link>
+              </div>
+            )}
+
+            {a.status === 'COMPLETED' && (
+              <div className="mt-3 border-t border-brand-neutral-100 pt-3">
+                {a.hasReview ? (
+                  <p className="text-sm text-brand-neutral-500">You reviewed this appointment. Thank you!</p>
+                ) : (
+                  <DoctorReviewForm appointmentId={a.id} onSubmitted={() => handleReviewed(a.id)} />
+                )}
               </div>
             )}
 

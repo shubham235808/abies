@@ -78,6 +78,7 @@ model User {
   reports                    Report[]
   medicineOrders             MedicineOrder[]
   carts                      Cart[]
+  reviews                    Review[]
   panchakarmaRecommendations PanchakarmaRecommendation[]
   panchakarmaBookings        PanchakarmaBooking[]
   supportTicketsRequested    SupportTicket[]             @relation("SupportTicketRequester")
@@ -1162,6 +1163,12 @@ model Medicine {
   // catalogue grouping, not itself a tax-rate key.
   category             String?
   hsnCode              String?
+  // EXPANSION-1c — same gated-aggregate pattern as DoctorProfile.rating:
+  // only counts published, verified-purchase reviews, and stays 0 (falls
+  // out of any rating-based sort/display) below a minimum sample size —
+  // see modules/reviews/reviews.service.ts's recomputeAggregate.
+  rating               Float               @default(0)
+  reviewCount          Int                 @default(0)
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
   prescriptionItems    PrescriptionItem[]
@@ -1459,6 +1466,62 @@ model CartItem {
   variant    MedicineVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
 
   @@index([cartId])
+}
+
+enum ReviewTargetType {
+  DOCTOR
+  MEDICINE
+}
+
+enum ReviewSourceType {
+  APPOINTMENT
+  MEDICINE_ORDER
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
+}
+
+// EXPANSION-1c — real, verified-transaction-only reviews. Deliberately NOT
+// wired into doctor search ranking/sort (docs/EXPANSION-1-VISUAL-GAP-ANALYSIS.md
+// open item #1): the platform's own source blueprint names "a marketplace
+// that ranks providers only by commission paid" as an anti-pattern, and
+// quality is meant to come from "objective operational metrics, not
+// pay-to-rank." A naive rating-sort would reintroduce exactly that dynamic,
+// so aggregate ratings are display-only here.
+//
+// (targetType, targetId) / (sourceType, sourceId) follow the same
+// string-pair polymorphic-reference convention as StockMovement's
+// referenceType/referenceId, since a review can point at either a
+// DoctorProfile+Appointment pair or a Medicine+MedicineOrder pair and
+// neither needs a real FK to enforce that (the service layer validates the
+// source transaction belongs to the author and is actually completed
+// before a Review row is ever created).
+model Review {
+  id                String           @id @default(cuid())
+  authorUserId      String
+  targetType        ReviewTargetType
+  targetId          String
+  sourceType        ReviewSourceType
+  sourceId          String
+  rating            Int
+  comment           String?
+  status            ReviewStatus     @default(PUBLISHED)
+  moderatedByUserId String?
+  moderatedAt       DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  author            User             @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  // One review per (author, target, source transaction) — not just per
+  // source, since one MedicineOrder can contain several different
+  // Medicines, each independently reviewable from that same order.
+  // Re-reviewing the same target from the same transaction isn't a new
+  // opinion, it's an edit (not supported yet; out of scope this stage).
+  @@unique([authorUserId, targetType, targetId, sourceType, sourceId])
+  @@index([targetType, targetId, status])
 }
 
 model MedicineOrder {

@@ -13,16 +13,83 @@ import { loadRazorpayScript } from '@/lib/razorpay-checkout';
 type PrescriptionItem = { id: string; productName: string; dosage: string | null; frequency: string | null };
 type Prescription = { id: string; doctorName: string; finalizedAt: string | null; items: PrescriptionItem[] };
 type Pharmacy = { id: string; name: string | null; serviceAreas: string[] };
+type OrderItem = { medicineId: string; name: string; hasReview: boolean };
 type Order = {
   id: string;
   status: string;
   createdAt: string;
   pharmacyName: string | null;
   itemNames: string[];
+  items: OrderItem[];
   shipment: { carrier: string | null; trackingRef: string | null; dispatchedAt: string | null; deliveredAt: string | null } | null;
 };
 
 const CANCELLABLE = new Set(['PENDING', 'ACCEPTED']);
+
+function StarPicker({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  return (
+    <div role="radiogroup" aria-label="Rating" className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          role="radio"
+          aria-checked={value === n}
+          aria-label={`${n} star${n === 1 ? '' : 's'}`}
+          onClick={() => onChange(n)}
+          className={n <= value ? 'text-lg text-brand-purple-600' : 'text-lg text-brand-neutral-300'}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MedicineReviewForm({ orderId, medicineId, medicineName, onSubmitted }: { orderId: string; medicineId: string; medicineName: string; onSubmitted: () => void }) {
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  async function submit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.post(`/api/medicine-orders/${orderId}/review`, { medicineId, rating, comment: comment || undefined });
+      onSubmitted();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not submit your review.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+        Review {medicineName}
+      </Button>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {error && <Alert tone="error">{error}</Alert>}
+      <StarPicker value={rating} onChange={setRating} />
+      <Input placeholder="Your review (optional)" value={comment} onChange={(e) => setComment(e.target.value)} />
+      <div className="flex gap-2">
+        <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>
+          Never mind
+        </Button>
+        <Button size="sm" loading={submitting} onClick={submit}>
+          Submit review
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function MedicinesDashboard({
   prescriptions,
@@ -52,6 +119,14 @@ export function MedicinesDashboard({
 
   function handleOrderPlaced(order: Order) {
     setOrders((prev) => [order, ...prev]);
+  }
+
+  function handleItemReviewed(orderId: string, medicineId: string) {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId ? { ...o, items: o.items.map((i) => (i.medicineId === medicineId ? { ...i, hasReview: true } : i)) } : o,
+      ),
+    );
   }
 
   return (
@@ -96,6 +171,26 @@ export function MedicinesDashboard({
                     Shipped via {o.shipment.carrier ?? 'courier'}
                     {o.shipment.trackingRef ? ` — ${o.shipment.trackingRef}` : ''}
                   </p>
+                )}
+
+                {o.status === 'DELIVERED' && o.items.length > 0 && (
+                  <div className="mt-3 space-y-2 border-t border-brand-neutral-100 pt-3">
+                    {[...new Map(o.items.map((i) => [i.medicineId, i])).values()].map((item) =>
+                      item.hasReview ? (
+                        <p key={item.medicineId} className="text-sm text-brand-neutral-500">
+                          You reviewed {item.name}. Thank you!
+                        </p>
+                      ) : (
+                        <MedicineReviewForm
+                          key={item.medicineId}
+                          orderId={o.id}
+                          medicineId={item.medicineId}
+                          medicineName={item.name}
+                          onSubmitted={() => handleItemReviewed(o.id, item.medicineId)}
+                        />
+                      ),
+                    )}
+                  </div>
                 )}
 
                 {CANCELLABLE.has(o.status) && (
@@ -214,6 +309,7 @@ function PrescriptionCard({
               createdAt: new Date().toISOString(),
               pharmacyName: pharmacy?.name ?? null,
               itemNames: availableMatches.map((m) => m.productName),
+              items: [],
               shipment: null,
             });
             setExpanded(false);

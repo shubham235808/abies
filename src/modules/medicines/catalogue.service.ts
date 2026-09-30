@@ -190,6 +190,8 @@ export interface PublicMedicineListing {
   pharmacy: { id: string; name: string | null; serviceAreas: string[] };
   quantityAvailable: number;
   price: number;
+  rating: number;
+  reviewCount: number;
   // EXPANSION-1 — one row per distinct variant (or one "null" row for a
   // plain, non-variant product), sorted by the variant's own sortOrder.
   // The catalogue grid shows price/quantityAvailable above as a "from ₹X"
@@ -263,6 +265,8 @@ export async function searchPublic(query: PublicSearchQuery): Promise<{ total: n
         pharmacy: row.pharmacy,
         quantityAvailable: row.quantityAvailable,
         price: row.price,
+        rating: row.medicine.rating,
+        reviewCount: row.medicine.reviewCount,
         variants: [],
       });
     }
