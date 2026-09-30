@@ -58,11 +58,22 @@ export async function resolveMedicineByName(
   });
 }
 
+// EXPANSION-1 — find-or-create a pack-size variant under a medicine, by
+// label. Additive: a medicine nobody has ever given a variant label to
+// has none, and every existing product keeps working unvaried.
+async function resolveVariant(medicineId: string, label: string) {
+  const trimmed = label.trim();
+  const existing = await prisma.medicineVariant.findUnique({ where: { medicineId_label: { medicineId, label: trimmed } } });
+  if (existing) return existing;
+  const count = await prisma.medicineVariant.count({ where: { medicineId } });
+  return prisma.medicineVariant.create({ data: { medicineId, label: trimmed, sortOrder: count } });
+}
+
 export async function listMyInventory(userId: string) {
   const pharmacy = await ensurePharmacyProfile(userId);
   return prisma.pharmacyInventory.findMany({
     where: { pharmacyId: pharmacy.id },
-    include: { medicine: true },
+    include: { medicine: true, variant: true },
     orderBy: [{ medicine: { name: 'asc' } }, { expiryDate: 'asc' }],
   });
 }
@@ -103,17 +114,20 @@ export async function addInventory(userId: string, dto: AddInventoryInput) {
   });
   if (existingBatch) throw new ConflictError('You already have a batch with this number for this medicine');
 
+  const variant = dto.variantLabel ? await resolveVariant(medicine.id, dto.variantLabel) : null;
+
   return prisma.$transaction(async (tx) => {
     const row = await tx.pharmacyInventory.create({
       data: {
         pharmacyId: pharmacy.id,
         medicineId: medicine.id,
+        variantId: variant?.id,
         batchNumber: dto.batchNumber,
         expiryDate,
         quantityAvailable: dto.quantityAvailable,
         price: dto.price,
       },
-      include: { medicine: true },
+      include: { medicine: true, variant: true },
     });
     await recordStockMovement(tx, {
       pharmacyId: pharmacy.id,
@@ -137,7 +151,7 @@ export async function updateInventory(userId: string, inventoryId: string, dto: 
         price: dto.price,
         expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : undefined,
       },
-      include: { medicine: true },
+      include: { medicine: true, variant: true },
     });
     if (dto.quantityAvailable !== undefined && dto.quantityAvailable !== row.quantityAvailable) {
       await recordStockMovement(tx, {
@@ -158,6 +172,13 @@ export async function removeInventory(userId: string, inventoryId: string) {
   await prisma.pharmacyInventory.delete({ where: { id: row.id } });
 }
 
+export interface PublicMedicineVariantOption {
+  variantId: string | null; // null = this pharmacy's non-variant batch(es)
+  label: string | null;
+  price: number;
+  quantityAvailable: number;
+}
+
 export interface PublicMedicineListing {
   medicineId: string;
   name: string;
@@ -169,6 +190,12 @@ export interface PublicMedicineListing {
   pharmacy: { id: string; name: string | null; serviceAreas: string[] };
   quantityAvailable: number;
   price: number;
+  // EXPANSION-1 — one row per distinct variant (or one "null" row for a
+  // plain, non-variant product), sorted by the variant's own sortOrder.
+  // The catalogue grid shows price/quantityAvailable above as a "from ₹X"
+  // summary; a product-detail page can render this array as a pack-size
+  // selector.
+  variants: PublicMedicineVariantOption[];
 }
 
 // OTC-only (requiresPrescription: false) — a prescribed medicine is ordered
@@ -203,11 +230,21 @@ export async function searchPublic(query: PublicSearchQuery): Promise<{ total: n
         ...(query.area ? { serviceAreas: { has: query.area } } : {}),
       },
     },
-    include: { medicine: true, pharmacy: { select: { id: true, name: true, serviceAreas: true } } },
+    include: {
+      medicine: true,
+      variant: { select: { id: true, label: true, sortOrder: true } },
+      pharmacy: { select: { id: true, name: true, serviceAreas: true } },
+    },
     orderBy: { price: 'asc' },
   });
 
   const grouped = new Map<string, PublicMedicineListing>();
+  // Per (pharmacy, medicine) group, aggregate by variant — a variant's own
+  // quantity/price summed across that pharmacy's batches of it, same
+  // simplification the outer grouping already makes for the medicine as a
+  // whole.
+  const variantsByGroup = new Map<string, Map<string, { variantId: string | null; label: string | null; sortOrder: number; price: number; quantityAvailable: number }>>();
+
   for (const row of rows) {
     const key = `${row.pharmacyId}:${row.medicineId}`;
     const existing = grouped.get(key);
@@ -226,8 +263,31 @@ export async function searchPublic(query: PublicSearchQuery): Promise<{ total: n
         pharmacy: row.pharmacy,
         quantityAvailable: row.quantityAvailable,
         price: row.price,
+        variants: [],
       });
     }
+
+    const variantMap = variantsByGroup.get(key) ?? new Map();
+    variantsByGroup.set(key, variantMap);
+    const variantKey = row.variantId ?? 'none';
+    const existingVariant = variantMap.get(variantKey);
+    if (existingVariant) {
+      existingVariant.quantityAvailable += row.quantityAvailable;
+      existingVariant.price = Math.min(existingVariant.price, row.price);
+    } else {
+      variantMap.set(variantKey, {
+        variantId: row.variantId,
+        label: row.variant?.label ?? null,
+        sortOrder: row.variant?.sortOrder ?? 0,
+        price: row.price,
+        quantityAvailable: row.quantityAvailable,
+      });
+    }
+  }
+
+  for (const [key, listing] of grouped) {
+    const variants = [...(variantsByGroup.get(key)?.values() ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
+    listing.variants = variants.map((v) => ({ variantId: v.variantId, label: v.label, price: v.price, quantityAvailable: v.quantityAvailable }));
   }
 
   const all = [...grouped.values()].sort((a, b) => a.name.localeCompare(b.name));

@@ -133,7 +133,7 @@ export async function bookOrder(patientUserId: string, dto: BookOrderInput) {
 
   const prescriptionItemByMedicineId = new Map((prescription?.items ?? []).filter((i) => i.medicineId).map((i) => [i.medicineId as string, i.id]));
 
-  type ResolvedItem = { medicineId: string; medicineName: string; quantity: number; batchNumber: string; unitPrice: number; prescriptionItemId?: string; inventoryId?: string };
+  type ResolvedItem = { medicineId: string; variantId?: string; medicineName: string; quantity: number; batchNumber: string; unitPrice: number; prescriptionItemId?: string; inventoryId?: string };
   const resolvedItems: ResolvedItem[] = [];
 
   for (const requested of dto.items) {
@@ -143,9 +143,9 @@ export async function bookOrder(patientUserId: string, dto: BookOrderInput) {
       if (!prescriptionItemId) {
         throw new BadRequestError(`${medicine.name} requires a prescription and was not found on the selected prescription`);
       }
-      resolvedItems.push({ medicineId: medicine.id, medicineName: medicine.name, quantity: requested.quantity, batchNumber: '', unitPrice: 0, prescriptionItemId });
+      resolvedItems.push({ medicineId: medicine.id, variantId: requested.variantId, medicineName: medicine.name, quantity: requested.quantity, batchNumber: '', unitPrice: 0, prescriptionItemId });
     } else {
-      resolvedItems.push({ medicineId: medicine.id, medicineName: medicine.name, quantity: requested.quantity, batchNumber: '', unitPrice: 0 });
+      resolvedItems.push({ medicineId: medicine.id, variantId: requested.variantId, medicineName: medicine.name, quantity: requested.quantity, batchNumber: '', unitPrice: 0 });
     }
   }
 
@@ -158,7 +158,11 @@ export async function bookOrder(patientUserId: string, dto: BookOrderInput) {
       // phase, so insufficient stock in any one batch fails the booking
       // rather than silently partial-filling it.
       const batch = await tx.pharmacyInventory.findFirst({
-        where: { pharmacyId: pharmacy.id, medicineId: item.medicineId, quantityAvailable: { gte: item.quantity } },
+        // EXPANSION-1 — variantId: item.variantId ?? null matches only
+        // this exact variant's batches (or only non-variant batches when
+        // the item didn't request one) — never silently substitutes a
+        // different pack size for the one the patient picked.
+        where: { pharmacyId: pharmacy.id, medicineId: item.medicineId, variantId: item.variantId ?? null, quantityAvailable: { gte: item.quantity } },
         orderBy: { expiryDate: 'asc' },
       });
       if (!batch) throw new BadRequestError(`Insufficient stock for ${item.medicineName} at this pharmacy`);
@@ -179,6 +183,7 @@ export async function bookOrder(patientUserId: string, dto: BookOrderInput) {
         items: {
           create: resolvedItems.map((item) => ({
             medicineId: item.medicineId,
+            variantId: item.variantId,
             batchNumber: item.batchNumber,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
@@ -371,7 +376,7 @@ function detailInclude() {
   return {
     pharmacy: { select: { id: true, name: true, serviceAreas: true } },
     patientUser: { select: { mobile: true, patientProfile: { select: { firstName: true, lastName: true } } } },
-    items: { include: { medicine: { select: { name: true, form: true, strength: true } } } },
+    items: { include: { medicine: { select: { name: true, form: true, strength: true } }, variant: { select: { label: true } } } },
     shipment: true,
     payment: { select: { status: true, amount: true } },
   };
@@ -391,7 +396,7 @@ export async function listMineAsPatient(patientUserId: string) {
     where: { patientUserId },
     include: {
       pharmacy: { select: { name: true } },
-      items: { include: { medicine: { select: { name: true } } } },
+      items: { include: { medicine: { select: { name: true } }, variant: { select: { label: true } } } },
       shipment: true,
     },
     orderBy: { createdAt: 'desc' },
@@ -405,7 +410,7 @@ export async function listMineAsPharmacy(pharmacyUserId: string) {
     where: { pharmacyId: pharmacy.id, payment: { status: 'SUCCESS' } },
     include: {
       patientUser: { select: { mobile: true, patientProfile: { select: { firstName: true, lastName: true } } } },
-      items: { include: { medicine: { select: { name: true } } } },
+      items: { include: { medicine: { select: { name: true } }, variant: { select: { label: true } } } },
     },
     orderBy: { createdAt: 'asc' },
   });

@@ -527,3 +527,92 @@ describe('POS / GST (ENTERPRISE-7)', () => {
     ).rejects.toThrow(BadRequestError);
   });
 });
+
+describe('medicine variants (EXPANSION-1)', () => {
+  it('groups batches of the same pack size into one variant, and keeps different sizes separate', async () => {
+    const { pharmacyUserId, pharmacyId } = await approvedPharmacy();
+    const medicineName = `Chyawanprash-${randomInt(1000, 9999)}`;
+
+    const small = await addInventory(pharmacyUserId, {
+      name: medicineName,
+      requiresPrescription: false,
+      variantLabel: '250gm',
+      batchNumber: `B${randomInt(100000, 999999)}`,
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      quantityAvailable: 20,
+      price: 250,
+    });
+    expect(small.variant?.label).toBe('250gm');
+
+    const large = await addInventory(pharmacyUserId, {
+      medicineId: small.medicineId,
+      variantLabel: '1kg',
+      batchNumber: `B${randomInt(100000, 999999)}`,
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      quantityAvailable: 10,
+      price: 800,
+    });
+    expect(large.variant?.label).toBe('1kg');
+    expect(large.variant?.id).not.toBe(small.variant?.id);
+
+    // A second batch of the SAME size finds the existing variant rather
+    // than creating a duplicate.
+    const secondSmallBatch = await addInventory(pharmacyUserId, {
+      medicineId: small.medicineId,
+      variantLabel: '250gm',
+      batchNumber: `B${randomInt(100000, 999999)}`,
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      quantityAvailable: 5,
+      price: 260,
+    });
+    expect(secondSmallBatch.variant?.id).toBe(small.variant?.id);
+
+    const { medicines } = await searchPublic({ q: medicineName });
+    const listing = medicines.find((m) => m.medicineId === small.medicineId && m.pharmacy.id === pharmacyId);
+    expect(listing?.variants).toHaveLength(2);
+    const sizes = listing?.variants.map((v) => v.label).sort();
+    expect(sizes).toEqual(['1kg', '250gm']);
+    const smallListing = listing?.variants.find((v) => v.label === '250gm');
+    expect(smallListing?.quantityAvailable).toBe(25); // 20 + 5 across the two 250gm batches
+    expect(smallListing?.price).toBe(250); // cheapest of the two 250gm batches
+  });
+
+  it("bookOrder matches the patient's chosen variant, never a different pack size", async () => {
+    const patientId = await registerUser('PATIENT');
+    const { pharmacyUserId, pharmacyId } = await approvedPharmacy();
+    const medicineName = `Ashwagandha-${randomInt(1000, 9999)}`;
+
+    const small = await addInventory(pharmacyUserId, {
+      name: medicineName,
+      requiresPrescription: false,
+      variantLabel: '250gm',
+      batchNumber: `V${randomInt(100000, 999999)}`,
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      quantityAvailable: 5,
+      price: 300,
+    });
+    const large = await addInventory(pharmacyUserId, {
+      medicineId: small.medicineId,
+      variantLabel: '1kg',
+      batchNumber: `V${randomInt(100000, 999999)}`,
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      quantityAvailable: 5,
+      price: 900,
+    });
+
+    const { order } = await bookOrder(patientId, {
+      pharmacyId,
+      deliveryAddress: 'Somewhere',
+      items: [{ medicineId: small.medicineId, variantId: large.variant!.id, quantity: 1 }],
+    });
+
+    const detail = await getOrder(patientId, 'PATIENT', order.id);
+    expect(detail.items[0]?.unitPrice).toBe(900); // the 1kg variant's price, not the 250gm one
+    expect(detail.items[0]?.variant?.label).toBe('1kg');
+
+    const smallRow = await prisma.pharmacyInventory.findUniqueOrThrow({ where: { id: small.id } });
+    const largeRow = await prisma.pharmacyInventory.findUniqueOrThrow({ where: { id: large.id } });
+    expect(smallRow.quantityAvailable).toBe(5); // untouched
+    expect(largeRow.quantityAvailable).toBe(4); // decremented
+  });
+});

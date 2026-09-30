@@ -1167,6 +1167,7 @@ model Medicine {
   inventory            PharmacyInventory[]
   orderItems           MedicineOrderItem[]
   physicalSaleItems    PhysicalSaleItem[]
+  variants             MedicineVariant[]
 
   @@index([name])
 }
@@ -1206,10 +1207,33 @@ model Pharmacy {
   @@index([verificationStatus, active])
 }
 
+// EXPANSION-1 — a purchasable size/pack of a Medicine (e.g. "250gm",
+// "500gm", "1kg"). Additive and optional: a Medicine with no variants
+// behaves exactly as before (every reference below is a nullable FK), so
+// none of the ~20 existing services touching PharmacyInventory/
+// MedicineOrderItem by medicineId alone need to change to keep working.
+model MedicineVariant {
+  id         String   @id @default(cuid())
+  medicineId String
+  label      String
+  sortOrder  Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  medicine   Medicine            @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  inventory  PharmacyInventory[]
+  orderItems MedicineOrderItem[]
+
+  @@unique([medicineId, label])
+  @@index([medicineId])
+}
+
 model PharmacyInventory {
   id                String              @id @default(cuid())
   pharmacyId        String
   medicineId        String
+  variantId         String?
   batchNumber       String
   expiryDate        DateTime
   quantityAvailable Int
@@ -1218,6 +1242,7 @@ model PharmacyInventory {
   updatedAt         DateTime            @updatedAt
   pharmacy          Pharmacy            @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
   medicine          Medicine            @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  variant           MedicineVariant?    @relation(fields: [variantId], references: [id], onDelete: SetNull)
   stockMovements    StockMovement[]
 
   @@unique([pharmacyId, medicineId, batchNumber])
@@ -1412,6 +1437,7 @@ model MedicineOrderItem {
   medicineOrderId    String
   prescriptionItemId String?
   medicineId         String
+  variantId          String?
   batchNumber        String
   quantity           Int
   unitPrice          Int
@@ -1419,6 +1445,7 @@ model MedicineOrderItem {
   medicineOrder      MedicineOrder     @relation(fields: [medicineOrderId], references: [id], onDelete: Cascade)
   prescriptionItem   PrescriptionItem? @relation(fields: [prescriptionItemId], references: [id], onDelete: SetNull)
   medicine           Medicine          @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  variant            MedicineVariant?  @relation(fields: [variantId], references: [id], onDelete: SetNull)
 
   @@index([medicineOrderId])
 }

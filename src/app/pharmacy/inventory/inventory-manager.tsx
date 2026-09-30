@@ -19,6 +19,7 @@ type InventoryRow = {
   quantityAvailable: number;
   price: number;
   medicine: { id: string; name: string; form: string | null; strength: string | null; requiresPrescription: boolean; hsnCode: string | null };
+  variant: { label: string } | null;
 };
 
 type FormValues = z.infer<typeof addInventorySchema>;
@@ -44,7 +45,10 @@ export function InventoryManager({ initial }: { initial: InventoryRow[] }) {
       label: 'Medicine',
       render: (r) => (
         <>
-          <p className="font-medium text-brand-neutral-900">{r.medicine.name}</p>
+          <p className="font-medium text-brand-neutral-900">
+            {r.medicine.name}
+            {r.variant && <span className="text-xs font-normal text-brand-neutral-500"> ({r.variant.label})</span>}
+          </p>
           <p className="text-xs text-brand-neutral-400">{[r.medicine.form, r.medicine.strength].filter(Boolean).join(' · ')}</p>
         </>
       ),
@@ -155,6 +159,14 @@ function NewBatchForm({ onCreated, onCancel }: { onCreated: (item: InventoryRow)
           <Label htmlFor="hsnCode">HSN code</Label>
           <Input id="hsnCode" placeholder="e.g. 3004" {...register('hsnCode')} />
           <p className="mt-1 text-xs text-brand-neutral-400">Needed to sell this item at the POS counter — only filled if not already set.</p>
+        </div>
+        <div>
+          <Label htmlFor="variantLabel">Pack size (optional)</Label>
+          <Input id="variantLabel" placeholder="e.g. 250gm" {...register('variantLabel')} />
+          <p className="mt-1 text-xs text-brand-neutral-400">
+            Leave blank for a single-size product. Reuse the same size text across batches to group them as one
+            purchasable pack size.
+          </p>
         </div>
         <div>
           <Label htmlFor="batchNumber">Batch number</Label>

@@ -21,6 +21,10 @@ export const addInventorySchema = z.object({
   // message rather than guessing a rate.
   category: z.string().max(100).optional(),
   hsnCode: z.string().max(20).optional(),
+  // EXPANSION-1 — find-or-create by label under this medicine, same
+  // pattern as resolveMedicineByName below. Omitted: this batch is a
+  // plain, non-variant product, exactly as every existing product works.
+  variantLabel: z.string().max(60).optional(),
   batchNumber: z.string().min(1).max(100),
   expiryDate: z.string().datetime(),
   quantityAvailable: z.number().int().min(0).max(1_000_000),

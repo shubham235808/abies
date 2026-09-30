@@ -9,6 +9,10 @@ export const bookOrderSchema = z.object({
     .array(
       z.object({
         medicineId: z.string().min(1),
+        // EXPANSION-1 — omitted for a plain, non-variant product; required
+        // in effect once a medicine has variants, since bookOrder refuses
+        // to guess which pack size was meant.
+        variantId: z.string().optional(),
         quantity: z.number().int().min(1).max(1000),
       }),
     )
