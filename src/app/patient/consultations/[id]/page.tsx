@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
-import { Alert } from '@/components/ui/alert';
 import { Badge, ConsultationStatusBadge, PrescriptionStatusBadge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { VideoCallPanel } from '@/components/ui/video-call-panel';
 import { NotFoundError } from '@/lib/errors';
 import { resolveJoinInfo } from '@/lib/video';
 import { getConsultation, recordJoin } from '@/modules/consultations/consultations.service';
@@ -40,7 +40,16 @@ export default async function PatientConsultationPage({ params }: { params: Prom
         <ConsultationStatusBadge status={consultation.status} />
       </div>
 
-      {consultation.appointment.mode === 'VIDEO' && <Alert tone="info" className="mt-4">{resolveJoinInfo().message}</Alert>}
+      {consultation.appointment.mode === 'VIDEO' && (
+        <VideoCallPanel
+          message={resolveJoinInfo().message}
+          joinedAt={
+            consultation.videoSession
+              ? { doctor: consultation.videoSession.doctorJoinedAt?.toISOString() ?? null, patient: consultation.videoSession.patientJoinedAt?.toISOString() ?? null }
+              : undefined
+          }
+        />
+      )}
 
       {(consultation.chiefComplaint || consultation.historyOfPresentIllness) && (
         <Card className="mt-6">

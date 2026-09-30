@@ -10,6 +10,7 @@ import { Badge, CarePlanStatusBadge, ConsultationStatusBadge, PrescriptionStatus
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
+import { VideoCallPanel } from '@/components/ui/video-call-panel';
 import { api, ApiError } from '@/lib/api-client';
 import { createCarePlanSchema } from '@/modules/care-plans/care-plans.schemas';
 import { saveClinicalNoteSchema, updateConsultationDetailsSchema } from '@/modules/consultations/consultations.schemas';
@@ -133,16 +134,15 @@ export function ConsultationWorkspace({
         </Alert>
       )}
 
-      {consultation.appointment.mode === 'VIDEO' && (
-        <Alert tone="info" className="mt-4">
-          {videoJoinMessage}
-          {consultation.videoSession && (
-            <p className="mt-1 text-xs opacity-80">
-              You joined: {consultation.videoSession.doctorJoinedAt ? new Date(consultation.videoSession.doctorJoinedAt).toLocaleTimeString() : 'not yet'} ·
-              {' '}Patient joined: {consultation.videoSession.patientJoinedAt ? new Date(consultation.videoSession.patientJoinedAt).toLocaleTimeString() : 'not yet'}
-            </p>
-          )}
-        </Alert>
+      {consultation.appointment.mode === 'VIDEO' && videoJoinMessage && (
+        <VideoCallPanel
+          message={videoJoinMessage}
+          joinedAt={
+            consultation.videoSession
+              ? { doctor: consultation.videoSession.doctorJoinedAt, patient: consultation.videoSession.patientJoinedAt }
+              : undefined
+          }
+        />
       )}
 
       <div className="mt-6 flex gap-3">
