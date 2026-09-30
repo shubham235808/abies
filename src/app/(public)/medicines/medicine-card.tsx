@@ -8,18 +8,45 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Input, Label } from '@/components/ui/input';
+import { Input, Label, Select } from '@/components/ui/input';
+import { useToast } from '@/components/ui/toast';
 import { api, ApiError } from '@/lib/api-client';
 import { loadRazorpayScript } from '@/lib/razorpay-checkout';
 import type { PublicMedicineListing } from '@/modules/medicines/catalogue.service';
 
 export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicineListing; viewerRole: string | null }) {
   const router = useRouter();
+  const toast = useToast();
+  const hasVariants = medicine.variants.length > 1;
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(medicine.variants[0]?.variantId ?? null);
+  const selectedVariant = medicine.variants.find((v) => v.variantId === selectedVariantId) ?? medicine.variants[0];
+  const unitPrice = selectedVariant?.price ?? medicine.price;
+  const availableQuantity = selectedVariant?.quantityAvailable ?? medicine.quantityAvailable;
+
   const [ordering, setOrdering] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [address, setAddress] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
+
+  async function handleAddToCart() {
+    setError(null);
+    setAddingToCart(true);
+    try {
+      await api.post('/api/patients/me/cart', {
+        pharmacyId: medicine.pharmacy.id,
+        medicineId: medicine.medicineId,
+        variantId: selectedVariantId ?? undefined,
+        quantity,
+      });
+      toast.show(`Added ${medicine.name} to cart.`, 'success');
+    } catch (err) {
+      toast.show(err instanceof ApiError ? err.message : 'Could not add this to your cart.', 'danger');
+    } finally {
+      setAddingToCart(false);
+    }
+  }
 
   async function handleBookAndPay() {
     if (!address) {
@@ -36,7 +63,7 @@ export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicin
       }>('/api/medicine-orders', {
         pharmacyId: medicine.pharmacy.id,
         deliveryAddress: address,
-        items: [{ medicineId: medicine.medicineId, quantity }],
+        items: [{ medicineId: medicine.medicineId, variantId: selectedVariantId ?? undefined, quantity }],
       });
 
       await loadRazorpayScript();
@@ -92,9 +119,26 @@ export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicin
             {[medicine.form, medicine.strength].filter(Boolean).join(' · ')} · {medicine.pharmacy.name ?? 'Pharmacy'}
           </p>
         </div>
-        <Badge tone="blue">₹{medicine.price}</Badge>
+        <Badge tone="blue">₹{unitPrice}</Badge>
       </div>
-      <p className="mt-2 text-xs text-brand-neutral-400">{medicine.quantityAvailable} in stock</p>
+      <p className="mt-2 text-xs text-brand-neutral-400">{availableQuantity} in stock</p>
+
+      {hasVariants && (
+        <div className="mt-3">
+          <Label htmlFor={`variant-${medicine.medicineId}`}>Pack size</Label>
+          <Select
+            id={`variant-${medicine.medicineId}`}
+            value={selectedVariantId ?? ''}
+            onChange={(e) => setSelectedVariantId(e.target.value || null)}
+          >
+            {medicine.variants.map((v) => (
+              <option key={v.variantId ?? 'default'} value={v.variantId ?? ''}>
+                {v.label ?? 'Standard'} — ₹{v.price}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
 
       {viewerRole !== 'PATIENT' ? (
         <div className="mt-3 text-sm text-brand-neutral-500">
@@ -118,7 +162,7 @@ export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicin
               id={`qty-${medicine.medicineId}`}
               type="number"
               min={1}
-              max={medicine.quantityAvailable}
+              max={availableQuantity}
               value={quantity}
               onChange={(e) => setQuantity(Number(e.target.value))}
             />
@@ -128,13 +172,18 @@ export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicin
             <Input id={`address-${medicine.medicineId}`} value={address} onChange={(e) => setAddress(e.target.value)} />
           </div>
           <Button size="sm" loading={submitting} onClick={handleBookAndPay}>
-            Order & pay ₹{medicine.price * quantity}
+            Order & pay ₹{unitPrice * quantity}
           </Button>
         </div>
       ) : (
-        <Button variant="secondary" size="sm" className="mt-3" onClick={() => setOrdering(true)}>
-          Order
-        </Button>
+        <div className="mt-3 flex gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setOrdering(true)}>
+            Order
+          </Button>
+          <Button variant="ghost" size="sm" loading={addingToCart} onClick={handleAddToCart}>
+            Add to cart
+          </Button>
+        </div>
       )}
     </Card>
   );

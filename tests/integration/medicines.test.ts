@@ -23,6 +23,7 @@ import { holdSlot, verifyPayment } from '@/modules/appointments/appointments.ser
 import { createPrescription, finalizePrescription } from '@/modules/consultations/prescriptions.service';
 import { approve as approvePharmacy } from '@/modules/medicines/admin-pharmacies.service';
 import { addInventory, searchPublic, updateInventory } from '@/modules/medicines/catalogue.service';
+import { addToCart, checkoutCart, getCart, listMyCarts, removeCartItem, updateCartItem } from '@/modules/medicines/cart.service';
 import { createGstRate } from '@/modules/configuration/configuration.service';
 import { ensurePharmacyProfile, submitPharmacy, updateMyPharmacy, upsertMyTaxSettings } from '@/modules/medicines/pharmacies.service';
 import { recordSale } from '@/modules/medicines/pos.service';
@@ -614,5 +615,102 @@ describe('medicine variants (EXPANSION-1)', () => {
     const largeRow = await prisma.pharmacyInventory.findUniqueOrThrow({ where: { id: large.id } });
     expect(smallRow.quantityAvailable).toBe(5); // untouched
     expect(largeRow.quantityAvailable).toBe(4); // decremented
+  });
+});
+
+describe('persistent cart (EXPANSION-1b)', () => {
+  it('adding the same item twice accumulates quantity in one cart', async () => {
+    const patientId = await registerUser('PATIENT');
+    const { pharmacyUserId, pharmacyId } = await approvedPharmacy();
+    const stocked = await stockedOtcMedicine(pharmacyUserId, `Cart-${randomInt(1000, 9999)}`, 20, 40);
+
+    const first = await addToCart(patientId, { pharmacyId, medicineId: stocked.medicineId, quantity: 2 });
+    expect(first.items).toHaveLength(1);
+    expect(first.items[0]?.quantity).toBe(2);
+
+    const second = await addToCart(patientId, { pharmacyId, medicineId: stocked.medicineId, quantity: 3 });
+    expect(second.id).toBe(first.id);
+    expect(second.items).toHaveLength(1);
+    expect(second.items[0]?.quantity).toBe(5);
+    expect(second.subtotal).toBe(200); // 5 x 40
+  });
+
+  it('keeps carts from different pharmacies separate', async () => {
+    const patientId = await registerUser('PATIENT');
+    const { pharmacyUserId: pharmacyUserId1, pharmacyId: pharmacyId1 } = await approvedPharmacy();
+    const { pharmacyUserId: pharmacyUserId2, pharmacyId: pharmacyId2 } = await approvedPharmacy();
+    const item1 = await stockedOtcMedicine(pharmacyUserId1, `Cart-${randomInt(1000, 9999)}`, 20, 40);
+    const item2 = await stockedOtcMedicine(pharmacyUserId2, `Cart-${randomInt(1000, 9999)}`, 20, 60);
+
+    await addToCart(patientId, { pharmacyId: pharmacyId1, medicineId: item1.medicineId, quantity: 1 });
+    await addToCart(patientId, { pharmacyId: pharmacyId2, medicineId: item2.medicineId, quantity: 1 });
+
+    const carts = await listMyCarts(patientId);
+    expect(carts).toHaveLength(2);
+    expect(new Set(carts.map((c) => c.pharmacy.id))).toEqual(new Set([pharmacyId1, pharmacyId2]));
+  });
+
+  it('refuses to add a prescription-required medicine to the cart', async () => {
+    const patientId = await registerUser('PATIENT');
+    const { pharmacyUserId, pharmacyId } = await approvedPharmacy();
+    const rxItem = await addInventory(pharmacyUserId, {
+      name: `RxCart-${randomInt(1000, 9999)}`,
+      requiresPrescription: true,
+      batchNumber: 'B1',
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      quantityAvailable: 10,
+      price: 100,
+    });
+
+    await expect(addToCart(patientId, { pharmacyId, medicineId: rxItem.medicineId, quantity: 1 })).rejects.toThrow(BadRequestError);
+  });
+
+  it('updating a cart item quantity to zero removes it', async () => {
+    const patientId = await registerUser('PATIENT');
+    const { pharmacyUserId, pharmacyId } = await approvedPharmacy();
+    const stocked = await stockedOtcMedicine(pharmacyUserId, `Cart-${randomInt(1000, 9999)}`, 20, 40);
+
+    const cart = await addToCart(patientId, { pharmacyId, medicineId: stocked.medicineId, quantity: 2 });
+    const updated = await updateCartItem(patientId, cart.items[0]!.id, { quantity: 0 });
+    expect(updated.items).toHaveLength(0);
+  });
+
+  it("refuses a non-owning patient from touching someone else's cart item", async () => {
+    const patientId = await registerUser('PATIENT');
+    const stranger = await registerUser('PATIENT');
+    const { pharmacyUserId, pharmacyId } = await approvedPharmacy();
+    const stocked = await stockedOtcMedicine(pharmacyUserId, `Cart-${randomInt(1000, 9999)}`, 20, 40);
+
+    const cart = await addToCart(patientId, { pharmacyId, medicineId: stocked.medicineId, quantity: 1 });
+    await expect(removeCartItem(stranger, cart.items[0]!.id)).rejects.toThrow(NotFoundError);
+  });
+
+  it('checkout converts a cart into a real order and marks the cart CONVERTED', async () => {
+    const patientId = await registerUser('PATIENT');
+    const { pharmacyUserId, pharmacyId } = await approvedPharmacy();
+    const stocked = await stockedOtcMedicine(pharmacyUserId, `Cart-${randomInt(1000, 9999)}`, 20, 40);
+
+    const cart = await addToCart(patientId, { pharmacyId, medicineId: stocked.medicineId, quantity: 2 });
+    const { order } = await checkoutCart(patientId, cart.id, { deliveryAddress: '221B Baker Street' });
+    expect(order.status).toBe('PENDING');
+
+    const row = await prisma.pharmacyInventory.findUniqueOrThrow({ where: { id: stocked.id } });
+    expect(row.quantityAvailable).toBe(18);
+
+    const convertedCart = await prisma.cart.findUniqueOrThrow({ where: { id: cart.id } });
+    expect(convertedCart.status).toBe('CONVERTED');
+    expect(convertedCart.convertedOrderId).toBe(order.id);
+
+    await expect(getCart(patientId, cart.id)).resolves.toMatchObject({ status: 'CONVERTED' });
+    const activeCarts = await listMyCarts(patientId);
+    expect(activeCarts.find((c) => c.id === cart.id)).toBeUndefined();
+  });
+
+  it('refuses to check out an empty cart', async () => {
+    const patientId = await registerUser('PATIENT');
+    const { pharmacyId } = await approvedPharmacy();
+    const cart = await prisma.cart.create({ data: { patientUserId: patientId, pharmacyId, status: 'ACTIVE' } });
+
+    await expect(checkoutCart(patientId, cart.id, { deliveryAddress: 'Somewhere' })).rejects.toThrow(BadRequestError);
   });
 });
