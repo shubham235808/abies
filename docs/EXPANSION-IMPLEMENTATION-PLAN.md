@@ -3,7 +3,20 @@
 Closes Phase 0 of `ABIES-AGENTIC-DEVELOPMENT-MASTER-PROMPT.md`. Companion
 docs: `EXPANSION-GAP-ANALYSIS.md` (what's new and why),
 `EXPANSION-DOMAIN-MODEL.md` (schema sketch), `EXPANSION-TARGET-ARCHITECTURE.md`
-(the four-deployable migration). This document sequences the work.
+(the four-deployable migration), `EXPANSION-1-VISUAL-GAP-ANALYSIS.md`
+(the visual-design reconciliation pass, added after a 15-screen UI/UX
+reference was supplied and the user asked for it to run first). This
+document sequences the work.
+
+## Renumbering note
+
+The stage numbers below were reassigned after the visual-design
+reference was supplied, per explicit direction to run that pass first:
+**EXPANSION-1 is now Visual Design Reconciliation** (see
+`EXPANSION-1-VISUAL-GAP-ANALYSIS.md`), and Settlement/FMCG/Hospital/
+migration/final-QA each moved one slot later than described in this
+document's original stage list below. Treat every "EXPANSION-N" label
+in the section headers immediately below as shifted by one.
 
 ## Sequencing rationale
 
