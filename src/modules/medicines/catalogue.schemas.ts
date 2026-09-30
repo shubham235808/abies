@@ -40,6 +40,12 @@ export const updateInventorySchema = z.object({
 export const publicMedicineSearchSchema = z.object({
   q: z.string().optional(),
   area: z.string().optional(),
+  // EXPANSION-1d — additive catalogue filters over existing fields
+  // (Medicine.category, Medicine.brandName, PharmacyInventory.price).
+  category: z.string().optional(),
+  brand: z.string().optional(),
+  priceMin: z.coerce.number().min(0).optional(),
+  priceMax: z.coerce.number().min(0).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
   offset: z.coerce.number().int().min(0).optional(),
 });

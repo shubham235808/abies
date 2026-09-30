@@ -1,4 +1,5 @@
 import { facets, searchPublic } from '@/modules/medicines/catalogue.service';
+import { publicMedicineSearchSchema } from '@/modules/medicines/catalogue.schemas';
 import { getCurrentSession } from '@/server/current-user';
 import { MedicinesFilters } from './filters';
 import { MedicineCard } from './medicine-card';
@@ -15,7 +16,7 @@ export default async function MedicinesPage({
 }) {
   const params = await searchParams;
   const [{ medicines, total }, facetData, session] = await Promise.all([
-    searchPublic({ q: params.q, area: params.area }),
+    searchPublic(publicMedicineSearchSchema.parse(params)),
     facets(),
     getCurrentSession(),
   ]);

@@ -34,9 +34,17 @@ const STATUS_TONE: Record<Doc['status'], 'neutral' | 'success' | 'danger' | 'ora
   RESUBMISSION_REQUIRED: 'orange',
 };
 
-export function DocumentsManager({ initial, editable }: { initial: Doc[]; editable: boolean }) {
+export function DocumentsManager({
+  initial,
+  editable,
+  photoEditable,
+}: {
+  initial: Doc[];
+  editable: boolean;
+  photoEditable: boolean;
+}) {
   const [documents, setDocuments] = useState(initial);
-  const [type, setType] = useState(TYPES[0]!.value);
+  const [type, setType] = useState(editable ? TYPES[0]!.value : 'PROFILE_PHOTO');
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -122,7 +130,7 @@ export function DocumentsManager({ initial, editable }: { initial: Doc[]; editab
               <Button variant="secondary" size="sm" onClick={() => handleDownload(doc.id)}>
                 View
               </Button>
-              {editable && (
+              {(doc.type === 'PROFILE_PHOTO' ? photoEditable : editable) && (
                 <Button variant="ghost" size="sm" onClick={() => setPendingRemoveId(doc.id)}>
                   Remove
                 </Button>
@@ -133,11 +141,11 @@ export function DocumentsManager({ initial, editable }: { initial: Doc[]; editab
         {documents.length === 0 && <p className="text-sm text-brand-neutral-500">No documents uploaded yet.</p>}
       </div>
 
-      {editable && (
+      {(editable || photoEditable) && (
         <div className="mt-6 space-y-3 rounded-card border border-brand-neutral-200 p-5">
           <Label htmlFor="doc-type">Document type</Label>
           <Select id="doc-type" value={type} onChange={(e) => setType(e.target.value)}>
-            {TYPES.map((t) => (
+            {TYPES.filter((t) => (t.value === 'PROFILE_PHOTO' ? photoEditable : editable)).map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
               </option>

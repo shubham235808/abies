@@ -240,6 +240,47 @@ describe('document resubmission (ENTERPRISE-5)', () => {
   });
 });
 
+describe('doctor profile photo (EXPANSION-1d)', () => {
+  it('lets an already-approved doctor add and remove a profile photo, unlike a credential document', async () => {
+    const userId = await registerDoctor();
+    const { profile: submitted } = await completeAndSubmitDoctor(userId);
+    await approveDoctor(submitted.id);
+
+    // Credential documents stay locked once approved — unchanged behavior.
+    await expect(
+      addDocument(userId, 'ID_PROOF', { originalName: 'id.pdf', ...pdf }, { userId }),
+    ).rejects.toThrow(ForbiddenError);
+
+    // A profile photo is marketing content, not a credential — always editable.
+    const photo = await addDocument(userId, 'PROFILE_PHOTO', { originalName: 'photo.jpg', mimeType: 'image/jpeg', size: 1024, buffer: Buffer.from('fake-jpeg') }, { userId });
+    expect(photo.type).toBe('PROFILE_PHOTO');
+
+    await removeDocument(userId, photo.id, { userId });
+    const remaining = await prisma.doctorDocument.findMany({ where: { doctorProfileId: submitted.id, type: 'PROFILE_PHOTO' } });
+    expect(remaining).toHaveLength(0);
+  });
+
+  it("exposes photoUrl only once an admin has VERIFIED the doctor's photo", async () => {
+    const userId = await registerDoctor();
+    const { profile: submitted } = await completeAndSubmitDoctor(userId);
+    await approveDoctor(submitted.id);
+
+    let { doctor } = await publicProfile(submitted.slug);
+    expect(doctor.photoUrl).toBeNull();
+
+    const photo = await addDocument(userId, 'PROFILE_PHOTO', { originalName: 'photo.jpg', mimeType: 'image/jpeg', size: 1024, buffer: Buffer.from('fake-jpeg') }, { userId });
+
+    ({ doctor } = await publicProfile(submitted.slug));
+    expect(doctor.photoUrl).toBeNull(); // uploaded, not yet verified
+
+    const adminId = await registerAdmin();
+    await reviewDocument(submitted.id, photo.id, { userId: adminId }, 'VERIFY');
+
+    ({ doctor } = await publicProfile(submitted.slug));
+    expect(doctor.photoUrl).toBe(`/api/public/doctors/${submitted.slug}/photo`);
+  });
+});
+
 // docs/ENTERPRISE-GAP-ANALYSIS.md §4 — language-matching ranks, never hides.
 describe('language-matching ranking (ENTERPRISE-4)', () => {
   it('ranks a language-matching doctor first without hiding a non-matching one', async () => {

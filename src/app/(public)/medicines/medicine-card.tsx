@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label, Select } from '@/components/ui/input';
+import { RatingBadge } from '@/components/ui/rating';
 import { useToast } from '@/components/ui/toast';
 import { api, ApiError } from '@/lib/api-client';
 import { loadRazorpayScript } from '@/lib/razorpay-checkout';
@@ -118,6 +119,9 @@ export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicin
           <p className="text-xs text-brand-neutral-500">
             {[medicine.form, medicine.strength].filter(Boolean).join(' · ')} · {medicine.pharmacy.name ?? 'Pharmacy'}
           </p>
+          <div className="mt-1">
+            <RatingBadge rating={medicine.rating} reviewCount={medicine.reviewCount} />
+          </div>
         </div>
         <Badge tone="blue">₹{unitPrice}</Badge>
       </div>

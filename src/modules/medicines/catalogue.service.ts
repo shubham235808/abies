@@ -213,9 +213,14 @@ export async function searchPublic(query: PublicSearchQuery): Promise<{ total: n
   const rows = await prisma.pharmacyInventory.findMany({
     where: {
       quantityAvailable: { gt: 0 },
+      ...(query.priceMin !== undefined || query.priceMax !== undefined
+        ? { price: { gte: query.priceMin, lte: query.priceMax } }
+        : {}),
       medicine: {
         active: true,
         requiresPrescription: false,
+        ...(query.category ? { category: query.category } : {}),
+        ...(query.brand ? { brandName: query.brand } : {}),
         ...(query.q
           ? {
               OR: [
@@ -304,5 +309,13 @@ export async function facets() {
     select: { serviceAreas: true },
   });
   const areas = [...new Set(pharmacies.flatMap((p) => p.serviceAreas))].sort((a, b) => a.localeCompare(b));
-  return { areas };
+
+  const inStockMedicines = await prisma.medicine.findMany({
+    where: { active: true, requiresPrescription: false, inventory: { some: { quantityAvailable: { gt: 0 }, pharmacy: { verificationStatus: 'APPROVED', active: true } } } },
+    select: { category: true, brandName: true },
+  });
+  const categories = [...new Set(inStockMedicines.map((m) => m.category).filter((c): c is string => Boolean(c)))].sort((a, b) => a.localeCompare(b));
+  const brands = [...new Set(inStockMedicines.map((m) => m.brandName).filter((b): b is string => Boolean(b)))].sort((a, b) => a.localeCompare(b));
+
+  return { areas, categories, brands };
 }

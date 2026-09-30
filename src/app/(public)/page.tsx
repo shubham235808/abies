@@ -107,41 +107,107 @@ const HOW_IT_WORKS = [
   { step: '6', title: 'Track your health journey', body: 'Every visit, report and order in one patient dashboard.' },
 ];
 
+// EXPANSION-1d — reference UI shows a lifestyle/family photograph here; no
+// such licensed asset exists in this repo (docs/EXPANSION-1-VISUAL-GAP-ANALYSIS.md
+// open item #4), so this is a hand-drawn gradient/illustration placeholder
+// instead of fabricated or unlicensed stock photography, matching this
+// app's existing hand-rolled-SVG precedent.
+function HeroIllustration() {
+  return (
+    <svg viewBox="0 0 400 400" className="h-full w-full" aria-hidden="true">
+      <defs>
+        <linearGradient id="heroBlob" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="var(--color-brand-purple-200)" />
+          <stop offset="100%" stopColor="var(--color-brand-blue-100)" />
+        </linearGradient>
+        <linearGradient id="heroLeaf" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="var(--color-brand-purple-600)" />
+          <stop offset="100%" stopColor="var(--color-brand-magenta-500)" />
+        </linearGradient>
+      </defs>
+      <circle cx="200" cy="200" r="180" fill="url(#heroBlob)" />
+      <path
+        d="M200 90c60 0 110 50 110 110s-50 110-110 110c0-60 0-160 0-220Z"
+        fill="url(#heroLeaf)"
+        opacity="0.9"
+      />
+      <path
+        d="M200 90c-60 0-110 50-110 110s50 110 110 110c0-60 0-160 0-220Z"
+        fill="url(#heroLeaf)"
+        opacity="0.55"
+      />
+      <path d="M200 90v220" stroke="white" strokeWidth="3" strokeLinecap="round" opacity="0.6" />
+      <circle cx="130" cy="140" r="10" fill="white" opacity="0.7" />
+      <circle cx="280" cy="270" r="14" fill="white" opacity="0.5" />
+    </svg>
+  );
+}
+
+const CATEGORY_TILES: { title: string; href: string; accent: Accent }[] = [
+  { title: 'Doctors', href: '/doctors', accent: 'purple' },
+  { title: 'Medicines', href: '/medicines', accent: 'magenta' },
+  { title: 'Diagnostics', href: '/diagnostics', accent: 'blue' },
+  { title: 'Panchakarma', href: '/panchakarma', accent: 'orange' },
+];
+
 export default async function HomePage() {
   const [heroPromotion] = await activePromotionsForPlacement('PUBLIC_HOME_HERO', {}, 1);
 
   return (
     <main>
       <div className="bg-gradient-to-br from-brand-purple-50 via-white to-brand-blue-50">
-        <div className="mx-auto max-w-5xl px-6 pb-16 pt-14">
-          <p className="text-sm font-semibold uppercase tracking-wide text-brand-magenta-600">
-            Care orchestration platform
-          </p>
-          <h1 className="mt-2 text-4xl font-semibold text-brand-neutral-900 sm:text-5xl">
-            Trusted, coordinated{' '}
-            <span className="bg-gradient-to-r from-brand-purple-600 to-brand-magenta-500 bg-clip-text text-transparent">
-              Ayurveda care
-            </span>
-          </h1>
-          <p className="mt-4 max-w-2xl text-lg text-brand-neutral-600">
-            ABIES connects patients with verified Ayurveda practitioners, diagnostics, medicine
-            fulfilment and Panchakarma centres through one coordinated treatment journey — not a
-            set of disconnected bookings.
-          </p>
+        <div className="mx-auto grid max-w-5xl gap-8 px-6 pb-10 pt-14 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-brand-magenta-600">
+              Care orchestration platform
+            </p>
+            <h1 className="mt-2 text-4xl font-semibold text-brand-neutral-900 sm:text-5xl">
+              Trusted, coordinated{' '}
+              <span className="bg-gradient-to-r from-brand-purple-600 to-brand-magenta-500 bg-clip-text text-transparent">
+                Ayurveda care
+              </span>
+            </h1>
+            <p className="mt-4 max-w-2xl text-lg text-brand-neutral-600">
+              ABIES connects patients with verified Ayurveda practitioners, diagnostics, medicine
+              fulfilment and Panchakarma centres through one coordinated treatment journey — not a
+              set of disconnected bookings.
+            </p>
 
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <Link
-              href="/doctors"
-              className="rounded-lg bg-brand-purple-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-purple-700"
-            >
-              Find a doctor
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-lg border border-brand-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-brand-neutral-700 hover:bg-brand-neutral-50"
-            >
-              Sign in
-            </Link>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Link
+                href="/doctors"
+                className="rounded-lg bg-brand-purple-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-purple-700"
+              >
+                Find a doctor
+              </Link>
+              <Link
+                href="/login"
+                className="rounded-lg border border-brand-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-brand-neutral-700 hover:bg-brand-neutral-50"
+              >
+                Sign in
+              </Link>
+            </div>
+          </div>
+
+          <div className="mx-auto aspect-square w-full max-w-sm">
+            <HeroIllustration />
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-5xl px-6 pb-10">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {CATEGORY_TILES.map((tile) => (
+              <Link
+                key={tile.title}
+                href={tile.href}
+                className="flex flex-col items-center gap-2 rounded-card border border-brand-neutral-200 bg-white p-4 text-center shadow-sm transition-colors hover:border-brand-purple-300"
+              >
+                <span className={`inline-flex rounded-lg p-2 ${ACCENT_CLASSES[tile.accent].chip}`}>
+                  {ACCENT_CLASSES[tile.accent].icon}
+                </span>
+                <span className="text-sm font-medium text-brand-neutral-900">{tile.title}</span>
+              </Link>
+            ))}
           </div>
         </div>
       </div>

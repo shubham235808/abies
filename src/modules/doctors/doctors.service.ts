@@ -223,7 +223,14 @@ export async function addDocument(
   auditCtx: AuditContext,
 ) {
   const profile = await ensureProfile(userId);
-  if (!(await documentsEditable(profile))) {
+  // PROFILE_PHOTO is marketing/display content, not a credential document
+  // the verification-lock exists to protect — unlike a registration
+  // certificate, a doctor needs to be able to update their photo at any
+  // time, including once already APPROVED (the normal, permanent state
+  // for a live doctor). Public display still requires admin re-VERIFICATION
+  // of the new upload (modules/doctors/doctors.service.ts's PUBLIC_PHOTO_INCLUDE),
+  // so this doesn't skip moderation, only the credential-editability lock.
+  if (type !== DoctorDocumentType.PROFILE_PHOTO && !(await documentsEditable(profile))) {
     throw new ForbiddenError('Documents can be changed only while the application is in Draft or Rejected state, or a document has been flagged for resubmission');
   }
   assertUploadAllowed({ mimetype: file.mimeType, size: file.size });
@@ -273,10 +280,10 @@ export async function getDocumentDownloadUrl(userId: string, id: string): Promis
 
 export async function removeDocument(userId: string, id: string, auditCtx: AuditContext) {
   const profile = await ensureProfile(userId);
-  if (!(await documentsEditable(profile))) {
+  const document = await documentForOwner(userId, id);
+  if (document.type !== DoctorDocumentType.PROFILE_PHOTO && !(await documentsEditable(profile))) {
     throw new ForbiddenError('Documents cannot be removed while verification is in progress or approved');
   }
-  const document = await documentForOwner(userId, id);
   await prisma.doctorDocument.delete({ where: { id } });
   await deleteObject(document.storagePath).catch(() => undefined);
 
@@ -406,8 +413,14 @@ export async function submit(userId: string, declarationAccepted: boolean, audit
   return { profile: updated, message: 'Application submitted for ABIES verification' };
 }
 
+const PUBLIC_PHOTO_INCLUDE = {
+  where: { type: DoctorDocumentType.PROFILE_PHOTO, status: DoctorDocumentStatus.VERIFIED },
+  take: 1,
+  orderBy: { createdAt: 'desc' as const },
+} satisfies Prisma.DoctorDocumentFindManyArgs;
+
 function publicDoctor(
-  d: Prisma.DoctorProfileGetPayload<{ include: { clinics: true; availability: true } }>,
+  d: Prisma.DoctorProfileGetPayload<{ include: { clinics: true; availability: true; documents: typeof PUBLIC_PHOTO_INCLUDE } }>,
   patientLanguages?: string[],
 ) {
   const fullName = [d.title || 'Dr.', d.firstName, d.lastName].filter(Boolean).join(' ');
@@ -437,6 +450,12 @@ function publicDoctor(
     startingFee: fees.length ? Math.min(...fees) : null,
     rating: d.rating,
     reviewCount: d.reviewCount,
+    // EXPANSION-1d — a doctor's PROFILE_PHOTO document (already an
+    // existing upload type, previously write-only: uploaded but never
+    // surfaced publicly) is shown once an admin has VERIFIED it, the
+    // same trust gate already used for the profile's own discoverability
+    // — never an unreviewed upload shown to anonymous visitors.
+    photoUrl: d.documents.length > 0 ? `/api/public/doctors/${d.slug}/photo` : null,
     clinics: d.clinics,
     availability: d.availability,
     verified: true,
@@ -527,6 +546,7 @@ export async function searchPublic(query: PublicSearchQuery) {
         include: {
           clinics: { where: { active: true }, orderBy: { createdAt: 'asc' } },
           availability: { where: { active: true }, orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }] },
+          documents: PUBLIC_PHOTO_INCLUDE,
         },
       }),
     ]);
@@ -542,6 +562,7 @@ export async function searchPublic(query: PublicSearchQuery) {
       include: {
         clinics: { where: { active: true }, orderBy: { createdAt: 'asc' } },
         availability: { where: { active: true }, orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }] },
+        documents: PUBLIC_PHOTO_INCLUDE,
       },
     }),
   ]);
@@ -566,10 +587,24 @@ export async function publicProfile(slug: string) {
     include: {
       clinics: { where: { active: true }, orderBy: { createdAt: 'asc' } },
       availability: { where: { active: true }, orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }] },
+      documents: PUBLIC_PHOTO_INCLUDE,
     },
   });
   if (!doctor) throw new NotFoundError('Doctor not found');
   return { doctor: publicDoctor(doctor) };
+}
+
+// Resolves the actual signed download URL for a doctor's public photo, so
+// the redirect route can stay a thin two-line handler. Same VERIFIED-only
+// gate as publicDoctor()'s photoUrl flag.
+export async function publicPhotoDownloadUrl(slug: string): Promise<string> {
+  const doctor = await prisma.doctorProfile.findFirst({
+    where: { slug, verificationStatus: DoctorVerificationStatus.APPROVED, isDiscoverable: true },
+    select: { documents: PUBLIC_PHOTO_INCLUDE },
+  });
+  const photo = doctor?.documents[0];
+  if (!photo) throw new NotFoundError('Photo not found');
+  return getSignedDownloadUrl(photo.storagePath);
 }
 
 export async function facets() {

@@ -1,9 +1,12 @@
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
+import { DoctorAvatar } from '@/components/ui/doctor-avatar';
+import { RatingBadge } from '@/components/ui/rating';
 
 export interface PublicDoctorSummary {
   slug: string;
   name: string;
+  photoUrl: string | null;
   primaryQualification: string | null;
   highestQualification: string | null;
   yearsExperience: number | null;
@@ -25,12 +28,18 @@ export function DoctorCard({ doctor }: { doctor: PublicDoctorSummary }) {
       className="block rounded-card border border-brand-neutral-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-semibold text-brand-neutral-900">{doctor.name}</p>
-          <p className="text-sm text-brand-neutral-500">
-            {doctor.highestQualification || doctor.primaryQualification}
-            {doctor.yearsExperience ? ` · ${doctor.yearsExperience} yrs experience` : ''}
-          </p>
+        <div className="flex items-start gap-3">
+          <DoctorAvatar photoUrl={doctor.photoUrl} name={doctor.name} size={48} />
+          <div>
+            <p className="font-semibold text-brand-neutral-900">{doctor.name}</p>
+            <p className="text-sm text-brand-neutral-500">
+              {doctor.highestQualification || doctor.primaryQualification}
+              {doctor.yearsExperience ? ` · ${doctor.yearsExperience} yrs experience` : ''}
+            </p>
+            <div className="mt-1">
+              <RatingBadge rating={doctor.rating} reviewCount={doctor.reviewCount} />
+            </div>
+          </div>
         </div>
         <Badge tone="success">Verified</Badge>
       </div>
@@ -50,15 +59,10 @@ export function DoctorCard({ doctor }: { doctor: PublicDoctorSummary }) {
         <span>{doctor.consultationModes.join(' · ')}</span>
       </div>
 
-      <div className="mt-3 flex items-center justify-between">
+      <div className="mt-3">
         <span className="text-sm text-brand-neutral-600">
           {doctor.startingFee ? `From ₹${doctor.startingFee}` : 'Fee on request'}
         </span>
-        {doctor.reviewCount > 0 && (
-          <span className="text-sm text-brand-neutral-500">
-            ★ {doctor.rating.toFixed(1)} ({doctor.reviewCount})
-          </span>
-        )}
       </div>
     </Link>
   );

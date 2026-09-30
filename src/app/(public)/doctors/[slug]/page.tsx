@@ -1,8 +1,11 @@
 import { notFound } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { DoctorAvatar } from '@/components/ui/doctor-avatar';
+import { RatingBadge } from '@/components/ui/rating';
 import { NotFoundError } from '@/lib/errors';
 import { publicProfile } from '@/modules/doctors/doctors.service';
+import { listForDoctorBySlug } from '@/modules/reviews/reviews.service';
 import { getCurrentSession } from '@/server/current-user';
 import { BookingWidget } from './booking-widget';
 
@@ -24,16 +27,23 @@ export default async function DoctorProfilePage({ params }: { params: Promise<{ 
     throw err;
   }
   const session = await getCurrentSession();
+  const reviews = await listForDoctorBySlug(slug);
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold text-brand-neutral-900">{doctor.name}</h1>
-          <p className="mt-1 text-brand-neutral-600">
-            {doctor.highestQualification || doctor.primaryQualification}
-            {doctor.yearsExperience ? ` · ${doctor.yearsExperience} years experience` : ''}
-          </p>
+        <div className="flex items-start gap-4">
+          <DoctorAvatar photoUrl={doctor.photoUrl} name={doctor.name} size={64} />
+          <div>
+            <h1 className="text-3xl font-semibold text-brand-neutral-900">{doctor.name}</h1>
+            <p className="mt-1 text-brand-neutral-600">
+              {doctor.highestQualification || doctor.primaryQualification}
+              {doctor.yearsExperience ? ` · ${doctor.yearsExperience} years experience` : ''}
+            </p>
+            <div className="mt-1">
+              <RatingBadge rating={doctor.rating} reviewCount={doctor.reviewCount} />
+            </div>
+          </div>
         </div>
         <Badge tone="success">Verified practitioner</Badge>
       </div>
@@ -93,6 +103,31 @@ export default async function DoctorProfilePage({ params }: { params: Promise<{ 
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {reviews.length > 0 && (
+        <div className="mt-8">
+          <h2 className="font-semibold text-brand-neutral-900">Patient reviews</h2>
+          <div className="mt-3 space-y-3">
+            {reviews.map((r) => {
+              const firstName = r.author.patientProfile?.firstName;
+              const lastInitial = r.author.patientProfile?.lastName?.[0];
+              const authorLabel = firstName ? `${firstName}${lastInitial ? ` ${lastInitial}.` : ''}` : 'A patient';
+              return (
+                <Card key={r.id}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-brand-neutral-900">{authorLabel}</span>
+                    <span className="text-sm text-brand-purple-600" aria-label={`${r.rating} out of 5 stars`}>
+                      {'★'.repeat(r.rating)}
+                      {'☆'.repeat(5 - r.rating)}
+                    </span>
+                  </div>
+                  {r.comment && <p className="mt-2 text-sm text-brand-neutral-600">{r.comment}</p>}
+                </Card>
+              );
+            })}
+          </div>
         </div>
       )}
 

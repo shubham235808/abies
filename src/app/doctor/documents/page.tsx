@@ -24,6 +24,11 @@ export default async function DoctorDocumentsPage() {
       <div className="mt-6">
         <DocumentsManager
           editable={editable}
+          // Profile photo is marketing/display content, not a credential
+          // document — it can be updated any time, including once already
+          // approved, unlike registration/degree certificates (see
+          // modules/doctors/doctors.service.ts's addDocument comment).
+          photoEditable
           initial={profile.documents.map((d) => ({
             id: d.id,
             type: d.type,
