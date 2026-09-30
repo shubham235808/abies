@@ -8,16 +8,6 @@ docs: `EXPANSION-GAP-ANALYSIS.md` (what's new and why),
 reference was supplied and the user asked for it to run first). This
 document sequences the work.
 
-## Renumbering note
-
-The stage numbers below were reassigned after the visual-design
-reference was supplied, per explicit direction to run that pass first:
-**EXPANSION-1 is now Visual Design Reconciliation** (see
-`EXPANSION-1-VISUAL-GAP-ANALYSIS.md`), and Settlement/FMCG/Hospital/
-migration/final-QA each moved one slot later than described in this
-document's original stage list below. Treat every "EXPANSION-N" label
-in the section headers immediately below as shifted by one.
-
 ## Sequencing rationale
 
 Domain logic (Settlement, FMCG, Hospital) ships **before** the four-app
@@ -42,7 +32,50 @@ verification against the real running app → commit.
 `EXPANSION-DOMAIN-MODEL.md`, `EXPANSION-TARGET-ARCHITECTURE.md`, this
 plan. No application code touched.
 
-## EXPANSION-1 — Settlement engine
+## EXPANSION-1 — Visual design reconciliation
+
+**Status: complete** (sub-staged 1a-1d, each independently live-verified
+and committed). Per the user's explicit direction to run this pass
+before Settlement, displacing every stage below by one slot from this
+document's original numbering — see `EXPANSION-1-VISUAL-GAP-ANALYSIS.md`
+for the full per-screen gap analysis and the open-item decisions that
+scoped it.
+
+- **1a — Product variants**: `MedicineVariant` model (pack-size options
+  per product), additive/nullable on `PharmacyInventory` and
+  `MedicineOrderItem`.
+- **1b — Persistent cart**: `Cart`/`CartItem`, one active cart per
+  (patient, pharmacy), checkout delegates to the existing `bookOrder()`.
+- **1c — Reviews & ratings**: real, verified-transaction-gated reviews
+  (`Review` model) for doctors (completed appointment) and medicines
+  (delivered order item). Aggregate `rating`/`reviewCount` on
+  `DoctorProfile` (already existed, previously dormant) and `Medicine`
+  (new) only activate once a minimum sample size is reached — explicitly
+  not a pay-to-rank surface, since the aggregate is gated on verified
+  transactions, not payment.
+- **1d — Visual redesign proper**: homepage hero (placeholder gradient/
+  illustration — no licensed photography exists) and category tiles;
+  medicines catalogue filters (category/brand/price) and rating badges;
+  doctor photos (surfaced the pre-existing but previously-unused
+  `PROFILE_PHOTO` document type publicly once admin-verified, and fixed
+  a real bug this uncovered — the credential-document edit lock blocked
+  already-approved doctors from ever adding one); doctor profile reviews
+  section; a visual stepper over the existing real booking flow;
+  Panchakarma hero band; Management Command Centre revenue trend +
+  category-breakdown charts (recharts, computed from real `Payment` rows
+  via one parameterized raw-SQL date-bucketing query); a "camera off"
+  video-call placeholder panel (redesigned layout, same honest
+  no-live-provider message — never rendered to look like an active
+  call); pharmacy orders converted to the same `DataTable` component
+  already used elsewhere for ops screens.
+
+Live video consultation and product-detail-page ratings/review lists
+were confirmed explicitly out of scope for this pass (see the visual
+gap analysis's open items) — the former has no real provider to
+integrate, the latter's display surface (a dedicated product page)
+doesn't exist in this app's architecture and wasn't asked for.
+
+## EXPANSION-2 — Settlement engine
 
 **Scope**: `PartnerFeeTerm`, `Commission`, `Payout`, `Settlement`,
 `Reconciliation` models. Service layer: fee computation triggered when a
@@ -64,7 +97,7 @@ existing tables besides read-only references to `Payment`.
 clawback treatment for an already-paid-out commission (accounting
 decision, not engineering).
 
-## EXPANSION-2 — FMCG catalogue
+## EXPANSION-3 — FMCG catalogue
 
 **Scope**: `Medicine.isFmcg` boolean. Admin catalogue view filtered to
 FMCG items (a tab on the existing Pharmacy inventory manager or a filter
@@ -75,7 +108,7 @@ fulfilment logic — reuses `PharmacyInventory`/`MedicineOrder` unchanged.
 
 **Database changes**: 1 additive boolean field.
 
-## EXPANSION-3 — Inpatient hospital module
+## EXPANSION-4 — Inpatient hospital module
 
 **Scope**: `HospitalFacility`, `HospitalWard`, `HospitalBed`,
 `HospitalAdmission`, `HospitalBedTransfer`, `HospitalRoundNote`,
@@ -96,7 +129,7 @@ medication-administration-record charting, nursing shift notes, order
 sets, and bed-charge billing. These need real clinical/billing rules
 defined before they're built, not invented here.
 
-## EXPANSION-4 — Four-app migration
+## EXPANSION-5 — Four-app migration
 
 **Scope**: exactly what `EXPANSION-TARGET-ARCHITECTURE.md` specifies —
 workspace conversion, `packages/domain` + `packages/design-system`
@@ -110,12 +143,13 @@ single-app deployment live and serving traffic throughout, cut over only
 after every portal passes the same live-verification discipline every
 other stage in this project has used — never a big-bang replace.
 
-## EXPANSION-5 — Final QA, security, and responsive pass
+## EXPANSION-6 — Final QA, security, and responsive pass
 
 **Scope**: repeats ENTERPRISE-15's own methodology (screenshot pass at
 three breakpoints, live E2E verification, keyboard-only accessibility
-check, OWASP-style security review) — scoped to what EXPANSION-1 through
-4 actually added: the Settlement engine's financial-calculation
+check, OWASP-style security review) — scoped to what EXPANSION-2 through
+5 actually added (EXPANSION-1's visual pass was already live-verified
+per-substage as it shipped): the Settlement engine's financial-calculation
 correctness (deterministic server-side tests, per the master prompt's own
 Rule 14 on financial invariants), the Hospital module's authorization
 boundaries (a doctor must not see another facility's admissions without
@@ -134,9 +168,9 @@ until the migration itself is live).
 
 ## Next step
 
-This plan is ready for review. Per the master prompt's own Phase 0 gate
-("migration strategy approved by Orchestrator") and this project's
-standing practice of confirming before large, hard-to-reverse changes,
-EXPANSION-1 (Settlement) starts on explicit go-ahead — it's the lowest-
-risk, most clearly-grounded stage, and doesn't block on anything else in
-this plan.
+EXPANSION-1 (Visual design reconciliation) is complete. Per the master
+prompt's own Phase 0 gate ("migration strategy approved by Orchestrator")
+and this project's standing practice of confirming before large,
+hard-to-reverse changes, EXPANSION-2 (Settlement) starts on explicit
+go-ahead — it's the lowest-risk, most clearly-grounded of the remaining
+stages, and doesn't block on anything else in this plan.
