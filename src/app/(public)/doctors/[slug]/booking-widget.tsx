@@ -7,7 +7,10 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label, Select, Textarea } from '@/components/ui/input';
+import { Stepper } from '@/components/ui/stepper';
 import { api, ApiError } from '@/lib/api-client';
+
+const STEPS = ['Choose a slot', 'Your details', 'Pay & confirm'];
 import { loadRazorpayScript } from '@/lib/razorpay-checkout';
 
 type Slot = { startsAt: string; endsAt: string; mode: 'VIDEO' | 'CLINIC'; clinicId: string | null };
@@ -160,9 +163,14 @@ export function BookingWidget({
     );
   }
 
+  const currentStep = booking ? 3 : selectedSlot ? 2 : 1;
+
   return (
     <Card className="mt-10">
       <h2 className="font-semibold text-brand-neutral-900">Book an appointment</h2>
+      <div className="mt-3">
+        <Stepper steps={STEPS} currentStep={currentStep} />
+      </div>
 
       {error && (
         <Alert tone="error" className="mt-3">

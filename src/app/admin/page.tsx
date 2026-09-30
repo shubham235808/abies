@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { RevenueBreakdownChart, RevenueTrendChart } from '@/components/admin/revenue-charts';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { MetricCard } from '@/components/ui/metric-card';
 import { getDashboardMetrics } from '@/modules/admin/dashboard.service';
@@ -88,7 +89,12 @@ export default async function AdminOverviewPage() {
         )}
       </Card>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <RevenueTrendChart trend={metrics.revenueTrend} />
+        <RevenueBreakdownChart byPurpose={metrics.revenueByPurpose} />
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardTitle className="text-base">Revenue</CardTitle>
           <p className="mt-2 text-2xl font-semibold text-brand-neutral-900">₹{metrics.totalRevenue.toLocaleString('en-IN')}</p>
