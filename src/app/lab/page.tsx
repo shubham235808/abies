@@ -4,9 +4,11 @@ import { VerificationBadge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MetricCard } from '@/components/ui/metric-card';
 import { ListRow } from '@/components/ui/list-row';
+import { EarningsSummaryCard } from '@/components/settlement/earnings-history';
 import { getMyLab } from '@/modules/diagnostics/labs.service';
 import { listMyTests } from '@/modules/diagnostics/catalogue.service';
 import { listMineAsLab } from '@/modules/diagnostics/orders.service';
+import { earningsSummary } from '@/modules/settlement/earnings.service';
 import { requireSessionOrRedirect } from '@/server/current-user';
 import { SubmitButton } from './submit-button';
 
@@ -25,7 +27,7 @@ export default async function LabOverviewPage() {
   const editable = lab.verificationStatus === 'DRAFT' || lab.verificationStatus === 'REJECTED';
   const approved = lab.verificationStatus === 'APPROVED';
 
-  const orders = approved ? await listMineAsLab(session.userId) : [];
+  const [orders, earnings] = approved ? await Promise.all([listMineAsLab(session.userId), earningsSummary('DIAGNOSTIC_LAB', lab.id)]) : [[], null];
   const today = new Date();
 
   // docs/PORTAL-UX-SPEC.md's Lab dashboard — every bucket derived from
@@ -112,6 +114,7 @@ export default async function LabOverviewPage() {
             <MetricCard title="Reports pending" value={reportsPending.length} href="/lab/orders" />
             <MetricCard title="Completed today" value={completedToday.length} href="/lab/orders" />
             <MetricCard title="Test catalogue" value={tests.length} href="/lab/tests" />
+            {earnings && <EarningsSummaryCard summary={earnings} href="/lab/earnings" />}
           </div>
 
           <div className="mt-6">

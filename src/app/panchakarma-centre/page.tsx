@@ -4,9 +4,11 @@ import { VerificationBadge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MetricCard } from '@/components/ui/metric-card';
 import { ListRow } from '@/components/ui/list-row';
+import { EarningsSummaryCard } from '@/components/settlement/earnings-history';
 import { getMyCentre } from '@/modules/panchakarma/centres.service';
 import { listMyTherapies } from '@/modules/panchakarma/catalogue.service';
 import { listMineAsCentre } from '@/modules/panchakarma/bookings.service';
+import { earningsSummary } from '@/modules/settlement/earnings.service';
 import { requireSessionOrRedirect } from '@/server/current-user';
 import { SubmitButton } from './submit-button';
 
@@ -25,7 +27,9 @@ export default async function PanchakarmaCentreOverviewPage() {
   const editable = centre.verificationStatus === 'DRAFT' || centre.verificationStatus === 'REJECTED';
   const approved = centre.verificationStatus === 'APPROVED';
 
-  const bookings = approved ? await listMineAsCentre(session.userId) : [];
+  const [bookings, earnings] = approved
+    ? await Promise.all([listMineAsCentre(session.userId), earningsSummary('PANCHAKARMA_CENTRE', centre.id)])
+    : [[], null];
   const now = new Date();
 
   // docs/PORTAL-UX-SPEC.md's Panchakarma Centre dashboard — every bucket
@@ -99,6 +103,7 @@ export default async function PanchakarmaCentreOverviewPage() {
             <MetricCard title="Active courses" value={activeCourses.length} href="/panchakarma-centre/bookings" />
             <MetricCard title="Completed" value={completed.length} href="/panchakarma-centre/bookings" />
             <MetricCard title="Therapists" href="/panchakarma-centre/therapists" description="Manage your practitioner roster" />
+            {earnings && <EarningsSummaryCard summary={earnings} href="/panchakarma-centre/earnings" />}
           </div>
 
           <div className="mt-6">

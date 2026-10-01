@@ -6,6 +6,7 @@ const NAV = [
   { href: '/panchakarma-centre/therapies', label: 'Therapies' },
   { href: '/panchakarma-centre/therapists', label: 'Therapists' },
   { href: '/panchakarma-centre/bookings', label: 'Bookings' },
+  { href: '/panchakarma-centre/earnings', label: 'Earnings' },
 ];
 
 export default function PanchakarmaCentreLayout({ children }: { children: React.ReactNode }) {

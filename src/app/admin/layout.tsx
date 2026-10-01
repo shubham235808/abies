@@ -7,6 +7,7 @@ const NAV = [
   { href: '/admin/refunds', label: 'Refunds' },
   { href: '/admin/audit', label: 'Audit Log' },
   { href: '/admin/configuration', label: 'Configuration' },
+  { href: '/admin/settlement', label: 'Settlement' },
   { href: '/admin/promotions', label: 'Promotions' },
   { href: '/admin/reports', label: 'Reports' },
 ];

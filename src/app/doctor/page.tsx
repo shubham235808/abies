@@ -2,9 +2,11 @@ import Link from 'next/link';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { VerificationBadge } from '@/components/ui/badge';
+import { EarningsSummaryCard } from '@/components/settlement/earnings-history';
 import { listMineAsDoctor, myPracticeSummary } from '@/modules/appointments/appointments.service';
 import { listTasksNeedingAttention } from '@/modules/consultations/consultations.service';
 import { getMe } from '@/modules/doctors/doctors.service';
+import { earningsSummary } from '@/modules/settlement/earnings.service';
 import { requireSessionOrRedirect } from '@/server/current-user';
 import { SubmitButton } from './submit-button';
 
@@ -18,9 +20,14 @@ export default async function DoctorOverviewPage() {
   const editable = profile.verificationStatus === 'DRAFT' || profile.verificationStatus === 'REJECTED';
   const approved = profile.verificationStatus === 'APPROVED';
 
-  const [appointments, tasks, practiceSummary] = approved
-    ? await Promise.all([listMineAsDoctor(session.userId), listTasksNeedingAttention(session.userId), myPracticeSummary(session.userId)])
-    : [[], [], null];
+  const [appointments, tasks, practiceSummary, earnings] = approved
+    ? await Promise.all([
+        listMineAsDoctor(session.userId),
+        listTasksNeedingAttention(session.userId),
+        myPracticeSummary(session.userId),
+        earningsSummary('DOCTOR', profile.id),
+      ])
+    : [[], [], null, null];
 
   const today = new Date();
   const todaysSchedule = appointments
@@ -134,7 +141,7 @@ export default async function DoctorOverviewPage() {
           </Card>
 
           {practiceSummary && (
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardTitle className="text-base">Consultations this month</CardTitle>
                 <CardDescription>{practiceSummary.monthLabel}</CardDescription>
@@ -150,6 +157,7 @@ export default async function DoctorOverviewPage() {
                 <CardDescription>{practiceSummary.noShow} no-show(s) this month</CardDescription>
                 <p className="mt-2 text-2xl font-semibold text-brand-neutral-900">{practiceSummary.noShowRatePercent}%</p>
               </Card>
+              {earnings && <EarningsSummaryCard summary={earnings} href="/doctor/earnings" />}
             </div>
           )}
 

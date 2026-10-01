@@ -5,6 +5,7 @@ const NAV = [
   { href: '/lab/profile', label: 'Profile' },
   { href: '/lab/tests', label: 'Test catalogue' },
   { href: '/lab/orders', label: 'Orders' },
+  { href: '/lab/earnings', label: 'Earnings' },
 ];
 
 export default function LabLayout({ children }: { children: React.ReactNode }) {

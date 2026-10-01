@@ -7,6 +7,7 @@ const NAV = [
   { href: '/pharmacy/orders', label: 'Orders' },
   { href: '/pharmacy/pos', label: 'POS' },
   { href: '/pharmacy/tax-settings', label: 'Tax Settings' },
+  { href: '/pharmacy/earnings', label: 'Earnings' },
 ];
 
 export default function PharmacyLayout({ children }: { children: React.ReactNode }) {

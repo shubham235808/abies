@@ -4,9 +4,11 @@ import { VerificationBadge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MetricCard } from '@/components/ui/metric-card';
 import { ListRow } from '@/components/ui/list-row';
+import { EarningsSummaryCard } from '@/components/settlement/earnings-history';
 import { getMyPharmacy } from '@/modules/medicines/pharmacies.service';
 import { listMyInventory } from '@/modules/medicines/catalogue.service';
 import { listMineAsPharmacy } from '@/modules/medicines/orders.service';
+import { earningsSummary } from '@/modules/settlement/earnings.service';
 import { requireSessionOrRedirect } from '@/server/current-user';
 import { SubmitButton } from './submit-button';
 
@@ -24,7 +26,7 @@ export default async function PharmacyOverviewPage() {
   const editable = pharmacy.verificationStatus === 'DRAFT' || pharmacy.verificationStatus === 'REJECTED';
   const approved = pharmacy.verificationStatus === 'APPROVED';
 
-  const orders = approved ? await listMineAsPharmacy(session.userId) : [];
+  const [orders, earnings] = approved ? await Promise.all([listMineAsPharmacy(session.userId), earningsSummary('PHARMACY', pharmacy.id)]) : [[], null];
 
   // docs/PORTAL-UX-SPEC.md's Pharmacy dashboard — every bucket derived from
   // MedicineOrderStatus and PharmacyInventory.expiryDate, no new query.
@@ -96,6 +98,7 @@ export default async function PharmacyOverviewPage() {
             <MetricCard title="In transit" value={inTransit.length} href="/pharmacy/orders" />
             <MetricCard title="Low stock" value={lowStock.length} href="/pharmacy/inventory" />
             <MetricCard title="Expiring within 30 days" value={expiringSoon.length} href="/pharmacy/inventory" />
+            {earnings && <EarningsSummaryCard summary={earnings} href="/pharmacy/earnings" />}
           </div>
 
           <div className="mt-6">
