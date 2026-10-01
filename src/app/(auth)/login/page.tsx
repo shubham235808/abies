@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import Image from 'next/image';
 import Link from 'next/link';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -58,45 +59,49 @@ export default function LoginPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   return (
-    <main className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-6 py-16">
-      <h1 className="text-2xl font-semibold text-brand-neutral-900">Sign in to ABIES</h1>
-      <p className="mt-1 text-sm text-brand-neutral-600">
-        We&apos;ll text you a one-time code — no password needed.
-      </p>
+    <main className="grid min-h-[620px] place-items-center bg-gradient-to-br from-white via-[#fff4fc] to-[#edf8fc] px-6 py-12">
+      <div className="w-full max-w-[480px] rounded-[28px] border border-brand-neutral-100 bg-white p-7 shadow-brand">
+        <Image src="/abies-mark.png" alt="ABIES" width={64} height={64} className="rounded-control" />
+        <span className="mt-3.5 inline-flex items-center gap-2 rounded-pill bg-brand-purple-500/[0.07] px-3 py-1.5 text-xs font-bold text-brand-purple-700">
+          Secure access
+        </span>
+        <h1 className="mt-2.5 text-[28px] font-extrabold text-brand-neutral-900">Welcome to ABIES Care</h1>
+        <p className="mt-1 text-sm text-brand-neutral-500">We&apos;ll text you a one-time code — no password needed.</p>
 
-      {formError && (
-        <Alert tone="error" className="mt-6">
-          {formError}
-        </Alert>
-      )}
+        {formError && (
+          <Alert tone="error" className="mt-6">
+            {formError}
+          </Alert>
+        )}
 
-      <div className="mt-6">
-        {step.name === 'mobile' && (
-          <MobileStepForm
-            onError={setFormError}
-            onSent={(requestId, role, devOtp) => {
-              setFormError(null);
-              setStep({ name: 'otp', requestId, role, devOtp });
-            }}
-          />
-        )}
-        {step.name === 'otp' && (
-          <OtpStepForm
-            requestId={step.requestId}
-            devOtp={step.devOtp}
-            onError={setFormError}
-            onBack={() => setStep({ name: 'mobile' })}
-            onVerified={(role, mfaRequired) => {
-              setFormError(null);
-              if (mfaRequired) {
-                setStep({ name: 'mfa', role });
-              } else {
-                window.location.assign(PORTAL_PATH[role] ?? '/');
-              }
-            }}
-          />
-        )}
-        {step.name === 'mfa' && <MfaForm redirectTo={PORTAL_PATH[step.role] ?? '/'} />}
+        <div className="mt-6">
+          {step.name === 'mobile' && (
+            <MobileStepForm
+              onError={setFormError}
+              onSent={(requestId, role, devOtp) => {
+                setFormError(null);
+                setStep({ name: 'otp', requestId, role, devOtp });
+              }}
+            />
+          )}
+          {step.name === 'otp' && (
+            <OtpStepForm
+              requestId={step.requestId}
+              devOtp={step.devOtp}
+              onError={setFormError}
+              onBack={() => setStep({ name: 'mobile' })}
+              onVerified={(role, mfaRequired) => {
+                setFormError(null);
+                if (mfaRequired) {
+                  setStep({ name: 'mfa', role });
+                } else {
+                  window.location.assign(PORTAL_PATH[role] ?? '/');
+                }
+              }}
+            />
+          )}
+          {step.name === 'mfa' && <MfaForm redirectTo={PORTAL_PATH[step.role] ?? '/'} />}
+        </div>
       </div>
     </main>
   );
@@ -132,7 +137,7 @@ function MobileStepForm({
           {ROLE_OPTIONS.map((opt) => (
             <label
               key={opt.value}
-              className="cursor-pointer rounded-lg border border-brand-neutral-200 px-3 py-2 text-center text-sm has-[:checked]:border-brand-purple-500 has-[:checked]:bg-brand-purple-50 has-[:checked]:text-brand-purple-700"
+              className="cursor-pointer rounded-control border border-brand-neutral-200 px-3 py-2.5 text-center text-sm font-bold has-[:checked]:border-brand-purple-500 has-[:checked]:bg-brand-purple-50 has-[:checked]:text-brand-purple-700"
             >
               <input type="radio" value={opt.value} {...register('role')} className="sr-only" />
               {opt.label}

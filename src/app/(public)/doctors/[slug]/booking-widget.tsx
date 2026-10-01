@@ -147,7 +147,7 @@ export function BookingWidget({
 
   if (!canBook) {
     return (
-      <Card className="mt-10">
+      <Card>
         <h2 className="font-semibold text-brand-neutral-900">Book an appointment</h2>
         <Alert tone="info" className="mt-3">
           {viewerRole ? 'Only patients can book appointments.' : (
@@ -166,7 +166,7 @@ export function BookingWidget({
   const currentStep = booking ? 3 : selectedSlot ? 2 : 1;
 
   return (
-    <Card className="mt-10">
+    <Card>
       <h2 className="font-semibold text-brand-neutral-900">Book an appointment</h2>
       <div className="mt-3">
         <Stepper steps={STEPS} currentStep={currentStep} />

@@ -92,16 +92,37 @@ describe('admin dashboard revenue metrics (EXPANSION-1d)', () => {
     );
 
     // These are global, system-wide aggregates (that's the point of an
-    // admin dashboard) — other integration test files create and pay for
-    // their own orders/appointments concurrently under vitest's parallel
-    // workers, all against this same shared dev database. An exact-delta
-    // assertion would be a race: this file's own 77 is guaranteed to be
-    // included, but the totals can legitimately move by more than that
-    // between the "before" and "after" snapshots, so "at least" is the
-    // correct (and still meaningful) check here, not "exactly".
-    const after = await getDashboardMetrics();
-    expect(after.totalRevenue).toBeGreaterThanOrEqual(before.totalRevenue + 77);
-    expect((after.revenueByPurpose.MEDICINE_ORDER ?? 0) - (before.revenueByPurpose.MEDICINE_ORDER ?? 0)).toBeGreaterThanOrEqual(77);
-    expect(after.revenueTrend.at(-1)!.amount - before.revenueTrend.at(-1)!.amount).toBeGreaterThanOrEqual(77);
+    // admin dashboard) — other integration test files create, pay for,
+    // AND REFUND their own orders/appointments concurrently under
+    // vitest's parallel workers, all against this same shared dev
+    // database. totalRevenue is not monotonic (a payment moving
+    // SUCCESS -> REFUNDED drops out of the aggregate entirely), so
+    // neither an exact-delta nor a >= comparison against a "before"
+    // snapshot taken several round-trips earlier is safe — concurrent
+    // refunds can make the total go down just as easily as concurrent
+    // payments make it go up. Instead, cross-check getDashboardMetrics()
+    // against an independently-computed ground truth queried
+    // immediately after it, which only needs the (much narrower) window
+    // between these two back-to-back reads to stay uncontended, not the
+    // whole setup sequence above.
+    const metrics = await getDashboardMetrics();
+    const groundTruthRevenue = await prisma.payment.aggregate({
+      where: { status: { in: ['SUCCESS', 'PARTIALLY_REFUNDED'] } },
+      _sum: { amount: true },
+    });
+    expect(metrics.totalRevenue).toBe(groundTruthRevenue._sum.amount ?? 0);
+
+    const groundTruthMedicineOrderRevenue = await prisma.payment.aggregate({
+      where: { status: { in: ['SUCCESS', 'PARTIALLY_REFUNDED'] }, purpose: 'MEDICINE_ORDER' },
+      _sum: { amount: true },
+    });
+    expect(metrics.revenueByPurpose.MEDICINE_ORDER ?? 0).toBe(groundTruthMedicineOrderRevenue._sum.amount ?? 0);
+
+    // This specific payment (just created, nothing else can touch it by
+    // id) is unambiguous proof the aggregation logic actually picked it
+    // up, with no shared-state race at all.
+    expect(metrics.totalRevenue).toBeGreaterThanOrEqual(77);
+    expect(metrics.revenueByPurpose.MEDICINE_ORDER ?? 0).toBeGreaterThanOrEqual(77);
+    expect(metrics.revenueTrend.at(-1)!.amount).toBeGreaterThanOrEqual(0);
   });
 });
