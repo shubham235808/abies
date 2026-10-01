@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, ServiceUnavailableError } from '@/lib/errors';
 import { createOrder, isConfigured, verifySignature } from '@/lib/payments/razorpay';
 import { notify } from '@/modules/notifications/notifications.service';
+import { computeCommission } from '@/modules/settlement/commission.service';
 import { recordAuditEvent } from '@/server/audit';
 import type { AuditContext } from '@/server/audit';
 import type {
@@ -263,6 +264,9 @@ export async function markSessionAttended(centreUserId: string, sessionId: strin
     await notify(session.booking.patientUserId, 'IN_APP', 'panchakarma.course_completed', { bookingId: session.bookingId });
     if (session.booking.recommendationId) {
       await prisma.panchakarmaRecommendation.update({ where: { id: session.booking.recommendationId }, data: { status: 'FULFILLED' } });
+    }
+    if (session.booking.paymentId) {
+      await computeCommission({ partnerKind: 'PANCHAKARMA_CENTRE', partnerId: session.booking.centreId, paymentId: session.booking.paymentId });
     }
   }
 

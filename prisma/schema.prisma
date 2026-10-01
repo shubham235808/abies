@@ -558,6 +558,7 @@ model Payment {
   medicineOrder      MedicineOrder?
   panchakarmaBooking PanchakarmaBooking?
   refunds            Refund[]
+  commission         Commission?
 
   @@index([payerUserId, status])
   @@index([purpose, purposeEntityId])
@@ -2038,6 +2039,160 @@ model Refund {
 
   @@index([paymentId])
   @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Settlement domain (EXPANSION-2, docs/EXPANSION-DOMAIN-MODEL.md §1 — backs
+// Enhanced Blueprint §19: "Fee, Commission, Payout, Settlement,
+// Reconciliation"). Partner references are polymorphic plain strings
+// (partnerKind + partnerId), same convention as StockMovement's
+// referenceType/referenceId — a single partner table doesn't exist, since
+// DoctorProfile/DiagnosticLab/Pharmacy/PanchakarmaCentre are genuinely
+// separate models with no shared base table to FK against.
+// ---------------------------------------------------------------------------
+
+enum PartnerKind {
+  DOCTOR
+  DIAGNOSTIC_LAB
+  PHARMACY
+  PANCHAKARMA_CENTRE
+}
+
+enum FeeModel {
+  PERCENTAGE
+  FIXED
+}
+
+// One row per (partner, effective period) — admin-configurable, never a
+// hard-coded rate (master prompt §12: "Never hard-code example commission
+// values as business rules"), same precedent as GstRateConfig. A partner
+// with no active term simply has no fee computed for them yet — the
+// commission service treats "no applicable term" as a real, visible gap
+// (flagged on the commission row), not a silent default rate.
+model PartnerFeeTerm {
+  id              String      @id @default(cuid())
+  partnerKind     PartnerKind
+  partnerId       String
+  feeModel        FeeModel
+  rateBasisPoints Int? // PERCENTAGE: e.g. 1500 = 15.00%
+  fixedAmount     Int? // FIXED: rupees
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  active          Boolean     @default(true)
+  createdByUserId String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  commissions     Commission[]
+
+  @@index([partnerKind, partnerId, effectiveFrom])
+}
+
+enum CommissionStatus {
+  PENDING // transaction completed, fee computed, not yet in a payout
+  INCLUDED // pulled into a Payout
+  REVERSED // source transaction later refunded/cancelled (EXPANSION-2 scope: flagged, not acted on — see service comment)
+}
+
+// One row per fee-eligible completed transaction (a COMPLETED consultation,
+// a COMPLETED diagnostic order, a DELIVERED medicine order, a COMPLETED
+// Panchakarma booking) — computed once, snapshotting the PartnerFeeTerm
+// that applied, so a later rate change never rewrites history (same
+// "taxRate snapshot on PhysicalSaleItem" precedent from ENTERPRISE-7).
+// Append-only, like StockMovement — never edited after creation, only
+// reversed via a status change plus a new row in a later stage.
+model Commission {
+  id              String            @id @default(cuid())
+  partnerKind     PartnerKind
+  partnerId       String
+  sourcePaymentId String            @unique // idempotency guard — at most one Commission per Payment
+  grossAmount     Int
+  feeAmount       Int // platform's share
+  payableAmount   Int // partner's share = grossAmount - feeAmount
+  feeTermId       String?
+  status          CommissionStatus  @default(PENDING)
+  payoutId        String?
+  createdAt       DateTime          @default(now())
+
+  // Cascade, not Restrict — matches Refund.paymentId's existing
+  // convention (same model). Users/Payments are never hard-deleted in
+  // production (no such feature exists); this only matters for test
+  // cleanup's `prisma.user.deleteMany`, which needs the whole ownership
+  // chain to cascade away cleanly, same as every other financial-adjacent
+  // model here.
+  sourcePayment   Payment           @relation(fields: [sourcePaymentId], references: [id], onDelete: Cascade)
+  feeTerm         PartnerFeeTerm?   @relation(fields: [feeTermId], references: [id], onDelete: SetNull)
+  payout          Payout?           @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  @@index([partnerKind, partnerId, status])
+  @@index([payoutId])
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+}
+
+// One row per (partner, settlement cycle) — the amount ABIES owes that
+// partner for this cycle, aggregated from its Commission rows.
+model Payout {
+  id               String       @id @default(cuid())
+  settlementId     String
+  partnerKind      PartnerKind
+  partnerId        String
+  totalAmount      Int
+  status           PayoutStatus @default(PENDING)
+  paidAt           DateTime?
+  gatewayPayoutRef String?
+  failureReason    String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  settlement       Settlement     @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  commissions      Commission[]
+  reconciliation   Reconciliation?
+
+  @@index([settlementId])
+  @@index([partnerKind, partnerId])
+}
+
+enum SettlementStatus {
+  OPEN // cycle in progress, commissions still accruing
+  LOCKED // cycle closed, payouts generated, awaiting processing
+  COMPLETED // every payout in this cycle is PAID or FAILED
+}
+
+// The payout run for one cycle (e.g. weekly) across every partner.
+model Settlement {
+  id          String           @id @default(cuid())
+  cycleStart  DateTime
+  cycleEnd    DateTime
+  status      SettlementStatus @default(OPEN)
+  lockedAt    DateTime?
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+
+  payouts     Payout[]
+
+  @@index([status, cycleStart])
+}
+
+// Matches a Payout to the actual bank/gateway settlement report — closes
+// the loop between "we say we paid" and "the money actually moved."
+model Reconciliation {
+  id                 String    @id @default(cuid())
+  payoutId           String    @unique
+  externalReference  String // bank statement line / gateway settlement id
+  matchedAmount      Int
+  matched            Boolean   @default(false)
+  reconciledByUserId String?
+  reconciledAt       DateTime?
+  notes              String?
+  createdAt          DateTime  @default(now())
+
+  payout             Payout    @relation(fields: [payoutId], references: [id], onDelete: Cascade)
 }
 
 // ---------------------------------------------------------------------------

@@ -189,7 +189,7 @@ describe('doctor reviews (EXPANSION-1c)', () => {
     const { appointment, razorpayOrder } = await holdSlot(patientId, { doctorProfileId, mode: 'VIDEO', startsAt: slotStart.toISOString() });
     await verifyPayment(
       patientId,
-      { appointmentId: appointment.id, razorpayOrderId: razorpayOrder.id, razorpayPaymentId: `pay_x`, razorpaySignature: 'sig' },
+      { appointmentId: appointment.id, razorpayOrderId: razorpayOrder.id, razorpayPaymentId: `pay_${randomInt(1_000_000, 9_999_999)}`, razorpaySignature: 'sig' },
       { userId: patientId },
     );
 

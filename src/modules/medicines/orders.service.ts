@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, ServiceUnavailableError } from '@/lib/errors';
 import { createOrder, isConfigured, verifySignature } from '@/lib/payments/razorpay';
 import { notify } from '@/modules/notifications/notifications.service';
+import { computeCommission } from '@/modules/settlement/commission.service';
 import { recordStockMovement } from './stock-movements.service';
 import { recordAuditEvent } from '@/server/audit';
 import type { AuditContext } from '@/server/audit';
@@ -369,6 +370,9 @@ export async function markDelivered(pharmacyUserId: string, orderId: string) {
     prisma.medicineOrder.update({ where: { id: orderId }, data: { status: 'DELIVERED' } }),
   ]);
   await notify(order.patientUserId, 'IN_APP', 'medicine.order_delivered', { orderId });
+  if (order.paymentId) {
+    await computeCommission({ partnerKind: 'PHARMACY', partnerId: order.pharmacyId, paymentId: order.paymentId });
+  }
   return updatedOrder;
 }
 

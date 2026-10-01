@@ -6,6 +6,7 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, ServiceU
 import { assertUploadAllowed, getSignedDownloadUrl, putObject } from '@/lib/storage';
 import { createOrder, isConfigured, verifySignature } from '@/lib/payments/razorpay';
 import { notify } from '@/modules/notifications/notifications.service';
+import { computeCommission } from '@/modules/settlement/commission.service';
 import { recordAuditEvent } from '@/server/audit';
 import type { AuditContext } from '@/server/audit';
 import type {
@@ -319,6 +320,10 @@ export async function releaseReport(labUserId: string, orderId: string, dto: Rel
         orderId,
       });
     }
+  }
+
+  if (order.paymentId) {
+    await computeCommission({ partnerKind: 'DIAGNOSTIC_LAB', partnerId: order.labId, paymentId: order.paymentId });
   }
 
   return updatedOrder;

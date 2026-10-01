@@ -102,20 +102,24 @@ describe('admin dashboard revenue metrics (EXPANSION-1d)', () => {
     // refunds can make the total go down just as easily as concurrent
     // payments make it go up. Instead, cross-check getDashboardMetrics()
     // against an independently-computed ground truth queried
-    // immediately after it, which only needs the (much narrower) window
-    // between these two back-to-back reads to stay uncontended, not the
-    // whole setup sequence above.
-    const metrics = await getDashboardMetrics();
-    const groundTruthRevenue = await prisma.payment.aggregate({
-      where: { status: { in: ['SUCCESS', 'PARTIALLY_REFUNDED'] } },
-      _sum: { amount: true },
-    });
+    // immediately after it. Even that narrower window can occasionally
+    // straddle a concurrent writer, so re-take both readings together
+    // until they agree (or we run out of attempts) rather than accepting
+    // a one-shot race.
+    let metrics!: Awaited<ReturnType<typeof getDashboardMetrics>>;
+    let groundTruthRevenue!: { _sum: { amount: number | null } };
+    let groundTruthMedicineOrderRevenue!: { _sum: { amount: number | null } };
+    for (let attempt = 0; attempt < 5; attempt++) {
+      metrics = await getDashboardMetrics();
+      [groundTruthRevenue, groundTruthMedicineOrderRevenue] = await Promise.all([
+        prisma.payment.aggregate({ where: { status: { in: ['SUCCESS', 'PARTIALLY_REFUNDED'] } }, _sum: { amount: true } }),
+        prisma.payment.aggregate({ where: { status: { in: ['SUCCESS', 'PARTIALLY_REFUNDED'] }, purpose: 'MEDICINE_ORDER' }, _sum: { amount: true } }),
+      ]);
+      const revenueMatches = metrics.totalRevenue === (groundTruthRevenue._sum.amount ?? 0);
+      const medicineRevenueMatches = (metrics.revenueByPurpose.MEDICINE_ORDER ?? 0) === (groundTruthMedicineOrderRevenue._sum.amount ?? 0);
+      if (revenueMatches && medicineRevenueMatches) break;
+    }
     expect(metrics.totalRevenue).toBe(groundTruthRevenue._sum.amount ?? 0);
-
-    const groundTruthMedicineOrderRevenue = await prisma.payment.aggregate({
-      where: { status: { in: ['SUCCESS', 'PARTIALLY_REFUNDED'] }, purpose: 'MEDICINE_ORDER' },
-      _sum: { amount: true },
-    });
     expect(metrics.revenueByPurpose.MEDICINE_ORDER ?? 0).toBe(groundTruthMedicineOrderRevenue._sum.amount ?? 0);
 
     // This specific payment (just created, nothing else can touch it by

@@ -2,6 +2,7 @@ import type { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@/lib/errors';
 import { notify } from '@/modules/notifications/notifications.service';
+import { computeCommission } from '@/modules/settlement/commission.service';
 import { recordAuditEvent } from '@/server/audit';
 import type { AuditContext } from '@/server/audit';
 import type { saveClinicalNoteSchema, updateConsultationDetailsSchema } from './consultations.schemas';
@@ -124,13 +125,16 @@ export async function completeConsultation(doctorUserId: string, consultationId:
     throw new BadRequestError('This consultation has already ended');
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const { updated, paymentId } = await prisma.$transaction(async (tx) => {
     const result = await tx.consultation.update({
       where: { id: consultationId },
       data: { ...dto, status: 'COMPLETED', endedAt: new Date() },
     });
-    await tx.appointment.update({ where: { id: consultation.appointmentId }, data: { status: 'COMPLETED' } });
-    return result;
+    const appointment = await tx.appointment.update({
+      where: { id: consultation.appointmentId },
+      data: { status: 'COMPLETED' },
+    });
+    return { updated: result, paymentId: appointment.paymentId };
   });
 
   await recordAuditEvent(auditCtx, {
@@ -140,6 +144,9 @@ export async function completeConsultation(doctorUserId: string, consultationId:
     resourceId: consultationId,
   });
   await notify(consultation.patientUserId, 'IN_APP', 'consultation.completed', { consultationId });
+  if (paymentId) {
+    await computeCommission({ partnerKind: 'DOCTOR', partnerId: consultation.doctorProfileId, paymentId });
+  }
 
   return updated;
 }
