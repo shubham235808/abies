@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,7 @@ const STATUS_TONE: Record<PayoutRowData['status'], string> = {
 };
 
 export function PayoutRow({ payout }: { payout: PayoutRowData }) {
+  const router = useRouter();
   const [state, setState] = useState(payout);
   const [mode, setMode] = useState<'idle' | 'paying' | 'failing'>('idle');
   const [ref, setRef] = useState('');
@@ -45,6 +47,11 @@ export function PayoutRow({ payout }: { payout: PayoutRowData }) {
       const { payout: updated } = await api.post<{ payout: PayoutStatusFields }>(`/api/admin/settlement/payouts/${state.id}/mark-paid`, { gatewayPayoutRef: ref });
       setState({ ...state, ...updated });
       setMode('idle');
+      // CycleActions' "every payout resolved" check is computed server-side
+      // from the page's own getSettlement() call — without this, Complete
+      // cycle stays disabled (stale props) even once every payout here is
+      // actually terminal.
+      router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not mark this payout paid.');
     } finally {
@@ -59,6 +66,7 @@ export function PayoutRow({ payout }: { payout: PayoutRowData }) {
       const { payout: updated } = await api.post<{ payout: PayoutStatusFields }>(`/api/admin/settlement/payouts/${state.id}/mark-failed`, { failureReason: reason });
       setState({ ...state, ...updated });
       setMode('idle');
+      router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not mark this payout failed.');
     } finally {

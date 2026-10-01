@@ -7,7 +7,15 @@ import { prisma } from '@/lib/db';
 export async function earningsSummary(partnerKind: PartnerKind, partnerId: string) {
   const [pending, included, paidPayouts] = await Promise.all([
     prisma.commission.aggregate({ where: { partnerKind, partnerId, status: 'PENDING' }, _sum: { payableAmount: true }, _count: true }),
-    prisma.commission.aggregate({ where: { partnerKind, partnerId, status: 'INCLUDED' }, _sum: { payableAmount: true }, _count: true }),
+    // A commission permanently stays 'INCLUDED' once swept into a payout —
+    // that status alone doesn't say whether the payout itself has since
+    // been paid, so "awaiting payout" has to also exclude one whose payout
+    // already resolved (paid or failed), not just filter on Commission.status.
+    prisma.commission.aggregate({
+      where: { partnerKind, partnerId, status: 'INCLUDED', payout: { status: { in: ['PENDING', 'PROCESSING'] } } },
+      _sum: { payableAmount: true },
+      _count: true,
+    }),
     prisma.payout.aggregate({ where: { partnerKind, partnerId, status: 'PAID' }, _sum: { totalAmount: true }, _count: true }),
   ]);
   return {
