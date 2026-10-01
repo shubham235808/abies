@@ -5,16 +5,17 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md';
 
 const VARIANT_CLASSES: Record<Variant, string> = {
-  primary: 'bg-brand-purple-600 text-white hover:bg-brand-purple-700 disabled:bg-brand-purple-300',
+  primary:
+    'bg-gradient-to-br from-brand-purple-500 to-brand-magenta-500 text-white shadow-[0_8px_22px_rgba(166,10,128,0.18)] hover:-translate-y-px disabled:from-brand-purple-300 disabled:to-brand-purple-300 disabled:shadow-none disabled:translate-y-0',
   secondary:
-    'bg-white text-brand-purple-700 border border-brand-purple-200 hover:bg-brand-purple-50 disabled:text-brand-neutral-400 disabled:border-brand-neutral-200',
-  ghost: 'text-brand-neutral-600 hover:bg-brand-neutral-100 disabled:text-brand-neutral-300',
+    'bg-white text-brand-purple-700 border border-brand-neutral-200 hover:bg-brand-purple-50 disabled:text-brand-neutral-400 disabled:border-brand-neutral-200',
+  ghost: 'bg-brand-purple-50 text-brand-purple-700 hover:bg-brand-purple-100 disabled:bg-brand-neutral-100 disabled:text-brand-neutral-400',
   danger: 'bg-brand-magenta-600 text-white hover:bg-brand-magenta-700 disabled:bg-brand-magenta-300',
 };
 
 const SIZE_CLASSES: Record<Size, string> = {
-  sm: 'px-3 py-1.5 text-sm',
-  md: 'px-4 py-2.5 text-sm',
+  sm: 'px-3.5 py-2 text-sm',
+  md: 'px-[18px] py-3 text-sm',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -29,7 +30,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       ref={ref}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-purple-500 disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center gap-2 rounded-control font-bold transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-purple-500 disabled:cursor-not-allowed',
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],
         className,

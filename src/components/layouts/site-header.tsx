@@ -1,5 +1,11 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { CartButton } from '@/components/cart/cart-button';
+import { myCartItemCount } from '@/modules/medicines/cart.service';
+import { getCurrentSession } from '@/server/current-user';
+import { PORTAL_PATH } from '@/lib/portal-paths';
+import { MobileNav } from './mobile-nav';
+import { NavLinks } from './nav-links';
 
 const NAV = [
   { href: '/doctors', label: 'Find a doctor' },
@@ -9,43 +15,71 @@ const NAV = [
   { href: '/about', label: 'About' },
 ];
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const session = await getCurrentSession();
+  const isPatient = session?.user.role === 'PATIENT';
+  const cartCount = isPatient ? await myCartItemCount(session.userId) : 0;
+
   return (
-    <header className="sticky top-0 z-10 border-b border-brand-neutral-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          <Image src="/abies-mark.png" alt="" width={32} height={32} priority className="rounded-sm" />
-          <span className="text-lg font-semibold tracking-tight text-brand-purple-700">ABIES</span>
-        </Link>
-        <nav className="hidden items-center gap-5 md:flex">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="text-sm text-brand-neutral-600 hover:text-brand-purple-700"
-            >
-              {item.label}
+    <header className="sticky top-0 z-30">
+      <div className="bg-gradient-to-r from-brand-purple-500 to-brand-magenta-500 text-xs text-white">
+        <div className="mx-auto flex min-h-[34px] max-w-6xl items-center justify-between gap-4 px-6">
+          <span>Verified practitioners · Coordinated Ayurveda care</span>
+          <div className="hidden gap-4 sm:flex">
+            <Link href="/support" className="opacity-90 hover:opacity-100">
+              Customer Support
             </Link>
-          ))}
-        </nav>
-        <Link
-          href="/login"
-          className="shrink-0 rounded-lg bg-brand-purple-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-brand-purple-700"
-        >
-          Sign in
-        </Link>
+            <Link href="/support?type=sales" className="opacity-90 hover:opacity-100">
+              Sales
+            </Link>
+            <Link href="/support?type=tech" className="opacity-90 hover:opacity-100">
+              Tech Help
+            </Link>
+          </div>
+        </div>
       </div>
-      <nav className="flex gap-1 overflow-x-auto border-t border-brand-neutral-100 px-4 py-2 md:hidden">
-        {NAV.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="whitespace-nowrap rounded-md px-2.5 py-1 text-sm text-brand-neutral-600 hover:bg-brand-neutral-100"
-          >
-            {item.label}
+
+      <div className="border-b border-brand-neutral-100 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex h-[78px] max-w-6xl items-center justify-between gap-4 px-6">
+          <Link href="/" className="flex shrink-0 items-center gap-3">
+            <Image src="/abies-mark.png" alt="" width={44} height={44} priority className="rounded-control" />
+            <div className="hidden flex-col sm:flex">
+              <strong className="text-[17px] leading-tight text-brand-neutral-900">ABIES</strong>
+              <span className="text-[11px] text-brand-neutral-500">Integrated care platform</span>
+            </div>
           </Link>
-        ))}
-      </nav>
+
+          <NavLinks items={NAV} />
+
+          <div className="flex shrink-0 items-center gap-2.5">
+            <CartButton initialCount={cartCount} />
+            {session ? (
+              <Link
+                href={PORTAL_PATH[session.user.role] ?? '/'}
+                className="rounded-control bg-gradient-to-br from-brand-purple-500 to-brand-magenta-500 px-3.5 py-2 text-sm font-bold text-white shadow-[0_8px_22px_rgba(166,10,128,0.18)]"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="hidden rounded-control border border-brand-neutral-200 bg-white px-3.5 py-2 text-sm font-bold text-brand-purple-700 sm:inline-block"
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/doctors"
+                  className="hidden rounded-control bg-gradient-to-br from-brand-purple-500 to-brand-magenta-500 px-3.5 py-2 text-sm font-bold text-white shadow-[0_8px_22px_rgba(166,10,128,0.18)] sm:inline-block"
+                >
+                  Book consultation
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+        <MobileNav nav={NAV} />
+      </div>
     </header>
   );
 }

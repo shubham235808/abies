@@ -10,6 +10,7 @@ import { Input, Label, FieldError } from '@/components/ui/input';
 import { Alert } from '@/components/ui/alert';
 import { MfaForm } from '@/components/auth/mfa-form';
 import { api, ApiError } from '@/lib/api-client';
+import { PORTAL_PATH } from '@/lib/portal-paths';
 
 const ROLE_OPTIONS = [
   { value: 'PATIENT', label: 'Patient' },
@@ -23,19 +24,6 @@ const ROLE_OPTIONS = [
   { value: 'CARE_COORDINATOR', label: 'Care Coordinator' },
   { value: 'ADMIN', label: 'Administrator' },
 ] as const;
-
-const PORTAL_PATH: Record<string, string> = {
-  PATIENT: '/patient',
-  DOCTOR: '/doctor',
-  LAB: '/lab',
-  PHARMACY: '/pharmacy',
-  PANCHAKARMA_CENTRE: '/panchakarma-centre',
-  CUSTOMER_SUPPORT: '/customer-support',
-  TECH_SUPPORT: '/tech-support',
-  SALES: '/sales',
-  CARE_COORDINATOR: '/care-coordination',
-  ADMIN: '/admin',
-};
 
 const mobileStepSchema = z.object({
   mobile: z.string().min(10, 'Enter a 10-digit mobile number'),

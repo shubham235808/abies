@@ -85,14 +85,22 @@
   --gradient-blue-purple: linear-gradient(135deg, var(--color-brand-blue-500), var(--color-brand-purple-500));
   --gradient-orange-magenta: linear-gradient(135deg, var(--color-brand-orange-500), var(--color-brand-magenta-500));
 
-  --radius-card: 0.75rem;
-  --radius-control: 0.5rem;
+  /* Radius generous-rounded per the approved ABIES visual reference
+     (ABIES_Agent_Knowledge_Pack/04_Prototype) rather than this app's
+     earlier, tighter 0.75rem/0.5rem values. */
+  --radius-card: 1.375rem;
+  --radius-control: 0.875rem;
   --radius-pill: 9999px;
 
   /* Motion tokens — docs/ABIES-MOTION-SYSTEM.md §2. */
   --motion-fast: 120ms;
   --motion-normal: 220ms;
   --motion-slow: 360ms;
+
+  /* Elevated-card shadow — matches the reference prototype's floating
+     care-plan/badge panels, tinted with the brand purple rather than a
+     neutral gray so elevated surfaces read as "ABIES", not generic. */
+  --shadow-brand: 0 18px 55px rgba(66, 25, 70, 0.12);
 }
 
 :root {
