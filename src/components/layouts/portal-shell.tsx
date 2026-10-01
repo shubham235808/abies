@@ -5,6 +5,7 @@ import type { UserRole } from '@prisma/client';
 import { getCurrentSession } from '@/server/current-user';
 import { LogoutButton } from './logout-button';
 import { MobileNav } from './mobile-nav';
+import { PortalSidebarNav } from './portal-sidebar-nav';
 
 export interface PortalNavItem {
   href: string;
@@ -41,15 +42,15 @@ export async function PortalShell({
   if (requireMfa && !session.mfaVerified) redirect('/login/mfa');
 
   return (
-    <div className="min-h-screen bg-brand-neutral-50">
-      <header className="sticky top-0 z-10 border-b border-brand-neutral-200 bg-white">
+    <div className="min-h-screen bg-[#f8f6f9]">
+      <header className="sticky top-0 z-10 border-b border-brand-neutral-100 bg-white/95 backdrop-blur">
         <div className="flex items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
-              <Image src="/abies-mark.png" alt="" width={28} height={28} />
-              <span className="font-semibold text-brand-purple-700">ABIES</span>
+              <Image src="/abies-mark.png" alt="" width={28} height={28} className="rounded-control" />
+              <span className="font-extrabold text-brand-purple-700">ABIES</span>
             </Link>
-            <span className="rounded-full bg-brand-purple-50 px-2.5 py-0.5 text-xs font-medium text-brand-purple-700">
+            <span className="rounded-pill bg-brand-purple-500/[0.07] px-2.5 py-1 text-xs font-bold text-brand-purple-700">
               {portalLabel}
             </span>
           </div>
@@ -61,21 +62,11 @@ export async function PortalShell({
         <MobileNav nav={nav} />
       </header>
 
-      <div className="mx-auto flex max-w-6xl">
-        <aside className="sticky top-[57px] hidden h-[calc(100vh-57px)] w-56 shrink-0 border-r border-brand-neutral-200 bg-white p-4 md:block">
-          <nav className="space-y-1">
-            {nav.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="block rounded-md px-3 py-2 text-sm text-brand-neutral-700 hover:bg-brand-purple-50 hover:text-brand-purple-700"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+      <div className="mx-auto flex max-w-6xl gap-5 px-4 py-5 sm:px-6">
+        <aside className="sticky top-[90px] hidden h-max w-[240px] shrink-0 rounded-card border border-brand-neutral-200 bg-white p-[15px] md:block">
+          <PortalSidebarNav nav={nav} />
         </aside>
-        <main className="min-w-0 flex-1 p-4 sm:p-6">{children}</main>
+        <main className="min-w-0 flex-1">{children}</main>
       </div>
     </div>
   );
