@@ -16,10 +16,10 @@ vi.mock('@/modules/promotions/promotions.service', () => ({
 describe('HomePage', () => {
   it('renders the platform promise with live CTAs for what is real', async () => {
     render(await HomePage());
-    expect(screen.getByRole('heading', { name: /trusted, coordinated ayurveda care/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /ayurveda care journey/i })).toBeInTheDocument();
     // Sign-in, doctor discovery, and appointment booking (via the doctor
     // profile page) are all real (Phase 1/3/4) — they link out.
-    expect(screen.getByRole('link', { name: /find a doctor/i })).toHaveAttribute('href', '/doctors');
-    expect(screen.getByRole('link', { name: /^sign in$/i })).toHaveAttribute('href', '/login');
+    expect(screen.getByRole('link', { name: /find a verified doctor/i })).toHaveAttribute('href', '/doctors');
+    expect(screen.getByRole('link', { name: /explore panchakarma/i })).toHaveAttribute('href', '/panchakarma');
   });
 });
