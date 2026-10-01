@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { HoverCard } from '@/components/ui/card';
 import { Input, Label } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api-client';
 import { loadRazorpayScript } from '@/lib/razorpay-checkout';
@@ -67,57 +67,64 @@ export function TherapyCard({ therapy, viewerRole }: { therapy: PublicTherapy; v
   }
 
   return (
-    <Card>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-brand-neutral-900">{therapy.name}</h3>
-          <p className="text-xs text-brand-neutral-500">
-            {therapy.centre.name ?? 'Centre'} {therapy.centre.city ? `· ${therapy.centre.city}` : ''}
-          </p>
-        </div>
-        <Badge tone="blue">₹{therapy.price}/session</Badge>
+    <HoverCard className="overflow-hidden">
+      <div className="flex h-[145px] items-center justify-center bg-gradient-to-br from-brand-purple-50 to-brand-blue-50 text-5xl">
+        🪷
       </div>
-      {therapy.description && <p className="mt-2 text-sm text-brand-neutral-600">{therapy.description}</p>}
-      {therapy.durationMinutes && <p className="mt-1 text-xs text-brand-neutral-400">{therapy.durationMinutes} min per session</p>}
-      {therapy.requiredSupervision && <Badge tone="orange" className="mt-2">Requires supervision</Badge>}
-      {therapy.contraindications && <p className="mt-1 text-xs text-brand-neutral-400">Contraindications: {therapy.contraindications}</p>}
+      <div className="p-[18px]">
+        <Badge tone="success">Verified centre</Badge>
+        <h3 className="mt-2 font-bold text-brand-neutral-900">{therapy.name}</h3>
+        <p className="text-xs text-brand-neutral-500">
+          {therapy.centre.name ?? 'Centre'} {therapy.centre.city ? `· ${therapy.centre.city}` : ''}
+        </p>
+        {therapy.description && <p className="mt-2 text-sm text-brand-neutral-500">{therapy.description}</p>}
+        {therapy.durationMinutes && <p className="mt-1 text-xs text-brand-neutral-400">{therapy.durationMinutes} min per session</p>}
+        {therapy.requiredSupervision && <Badge tone="orange" className="mt-2">Requires supervision</Badge>}
+        {therapy.contraindications && <p className="mt-1 text-xs text-brand-neutral-400">Contraindications: {therapy.contraindications}</p>}
 
-      {viewerRole !== 'PATIENT' ? (
-        <div className="mt-3 text-sm text-brand-neutral-500">
-          {viewerRole ? (
-            'Only patients can book Panchakarma therapies.'
-          ) : (
-            <>
-              <Link href="/login" className="font-medium text-brand-purple-700 underline">
-                Log in as a patient
-              </Link>{' '}
-              to book this therapy.
-            </>
-          )}
-        </div>
-      ) : booking ? (
-        <div className="mt-3 space-y-3 border-t border-brand-neutral-100 pt-3">
-          {error && <Alert tone="error">{error}</Alert>}
-          <div>
-            <Label htmlFor={`sessions-${therapy.id}`}>Number of sessions</Label>
-            <Input
-              id={`sessions-${therapy.id}`}
-              type="number"
-              min={1}
-              max={60}
-              value={sessionCount}
-              onChange={(e) => setSessionCount(Number(e.target.value))}
-            />
+        {viewerRole !== 'PATIENT' ? (
+          <div className="mt-3 text-sm text-brand-neutral-500">
+            {viewerRole ? (
+              'Only patients can book Panchakarma therapies.'
+            ) : (
+              <>
+                <Link href="/login" className="font-medium text-brand-purple-700 underline">
+                  Log in as a patient
+                </Link>{' '}
+                to book this therapy.
+              </>
+            )}
           </div>
-          <Button size="sm" loading={submitting} onClick={handleBookAndPay}>
-            Book & pay ₹{therapy.price * sessionCount}
-          </Button>
-        </div>
-      ) : (
-        <Button variant="secondary" size="sm" className="mt-3" onClick={() => setBooking(true)}>
-          Book
-        </Button>
-      )}
-    </Card>
+        ) : booking ? (
+          <div className="mt-3 space-y-3 border-t border-brand-neutral-100 pt-3">
+            {error && <Alert tone="error">{error}</Alert>}
+            <div>
+              <Label htmlFor={`sessions-${therapy.id}`}>Number of sessions</Label>
+              <Input
+                id={`sessions-${therapy.id}`}
+                type="number"
+                min={1}
+                max={60}
+                value={sessionCount}
+                onChange={(e) => setSessionCount(Number(e.target.value))}
+              />
+            </div>
+            <Button size="sm" loading={submitting} onClick={handleBookAndPay}>
+              Book & pay ₹{therapy.price * sessionCount}
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-4 flex items-center justify-between">
+            <div>
+              <span className="text-xs text-brand-neutral-400">Starting at</span>
+              <div className="text-lg font-extrabold text-brand-neutral-900">₹{therapy.price}</div>
+            </div>
+            <Button size="sm" onClick={() => setBooking(true)}>
+              Request slot
+            </Button>
+          </div>
+        )}
+      </div>
+    </HoverCard>
   );
 }

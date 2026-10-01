@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { HoverCard } from '@/components/ui/card';
 import { Input, Label, Select } from '@/components/ui/input';
 import { RatingBadge } from '@/components/ui/rating';
 import { useToast } from '@/components/ui/toast';
@@ -101,9 +101,9 @@ export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicin
   }
 
   return (
-    <Card>
-      {medicine.imageUrl && (
-        <div className="relative -mx-6 -mt-6 mb-3 aspect-square overflow-hidden rounded-t-card bg-brand-neutral-50">
+    <HoverCard className="overflow-hidden">
+      <div className="relative flex aspect-square items-center justify-center bg-gradient-to-br from-brand-purple-50 to-brand-blue-50">
+        {medicine.imageUrl ? (
           <Image
             src={medicine.imageUrl}
             alt={medicine.name}
@@ -111,21 +111,25 @@ export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicin
             sizes="(min-width: 1024px) 240px, 45vw"
             className="object-contain p-4"
           />
-        </div>
-      )}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-brand-neutral-900">{medicine.name}</h3>
-          <p className="text-xs text-brand-neutral-500">
-            {[medicine.form, medicine.strength].filter(Boolean).join(' · ')} · {medicine.pharmacy.name ?? 'Pharmacy'}
-          </p>
-          <div className="mt-1">
-            <RatingBadge rating={medicine.rating} reviewCount={medicine.reviewCount} />
-          </div>
-        </div>
-        <Badge tone="blue">₹{unitPrice}</Badge>
+        ) : (
+          <span className="text-5xl" aria-hidden="true">💊</span>
+        )}
       </div>
-      <p className="mt-2 text-xs text-brand-neutral-400">{availableQuantity} in stock</p>
+      <div className="p-[18px]">
+        <Badge tone="success">General wellness</Badge>
+        <div className="mt-2 flex items-start justify-between gap-3">
+          <h3 className="font-bold text-brand-neutral-900">{medicine.name}</h3>
+        </div>
+        <p className="text-xs text-brand-neutral-500">
+          {[medicine.form, medicine.strength].filter(Boolean).join(' · ')} · {medicine.pharmacy.name ?? 'Pharmacy'}
+        </p>
+        <div className="mt-1">
+          <RatingBadge rating={medicine.rating} reviewCount={medicine.reviewCount} />
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-lg font-extrabold text-brand-neutral-900">₹{unitPrice}</span>
+          <span className="text-xs text-brand-neutral-400">{availableQuantity} in stock</span>
+        </div>
 
       {hasVariants && (
         <div className="mt-3">
@@ -189,6 +193,7 @@ export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicin
           </Button>
         </div>
       )}
-    </Card>
+      </div>
+    </HoverCard>
   );
 }

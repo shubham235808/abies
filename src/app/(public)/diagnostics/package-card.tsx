@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { HoverCard } from '@/components/ui/card';
 import { Input, Label } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api-client';
 import { loadRazorpayScript } from '@/lib/razorpay-checkout';
@@ -82,75 +82,79 @@ export function PackageCard({ diagnosticPackage: pkg, viewerRole }: { diagnostic
   }
 
   return (
-    <Card>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-brand-neutral-900">{pkg.name}</h3>
-          <p className="text-xs text-brand-neutral-500">{pkg.lab.name ?? 'Lab'}</p>
-        </div>
-        <Badge tone="blue">₹{pkg.price}</Badge>
+    <HoverCard className="overflow-hidden">
+      <div className="flex h-[145px] items-center justify-center bg-gradient-to-br from-brand-purple-50 to-brand-blue-50 text-5xl">
+        🧬
       </div>
-      {pkg.description && <p className="mt-2 text-sm text-brand-neutral-600">{pkg.description}</p>}
-      {pkg.testNames.length > 0 && <p className="mt-1 text-xs text-brand-neutral-400">Includes: {pkg.testNames.join(', ')}</p>}
+      <div className="p-[18px]">
+        <Badge tone="success">Home collection available</Badge>
+        <h3 className="mt-2 font-bold text-brand-neutral-900">{pkg.name}</h3>
+        <p className="text-xs text-brand-neutral-500">{pkg.lab.name ?? 'Lab'}</p>
+        {pkg.description && <p className="mt-2 text-sm text-brand-neutral-500">{pkg.description}</p>}
+        {pkg.testNames.length > 0 && <p className="mt-1 text-xs text-brand-neutral-400">Includes: {pkg.testNames.join(', ')}</p>}
 
-      {viewerRole !== 'PATIENT' ? (
-        <div className="mt-3 text-sm text-brand-neutral-500">
-          {viewerRole ? (
-            'Only patients can book diagnostic packages.'
-          ) : (
-            <>
-              <Link href="/login" className="font-medium text-brand-purple-700 underline">
-                Log in as a patient
-              </Link>{' '}
-              to book this package.
-            </>
-          )}
-        </div>
-      ) : booking ? (
-        <div className="mt-3 space-y-3 border-t border-brand-neutral-100 pt-3">
-          {error && <Alert tone="error">{error}</Alert>}
-          {pkg.lab.homeCollectionSupported && (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setCollectionMode('HOME')}
-                className={`rounded-full px-3 py-1 text-xs font-medium ${collectionMode === 'HOME' ? 'bg-brand-purple-600 text-white' : 'bg-brand-neutral-100 text-brand-neutral-600'}`}
-              >
-                Home collection
-              </button>
-              <button
-                type="button"
-                onClick={() => setCollectionMode('LAB_VISIT')}
-                className={`rounded-full px-3 py-1 text-xs font-medium ${collectionMode === 'LAB_VISIT' ? 'bg-brand-purple-600 text-white' : 'bg-brand-neutral-100 text-brand-neutral-600'}`}
-              >
-                Lab visit
-              </button>
-            </div>
-          )}
-          {collectionMode === 'HOME' && (
-            <div>
-              <Label htmlFor={`address-${pkg.id}`}>Collection address</Label>
-              <Input id={`address-${pkg.id}`} value={address} onChange={(e) => setAddress(e.target.value)} />
-            </div>
-          )}
-          <div>
-            <Label htmlFor={`scheduledAt-${pkg.id}`}>Preferred date & time</Label>
-            <Input
-              id={`scheduledAt-${pkg.id}`}
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
-            />
+        {viewerRole !== 'PATIENT' ? (
+          <div className="mt-3 text-sm text-brand-neutral-500">
+            {viewerRole ? (
+              'Only patients can book diagnostic packages.'
+            ) : (
+              <>
+                <Link href="/login" className="font-medium text-brand-purple-700 underline">
+                  Log in as a patient
+                </Link>{' '}
+                to book this package.
+              </>
+            )}
           </div>
-          <Button size="sm" loading={submitting} onClick={handleBookAndPay}>
-            Book & pay ₹{pkg.price}
-          </Button>
-        </div>
-      ) : (
-        <Button variant="secondary" size="sm" className="mt-3" onClick={() => setBooking(true)}>
-          Book
-        </Button>
-      )}
-    </Card>
+        ) : booking ? (
+          <div className="mt-3 space-y-3 border-t border-brand-neutral-100 pt-3">
+            {error && <Alert tone="error">{error}</Alert>}
+            {pkg.lab.homeCollectionSupported && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCollectionMode('HOME')}
+                  className={`rounded-pill px-3 py-1 text-xs font-bold ${collectionMode === 'HOME' ? 'bg-gradient-to-br from-brand-purple-500 to-brand-magenta-500 text-white' : 'bg-brand-neutral-100 text-brand-neutral-600'}`}
+                >
+                  Home collection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCollectionMode('LAB_VISIT')}
+                  className={`rounded-pill px-3 py-1 text-xs font-bold ${collectionMode === 'LAB_VISIT' ? 'bg-gradient-to-br from-brand-purple-500 to-brand-magenta-500 text-white' : 'bg-brand-neutral-100 text-brand-neutral-600'}`}
+                >
+                  Lab visit
+                </button>
+              </div>
+            )}
+            {collectionMode === 'HOME' && (
+              <div>
+                <Label htmlFor={`address-${pkg.id}`}>Collection address</Label>
+                <Input id={`address-${pkg.id}`} value={address} onChange={(e) => setAddress(e.target.value)} />
+              </div>
+            )}
+            <div>
+              <Label htmlFor={`scheduledAt-${pkg.id}`}>Preferred date & time</Label>
+              <Input
+                id={`scheduledAt-${pkg.id}`}
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+              />
+            </div>
+            <Button size="sm" loading={submitting} onClick={handleBookAndPay}>
+              Book & pay ₹{pkg.price}
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-lg font-extrabold text-brand-neutral-900">₹{pkg.price}</div>
+            <Button size="sm" onClick={() => setBooking(true)}>
+              Add
+            </Button>
+          </div>
+        )}
+      </div>
+    </HoverCard>
   );
 }

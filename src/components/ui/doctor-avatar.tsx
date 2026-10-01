@@ -5,6 +5,8 @@
 // storage config, for no real benefit on a small, already-compressed
 // upload. Falls back to initials when no verified photo exists yet.
 export function DoctorAvatar({ photoUrl, name, size = 48 }: { photoUrl: string | null; name: string; size?: number }) {
+  const radius = Math.round(size * 0.27);
+
   if (photoUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -13,8 +15,8 @@ export function DoctorAvatar({ photoUrl, name, size = 48 }: { photoUrl: string |
         alt={name}
         width={size}
         height={size}
-        className="shrink-0 rounded-full object-cover"
-        style={{ width: size, height: size }}
+        className="shrink-0 object-cover"
+        style={{ width: size, height: size, borderRadius: radius }}
       />
     );
   }
@@ -29,8 +31,8 @@ export function DoctorAvatar({ photoUrl, name, size = 48 }: { photoUrl: string |
   return (
     <span
       aria-hidden="true"
-      className="flex shrink-0 items-center justify-center rounded-full bg-brand-purple-100 font-semibold text-brand-purple-700"
-      style={{ width: size, height: size, fontSize: size * 0.4 }}
+      className="flex shrink-0 items-center justify-center bg-gradient-to-br from-brand-purple-100 to-brand-blue-100 font-bold text-brand-purple-700"
+      style={{ width: size, height: size, fontSize: size * 0.4, borderRadius: radius }}
     >
       {initials || '—'}
     </span>
