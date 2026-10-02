@@ -24,6 +24,7 @@ export async function resolveMedicineByName(
     requiresPrescription?: boolean;
     category?: string;
     hsnCode?: string;
+    isFmcg?: boolean;
   },
 ) {
   const trimmed = name.trim();
@@ -54,6 +55,7 @@ export async function resolveMedicineByName(
       requiresPrescription: extra?.requiresPrescription ?? true,
       category: extra?.category,
       hsnCode: extra?.hsnCode,
+      isFmcg: extra?.isFmcg ?? false,
     },
   });
 }
@@ -105,6 +107,7 @@ export async function addInventory(userId: string, dto: AddInventoryInput) {
           requiresPrescription: dto.requiresPrescription,
           category: dto.category,
           hsnCode: dto.hsnCode,
+          isFmcg: dto.isFmcg,
         })
       : null;
   if (!medicine) throw new BadRequestError('Provide either an existing medicineId or a name to catalogue a new one');
@@ -192,6 +195,7 @@ export interface PublicMedicineListing {
   price: number;
   rating: number;
   reviewCount: number;
+  isFmcg: boolean;
   // EXPANSION-1 — one row per distinct variant (or one "null" row for a
   // plain, non-variant product), sorted by the variant's own sortOrder.
   // The catalogue grid shows price/quantityAvailable above as a "from ₹X"
@@ -221,6 +225,7 @@ export async function searchPublic(query: PublicSearchQuery): Promise<{ total: n
         requiresPrescription: false,
         ...(query.category ? { category: query.category } : {}),
         ...(query.brand ? { brandName: query.brand } : {}),
+        ...(query.isFmcg !== undefined ? { isFmcg: query.isFmcg } : {}),
         ...(query.q
           ? {
               OR: [
@@ -272,6 +277,7 @@ export async function searchPublic(query: PublicSearchQuery): Promise<{ total: n
         price: row.price,
         rating: row.medicine.rating,
         reviewCount: row.medicine.reviewCount,
+        isFmcg: row.medicine.isFmcg,
         variants: [],
       });
     }
@@ -311,7 +317,10 @@ export async function facets() {
   const areas = [...new Set(pharmacies.flatMap((p) => p.serviceAreas))].sort((a, b) => a.localeCompare(b));
 
   const inStockMedicines = await prisma.medicine.findMany({
-    where: { active: true, requiresPrescription: false, inventory: { some: { quantityAvailable: { gt: 0 }, pharmacy: { verificationStatus: 'APPROVED', active: true } } } },
+    // Scoped to the same isFmcg: false catalogue the main grid searches —
+    // these facets drive that grid's own filter dropdowns, so an FMCG-only
+    // category/brand here would just yield an empty main grid.
+    where: { active: true, requiresPrescription: false, isFmcg: false, inventory: { some: { quantityAvailable: { gt: 0 }, pharmacy: { verificationStatus: 'APPROVED', active: true } } } },
     select: { category: true, brandName: true },
   });
   const categories = [...new Set(inStockMedicines.map((m) => m.category).filter((c): c is string => Boolean(c)))].sort((a, b) => a.localeCompare(b));

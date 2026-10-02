@@ -15,8 +15,13 @@ export default async function MedicinesPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const params = await searchParams;
-  const [{ medicines, total }, facetData, session] = await Promise.all([
-    searchPublic(publicMedicineSearchSchema.parse(params)),
+  const parsedQuery = publicMedicineSearchSchema.parse(params);
+  const [{ medicines, total }, { medicines: fmcgMedicines }, facetData, session] = await Promise.all([
+    // EXPANSION-3 — the Ayurveda/pharmacy catalogue stays its own shelf,
+    // separate from FMCG items (reused infrastructure, distinct section —
+    // not a blended "everything" grid).
+    searchPublic({ ...parsedQuery, isFmcg: false }),
+    searchPublic({ isFmcg: true, limit: 8 }),
     facets(),
     getCurrentSession(),
   ]);
@@ -34,7 +39,23 @@ export default async function MedicinesPage({
         <MedicinesFilters facets={facetData} />
       </div>
 
-      <p className="mt-6 text-sm text-brand-neutral-500">{total} medicine(s) found</p>
+      {fmcgMedicines.length > 0 && (
+        <section className="mt-10">
+          <p className="text-sm font-semibold uppercase tracking-wide text-brand-blue-600">FMCG</p>
+          <h2 className="mt-1 text-xl font-semibold text-brand-neutral-900">Wellness &amp; personal care essentials</h2>
+          <p className="mt-1 max-w-2xl text-sm text-brand-neutral-600">
+            Everyday wellness and personal-care products, stocked and fulfilled the same way as every medicine
+            below.
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {fmcgMedicines.map((m) => (
+              <MedicineCard key={`fmcg:${m.pharmacy.id}:${m.medicineId}`} medicine={m} viewerRole={session?.user.role ?? null} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <p className="mt-10 text-sm text-brand-neutral-500">{total} medicine(s) found</p>
       <div className="mt-3 grid gap-4 sm:grid-cols-2">
         {medicines.map((m) => (
           <MedicineCard key={`${m.pharmacy.id}:${m.medicineId}`} medicine={m} viewerRole={session?.user.role ?? null} />

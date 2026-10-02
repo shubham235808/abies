@@ -28,6 +28,7 @@ export default async function PharmacyInventoryPage() {
               strength: row.medicine.strength,
               requiresPrescription: row.medicine.requiresPrescription,
               hsnCode: row.medicine.hsnCode,
+              isFmcg: row.medicine.isFmcg,
             },
             variant: row.variant ? { label: row.variant.label } : null,
           }))}

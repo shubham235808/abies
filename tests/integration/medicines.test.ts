@@ -202,6 +202,56 @@ describe('OTC medicine catalogue', () => {
   });
 });
 
+describe('FMCG catalogue (EXPANSION-3)', () => {
+  it('flags a medicine as FMCG when the pharmacist sets it, and leaves it false by default', async () => {
+    const { pharmacyUserId } = await approvedPharmacy();
+    const fmcgItem = await addInventory(pharmacyUserId, {
+      name: `HandWash-${randomInt(1000, 9999)}`,
+      requiresPrescription: false,
+      isFmcg: true,
+      batchNumber: `B${randomInt(1000, 9999)}`,
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      quantityAvailable: 20,
+      price: 99,
+    });
+    expect(fmcgItem.medicine.isFmcg).toBe(true);
+
+    const ayurvedaItem = await stockedOtcMedicine(pharmacyUserId, `Triphala-${randomInt(1000, 9999)}`);
+    expect(ayurvedaItem.medicine.isFmcg).toBe(false);
+  });
+
+  it('searchPublic filters by isFmcg when asked, and stays unfiltered (both catalogues) when not', async () => {
+    const { pharmacyUserId } = await approvedPharmacy();
+    const sharedTag = `FmcgSearch-${randomInt(100000, 999999)}`;
+    const fmcgItem = await addInventory(pharmacyUserId, {
+      name: `${sharedTag}-Soap`,
+      requiresPrescription: false,
+      isFmcg: true,
+      batchNumber: `B${randomInt(1000, 9999)}`,
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      quantityAvailable: 20,
+      price: 60,
+    });
+    const ayurvedaItem = await addInventory(pharmacyUserId, {
+      name: `${sharedTag}-Churna`,
+      requiresPrescription: false,
+      batchNumber: `B${randomInt(1000, 9999)}`,
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      quantityAvailable: 20,
+      price: 60,
+    });
+
+    const fmcgOnly = await searchPublic({ q: sharedTag, isFmcg: true });
+    expect(fmcgOnly.medicines.map((m) => m.medicineId)).toEqual([fmcgItem.medicineId]);
+
+    const ayurvedaOnly = await searchPublic({ q: sharedTag, isFmcg: false });
+    expect(ayurvedaOnly.medicines.map((m) => m.medicineId)).toEqual([ayurvedaItem.medicineId]);
+
+    const both = await searchPublic({ q: sharedTag });
+    expect(both.medicines.map((m) => m.medicineId).sort()).toEqual([fmcgItem.medicineId, ayurvedaItem.medicineId].sort());
+  });
+});
+
 describe('prescription resolves to the medicines catalogue', () => {
   it('finalizing a prescription resolves each item to a Medicine row', async () => {
     const { doctorUserId, consultationId } = await confirmedAppointment();

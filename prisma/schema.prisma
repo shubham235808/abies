@@ -1164,6 +1164,11 @@ model Medicine {
   // catalogue grouping, not itself a tax-rate key.
   category             String?
   hsnCode              String?
+  // EXPANSION-3 — admin-managed FMCG flag, a distinct catalogue over the
+  // same Medicine/PharmacyInventory/MedicineOrder infrastructure rather
+  // than a new supplier model. Its own boolean, not an overload of
+  // category (which ENTERPRISE-7 already uses for GST classification).
+  isFmcg               Boolean             @default(false)
   // EXPANSION-1c — same gated-aggregate pattern as DoctorProfile.rating:
   // only counts published, verified-purchase reviews, and stays 0 (falls
   // out of any rating-based sort/display) below a minimum sample size —

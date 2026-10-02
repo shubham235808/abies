@@ -18,7 +18,7 @@ type InventoryRow = {
   expiryDate: string;
   quantityAvailable: number;
   price: number;
-  medicine: { id: string; name: string; form: string | null; strength: string | null; requiresPrescription: boolean; hsnCode: string | null };
+  medicine: { id: string; name: string; form: string | null; strength: string | null; requiresPrescription: boolean; hsnCode: string | null; isFmcg: boolean };
   variant: { label: string } | null;
 };
 
@@ -57,9 +57,12 @@ export function InventoryManager({ initial }: { initial: InventoryRow[] }) {
       key: 'type',
       label: 'Type',
       render: (r) => (
-        <Badge tone={r.medicine.requiresPrescription ? 'orange' : 'success'}>
-          {r.medicine.requiresPrescription ? 'Rx required' : 'OTC'}
-        </Badge>
+        <div className="flex flex-wrap gap-1">
+          <Badge tone={r.medicine.requiresPrescription ? 'orange' : 'success'}>
+            {r.medicine.requiresPrescription ? 'Rx required' : 'OTC'}
+          </Badge>
+          {r.medicine.isFmcg && <Badge tone="blue">FMCG</Badge>}
+        </div>
       ),
     },
     { key: 'hsn', label: 'HSN', render: (r) => r.medicine.hsnCode ?? <span className="text-brand-orange-600">Not set</span> },
@@ -192,6 +195,10 @@ function NewBatchForm({ onCreated, onCancel }: { onCreated: (item: InventoryRow)
       <label className="flex items-center gap-2 text-sm text-brand-neutral-700">
         <input type="checkbox" {...register('requiresPrescription')} />
         Requires a prescription (leave unchecked for an over-the-counter item)
+      </label>
+      <label className="flex items-center gap-2 text-sm text-brand-neutral-700">
+        <input type="checkbox" {...register('isFmcg')} />
+        FMCG item (wellness/personal-care product, listed separately from the Ayurveda catalogue)
       </label>
       <div className="flex gap-3">
         <Button type="button" variant="secondary" onClick={onCancel}>

@@ -21,6 +21,9 @@ export const addInventorySchema = z.object({
   // message rather than guessing a rate.
   category: z.string().max(100).optional(),
   hsnCode: z.string().max(20).optional(),
+  // EXPANSION-3 — admin-managed FMCG flag, same catalogue/pharmacy/order
+  // infrastructure as every other medicine.
+  isFmcg: z.boolean().optional(),
   // EXPANSION-1 — find-or-create by label under this medicine, same
   // pattern as resolveMedicineByName below. Omitted: this batch is a
   // plain, non-variant product, exactly as every existing product works.
@@ -44,6 +47,8 @@ export const publicMedicineSearchSchema = z.object({
   // (Medicine.category, Medicine.brandName, PharmacyInventory.price).
   category: z.string().optional(),
   brand: z.string().optional(),
+  // EXPANSION-3 — the public FMCG section on /medicines queries this true.
+  isFmcg: z.coerce.boolean().optional(),
   priceMin: z.coerce.number().min(0).optional(),
   priceMax: z.coerce.number().min(0).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
