@@ -14,7 +14,8 @@ export type Permission =
   | 'panchakarma.catalogue.manage'
   | 'promotion.manage'
   | 'configuration.manage'
-  | 'settlement.manage';
+  | 'settlement.manage'
+  | 'hospital.manage';
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   PATIENT: [],
@@ -26,7 +27,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   TECH_SUPPORT: [],
   SALES: [],
   CARE_COORDINATOR: [],
-  ADMIN: ['promotion.manage', 'configuration.manage', 'settlement.manage'],
+  ADMIN: ['promotion.manage', 'configuration.manage', 'settlement.manage', 'hospital.manage'],
 };
 
 export function hasPermission(role: UserRole, permission: Permission): boolean {

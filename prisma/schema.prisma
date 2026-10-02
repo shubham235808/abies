@@ -89,6 +89,7 @@ model User {
   partnerLeadsOwned          PartnerLead[]
   refundsRequested           Refund[]                    @relation("RefundRequester")
   refundsApproved            Refund[]                    @relation("RefundApprover")
+  hospitalAdmissions         HospitalAdmission[]
 
   @@index([role, status])
 }
@@ -348,6 +349,9 @@ model DoctorProfile {
   carePlans                  CarePlan[]
   diagnosticRecommendations  DiagnosticRecommendation[]
   panchakarmaRecommendations PanchakarmaRecommendation[]
+  hospitalAdmissionsAttended HospitalAdmission[]
+  hospitalRoundNotes         HospitalRoundNote[]
+  hospitalDischargeSummaries HospitalDischargeSummary[]
 
   @@unique([registrationCouncil, registrationNumber])
   @@index([verificationStatus, isDiscoverable])
@@ -2198,6 +2202,133 @@ model Reconciliation {
   createdAt          DateTime  @default(now())
 
   payout             Payout    @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// EXPANSION-4 — Inpatient hospital module (docs/EXPANSION-DOMAIN-MODEL.md §2,
+// backs the master prompt's Journey B / §8.5). Explicitly not blueprint-
+// grounded — the gap analysis flags it as a speculative addition the user
+// confirmed building anyway. Deliberately minimal: attending-doctor rounds
+// documentation, not a full nursing/MAR charting system; bed-charge billing
+// is NOT modelled yet (would need a real per-day/per-ward rate structure
+// defined first — same "no financial assumptions as fact" rule as every
+// other fee table in this schema).
+model HospitalFacility {
+  id           String   @id @default(cuid())
+  name         String
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String
+  postalCode   String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  wards        HospitalWard[]
+  admissions   HospitalAdmission[]
+}
+
+model HospitalWard {
+  id         String   @id @default(cuid())
+  facilityId String
+  name       String // "General Ward A", "ICU", "Panchakarma Inpatient"
+  // Free text now, promotable to an admin-configurable domain (the
+  // Configuration platform's ConfigCategory precedent below) once real
+  // ward types stabilize through use — not invented speculatively here.
+  wardType   String
+  active     Boolean  @default(true)
+
+  facility   HospitalFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  beds       HospitalBed[]
+
+  @@index([facilityId])
+}
+
+enum BedStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+}
+
+model HospitalBed {
+  id         String      @id @default(cuid())
+  wardId     String
+  label      String // "A-12"
+  status     BedStatus   @default(AVAILABLE)
+
+  ward       HospitalWard        @relation(fields: [wardId], references: [id], onDelete: Cascade)
+  admissions HospitalAdmission[]
+
+  @@unique([wardId, label])
+}
+
+enum AdmissionStatus {
+  ADMITTED
+  DISCHARGED
+  TRANSFERRED_OUT // left this facility for another, not a normal discharge
+}
+
+model HospitalAdmission {
+  id                       String          @id @default(cuid())
+  patientUserId            String
+  admittingDoctorProfileId String
+  facilityId               String
+  bedId                    String
+  admittedAt               DateTime        @default(now())
+  reason                   String
+  status                   AdmissionStatus @default(ADMITTED)
+  dischargedAt             DateTime?
+
+  patientUser              User              @relation(fields: [patientUserId], references: [id], onDelete: Cascade)
+  admittingDoctor          DoctorProfile     @relation(fields: [admittingDoctorProfileId], references: [id], onDelete: Restrict)
+  facility                 HospitalFacility  @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  bed                      HospitalBed       @relation(fields: [bedId], references: [id], onDelete: Restrict)
+  bedTransfers             HospitalBedTransfer[]
+  roundNotes               HospitalRoundNote[]
+  dischargeSummary         HospitalDischargeSummary?
+
+  @@index([patientUserId])
+  @@index([status])
+}
+
+model HospitalBedTransfer {
+  id            String   @id @default(cuid())
+  admissionId   String
+  fromBedId     String
+  toBedId       String
+  reason        String?
+  transferredAt DateTime @default(now())
+
+  admission     HospitalAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+
+  @@index([admissionId])
+}
+
+// Deliberately minimal: attending-doctor rounds documentation, not a full
+// nursing/MAR charting system.
+model HospitalRoundNote {
+  id                    String   @id @default(cuid())
+  admissionId           String
+  authorDoctorProfileId String
+  note                  String
+  createdAt             DateTime @default(now())
+
+  admission             HospitalAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  authorDoctor          DoctorProfile     @relation(fields: [authorDoctorProfileId], references: [id], onDelete: Restrict)
+
+  @@index([admissionId])
+}
+
+model HospitalDischargeSummary {
+  id                          String   @id @default(cuid())
+  admissionId                 String   @unique
+  summary                     String
+  followUpInstructions        String?
+  dischargedByDoctorProfileId String
+  createdAt                   DateTime @default(now())
+
+  admission                   HospitalAdmission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  dischargedByDoctor          DoctorProfile     @relation(fields: [dischargedByDoctorProfileId], references: [id], onDelete: Restrict)
 }
 
 // ---------------------------------------------------------------------------

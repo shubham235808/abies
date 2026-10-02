@@ -8,6 +8,7 @@ const NAV = [
   { href: '/patient/medicines', label: 'Medicines' },
   { href: '/patient/medicines/cart', label: 'Cart' },
   { href: '/patient/panchakarma', label: 'Panchakarma' },
+  { href: '/patient/hospital', label: 'Hospital' },
   { href: '/patient/payments', label: 'Payments' },
   { href: '/patient/support', label: 'Support' },
   { href: '/patient/profile', label: 'Profile' },
