@@ -119,6 +119,16 @@ describe('admitting a patient', () => {
     ).rejects.toThrow(NotFoundError);
   });
 
+  it('accepts a bare 10-digit mobile number (not just the stored +91-prefixed form)', async () => {
+    const { doctorProfileId } = await approvedDoctor();
+    const { bedA } = await facilityWithBed();
+    const { mobile } = await registerUser('PATIENT');
+    const bareMobile = mobile.replace('+91', '');
+
+    const admission = await admitPatient({ patientMobile: bareMobile, admittingDoctorProfileId: doctorProfileId, bedId: bedA.id, reason: 'x' }, AUDIT_CTX);
+    expect(admission.status).toBe('ADMITTED');
+  });
+
   it('refuses to admit into a bed that is already occupied', async () => {
     const { doctorProfileId } = await approvedDoctor();
     const { bedA } = await facilityWithBed();

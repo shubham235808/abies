@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { BadRequestError, ConflictError, NotFoundError } from '@/lib/errors';
+import { normalizeMobile } from '@/modules/auth/auth.service';
 import { notify } from '@/modules/notifications/notifications.service';
 import { recordAuditEvent } from '@/server/audit';
 import type { AuditContext } from '@/server/audit';
@@ -29,7 +30,11 @@ export async function getAdmission(admissionId: string) {
 // linkedPatientMobile; there's no patient search/autocomplete anywhere in
 // this app, so this doesn't invent one).
 export async function admitPatient(dto: z.infer<typeof admitPatientSchema>, auditCtx: AuditContext) {
-  const patient = await prisma.user.findUnique({ where: { mobile: dto.patientMobile } });
+  // The admin types a bare 10-digit number; every number in this schema is
+  // stored +91-prefixed (modules/auth/auth.service.ts's normalizeMobile,
+  // the same normalization the OTP login flow applies before ever touching
+  // the DB) — without it, a correctly-typed mobile would never match.
+  const patient = await prisma.user.findUnique({ where: { mobile: normalizeMobile(dto.patientMobile) } });
   if (!patient || patient.role !== 'PATIENT') throw new NotFoundError('No patient found with that mobile number');
 
   const doctor = await prisma.doctorProfile.findUnique({ where: { id: dto.admittingDoctorProfileId } });
