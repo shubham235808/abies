@@ -6,6 +6,10 @@ Builds the four apps (`client-web`, `partner-web`, `management-web`,
 separate GitOps repo (`abies-gitops`) that ArgoCD watches. Tekton never
 talks to the cluster's application namespace directly — ArgoCD owns that.
 
+**Setting this up for the first time?** `abies-gitops/DEPLOY.md` is the
+ordered runbook covering both repos — placeholders, one-time cluster
+setup, first build, verify. The sections below are reference.
+
 ## Layout
 
 - `tasks/build-push-image.yaml` — kaniko build + push for any one app or
