@@ -1,0 +1,36 @@
+# Example manual trigger: `kubectl create -f tekton/pipelineruns/management-web.yaml`
+# (generateName avoids collisions on repeat runs). Replace the two TODO
+# values once the registry and GitOps repo exist; the other three apps'
+# PipelineRuns are identical but for `app-name`/`overlay-path`.
+#
+# Requires a Secret named `gitops-deploy-key` of type kubernetes.io/ssh-auth
+# holding a deploy key with write access to the GitOps repo:
+#   kubectl create secret generic gitops-deploy-key \
+#     --from-file=ssh-privatekey=/path/to/key --type=kubernetes.io/ssh-auth
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: build-deploy-management-web-
+spec:
+  pipelineRef: {name: build-and-deploy}
+  params:
+    - {name: app-name, value: management-web}
+    - {name: app-repo-url, value: "TODO-this-repo-clone-url"}
+    - {name: app-revision, value: main}
+    - {name: image-repo, value: "TODO-registry-host/abies"}
+    - {name: gitops-repo-url, value: "TODO-gitops-repo-clone-url"}
+    - {name: gitops-revision, value: main}
+    - {name: overlay-path, value: "apps/management-web/overlays/production"}
+  workspaces:
+    - name: source
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources: {requests: {storage: 1Gi}}
+    - name: gitops
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources: {requests: {storage: 256Mi}}
+    - name: git-credentials
+      secret: {secretName: gitops-deploy-key}

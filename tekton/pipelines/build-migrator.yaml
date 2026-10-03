@@ -1,0 +1,63 @@
+# Migrations are shared infrastructure (one Postgres, one schema) run
+# once per deploy, independent of any single app — this is a separate
+# pipeline from build-and-deploy.yaml rather than a step duplicated into
+# all four app pipelines. Triggered whenever packages/domain/prisma/
+# migrations changes, not on every app commit.
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: build-migrator
+spec:
+  params:
+    - name: app-repo-url
+    - {name: app-revision, default: main}
+    - name: image-repo
+    - name: gitops-repo-url
+    - {name: gitops-revision, default: main}
+    - name: overlay-path
+      description: Path within the GitOps repo to the migration Job's kustomization, e.g. migration/overlays/production.
+  workspaces:
+    - name: source
+    - name: gitops
+    - name: git-credentials
+  tasks:
+    - name: fetch-source
+      taskRef: {name: git-clone, kind: ClusterTask}
+      workspaces: [{name: output, workspace: source}]
+      params:
+        - {name: url, value: $(params.app-repo-url)}
+        - {name: revision, value: $(params.app-revision)}
+
+    - name: fetch-gitops
+      taskRef: {name: git-clone, kind: ClusterTask}
+      workspaces:
+        - {name: output, workspace: gitops}
+        - {name: ssh-directory, workspace: git-credentials}
+      params:
+        - {name: url, value: $(params.gitops-repo-url)}
+        - {name: revision, value: $(params.gitops-revision)}
+
+    - name: build-push
+      runAfter: [fetch-source]
+      taskRef: {name: build-push-image}
+      workspaces: [{name: source, workspace: source}]
+      params:
+        # The migrator stage's own CMD (`prisma:deploy`) doesn't use
+        # app-name for anything except satisfying the shared builder
+        # stage's build step — platform-api is an arbitrary pick, same
+        # reasoning as docker-compose.prod.yml's migrate service.
+        - {name: app-name, value: platform-api}
+        - {name: dockerfile-target, value: migrator}
+        - name: image
+          value: "$(params.image-repo)/migrator:$(tasks.fetch-source.results.commit)"
+
+    - name: update-gitops
+      runAfter: [build-push, fetch-gitops]
+      taskRef: {name: update-gitops-image}
+      workspaces: [{name: gitops, workspace: gitops}]
+      params:
+        - {name: app-name, value: migrator}
+        - name: image
+          value: "$(params.image-repo)/migrator:$(tasks.fetch-source.results.commit)"
+        - {name: overlay-path, value: $(params.overlay-path)}
+        - {name: git-revision, value: $(params.gitops-revision)}

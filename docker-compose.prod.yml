@@ -40,6 +40,12 @@ services:
       context: .
       dockerfile: Dockerfile
       target: migrator
+      # The migrator stage is FROM builder, which requires APP_NAME to run
+      # `pnpm --filter ${APP_NAME} run build` — migrate's own CMD doesn't
+      # use that app's build output (it only runs `prisma:deploy`), so any
+      # one of the four is an arbitrary but valid pick to satisfy the stage.
+      args:
+        APP_NAME: platform-api
     env_file: .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-abies}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-abies_ayurveda}?schema=public

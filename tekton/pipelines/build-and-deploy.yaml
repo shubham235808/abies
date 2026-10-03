@@ -1,0 +1,88 @@
+# CI pipeline for one app: clone this repo at a revision, build+push its
+# image, then bump that app's image tag in the GitOps repo so ArgoCD syncs
+# it. Run once per app (see ../pipelineruns/*.yaml) — a single app's commit
+# shouldn't force a rebuild/redeploy of the other three.
+#
+# Depends on the `git-clone` ClusterTask from the Tekton catalog. If it's
+# not already installed on this cluster:
+#   kubectl apply -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/git-clone/0.9/git-clone.yaml
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: build-and-deploy
+spec:
+  description: >-
+    Builds one ABIES app from source and updates its image reference in
+    the GitOps repo for ArgoCD to pick up.
+  params:
+    - name: app-name
+      description: One of client-web, partner-web, management-web, platform-api.
+    - name: app-repo-url
+      description: This repo's clone URL.
+    - name: app-revision
+      description: Git ref in the app repo to build.
+      default: main
+    - name: image-repo
+      description: >-
+        Registry + repository path to push to, e.g.
+        registry.internal.abies.in/abies — TODO: fill in once the
+        in-cluster registry's hostname is known.
+    - name: gitops-repo-url
+      description: >-
+        TODO: fill in once the separate GitOps repo exists and its clone
+        URL is known.
+    - name: gitops-revision
+      default: main
+    - name: overlay-path
+      description: Path within the GitOps repo to this app's overlay, e.g. apps/client-web/overlays/production.
+  workspaces:
+    - name: source
+      description: Holds the checked-out app repo.
+    - name: gitops
+      description: Holds the checked-out GitOps repo.
+    - name: git-credentials
+      description: >-
+        SSH key (as an `ssh-directory` workspace backed by a Secret)
+        authorized to push to the GitOps repo. See
+        https://hub.tekton.dev/tekton/task/git-clone's "ssh-directory"
+        workspace docs — the same credential is reused for both the clone
+        and the later push in update-gitops-image.
+  tasks:
+    - name: fetch-source
+      taskRef: {name: git-clone, kind: ClusterTask}
+      workspaces:
+        - {name: output, workspace: source}
+      params:
+        - {name: url, value: $(params.app-repo-url)}
+        - {name: revision, value: $(params.app-revision)}
+
+    - name: fetch-gitops
+      taskRef: {name: git-clone, kind: ClusterTask}
+      workspaces:
+        - {name: output, workspace: gitops}
+        - {name: ssh-directory, workspace: git-credentials}
+      params:
+        - {name: url, value: $(params.gitops-repo-url)}
+        - {name: revision, value: $(params.gitops-revision)}
+
+    - name: build-push
+      runAfter: [fetch-source]
+      taskRef: {name: build-push-image}
+      workspaces:
+        - {name: source, workspace: source}
+      params:
+        - {name: app-name, value: $(params.app-name)}
+        - name: image
+          value: "$(params.image-repo)/$(params.app-name):$(tasks.fetch-source.results.commit)"
+
+    - name: update-gitops
+      runAfter: [build-push, fetch-gitops]
+      taskRef: {name: update-gitops-image}
+      workspaces:
+        - {name: gitops, workspace: gitops}
+      params:
+        - {name: app-name, value: $(params.app-name)}
+        - name: image
+          value: "$(params.image-repo)/$(params.app-name):$(tasks.fetch-source.results.commit)"
+        - {name: overlay-path, value: $(params.overlay-path)}
+        - {name: git-revision, value: $(params.gitops-revision)}

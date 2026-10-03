@@ -1,0 +1,46 @@
+# The CI -> CD handoff: after build-push-image publishes a new image,
+# this bumps that app's image reference in the GitOps repo's Kustomize
+# overlay and pushes the commit. ArgoCD (watching the GitOps repo, not
+# this one) picks up that commit and syncs the new image to the cluster —
+# Tekton never talks to the cluster directly.
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: update-gitops-image
+spec:
+  description: >-
+    Runs `kustomize edit set image` in the given overlay directory of an
+    already-checked-out GitOps repo workspace, then commits and pushes.
+  params:
+    - name: app-name
+    - name: image
+      description: Full image reference including tag, matching what build-push-image just pushed.
+    - name: overlay-path
+      description: Path within the gitops workspace to the kustomization.yaml to edit, e.g. apps/client-web/overlays/production.
+    - name: git-revision
+      description: Branch in the GitOps repo to commit and push to.
+      default: main
+  workspaces:
+    - name: gitops
+      description: Checked-out GitOps repo, writable, with push credentials already configured (see pipelines/build-and-deploy.yaml).
+  steps:
+    - name: set-image
+      image: registry.k8s.io/kustomize/kustomize:v5.4.3
+      workingDir: $(workspaces.gitops.path)/$(params.overlay-path)
+      command: ["kustomize"]
+      args: ["edit", "set", "image", "$(params.app-name)=$(params.image)"]
+    - name: commit-and-push
+      image: alpine/git:2.45.2
+      workingDir: $(workspaces.gitops.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        git config user.email "tekton-ci@abies.in"
+        git config user.name "Tekton CI"
+        git add "$(params.overlay-path)"
+        if git diff --cached --quiet; then
+          echo "No image change for $(params.app-name) — nothing to commit."
+          exit 0
+        fi
+        git commit -m "deploy($(params.app-name)): $(params.image)"
+        git push origin HEAD:$(params.git-revision)

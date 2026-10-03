@@ -1,0 +1,49 @@
+# Builds one of the four apps (client-web/partner-web/management-web/
+# platform-api) or the shared migrator image from this repo's single
+# parameterized Dockerfile, and pushes it to the configured registry.
+# Uses kaniko (not a Docker-in-Docker build) since Tekton build Pods
+# shouldn't need a privileged container or access to a host Docker socket.
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: build-push-image
+spec:
+  description: >-
+    Builds apps/<app-name> (or the `migrator` target) via the repo's root
+    Dockerfile and pushes the resulting image to IMAGE.
+  params:
+    - name: app-name
+      description: One of client-web, partner-web, management-web, platform-api — passed as the Dockerfile's APP_NAME build-arg.
+      type: string
+    - name: image
+      description: Full destination image reference, including tag (e.g. registry.internal/abies/client-web:abc1234).
+      type: string
+    - name: dockerfile-target
+      description: Dockerfile build target to stop at (runner for an app image, migrator for the migration image).
+      type: string
+      default: runner
+    - name: dockerfile
+      type: string
+      default: ./Dockerfile
+    - name: context
+      type: string
+      default: .
+  workspaces:
+    - name: source
+      description: Checked-out app repo (see pipelines/build-and-deploy.yaml's fetch-source task).
+  steps:
+    - name: build-and-push
+      image: gcr.io/kaniko-project/executor:v1.23.2
+      workingDir: $(workspaces.source.path)
+      args:
+        - --dockerfile=$(params.dockerfile)
+        - --context=$(workspaces.source.path)/$(params.context)
+        - --destination=$(params.image)
+        - --target=$(params.dockerfile-target)
+        - --build-arg=APP_NAME=$(params.app-name)
+        # The cluster's registry is reached over the internal network, not
+        # the public internet — adjust once the actual registry's TLS
+        # setup is known (drop this if it serves a trusted/real cert).
+        - --insecure
+        - --skip-tls-verify
+        - --cache=true
