@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { prisma } from '@/lib/db';
-import { requestOtp, verifyOtp } from '@/modules/auth/auth.service';
+import { prisma } from '@abies/domain/lib/db';
+import { requestOtp, verifyOtp } from '@abies/domain/modules/auth/auth.service';
 
 const razorpayMock = vi.hoisted(() => ({
   isConfigured: vi.fn(() => true),
@@ -14,13 +14,13 @@ const razorpayMock = vi.hoisted(() => ({
   verifySignature: vi.fn(() => true),
   verifyWebhookSignature: vi.fn(() => false),
 }));
-vi.mock('@/lib/payments/razorpay', () => razorpayMock);
+vi.mock('@abies/domain/lib/payments/razorpay', () => razorpayMock);
 
-import { getDashboardMetrics } from '@/modules/admin/dashboard.service';
-import { approve as approvePharmacy } from '@/modules/medicines/admin-pharmacies.service';
-import { addInventory } from '@/modules/medicines/catalogue.service';
-import { bookOrder, verifyOrderPayment } from '@/modules/medicines/orders.service';
-import { ensurePharmacyProfile, submitPharmacy, updateMyPharmacy } from '@/modules/medicines/pharmacies.service';
+import { getDashboardMetrics } from '@abies/domain/modules/admin/dashboard.service';
+import { approve as approvePharmacy } from '@abies/domain/modules/medicines/admin-pharmacies.service';
+import { addInventory } from '@abies/domain/modules/medicines/catalogue.service';
+import { bookOrder, verifyOrderPayment } from '@abies/domain/modules/medicines/orders.service';
+import { ensurePharmacyProfile, submitPharmacy, updateMyPharmacy } from '@abies/domain/modules/medicines/pharmacies.service';
 
 function freshMobile(): string {
   return `9${randomInt(100000000, 999999999)}`;

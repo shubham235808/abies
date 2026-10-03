@@ -1,28 +1,26 @@
 # Production overlay for the Ubuntu ESXi VM target (docs/TARGET-ARCHITECTURE.md).
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
-# Differences from docker-compose.yml:
-#   - postgres/redis/minio publish no host ports at all — only the app
-#     container reaches them, over the internal Docker network.
-#   - app keeps a single 127.0.0.1-only binding (not docker-compose.yml's
-#     dev "3000:3000" bound to every interface) — Nginx runs on the host
-#     (infra/nginx/abies.conf) and proxies to 127.0.0.1:3000, so that
-#     binding has to survive the overlay; only Nginx's own :80/:443 are
-#     ever reachable from outside the host.
+# EXPANSION-5 — now four app services instead of one (docs/
+# EXPANSION-TARGET-ARCHITECTURE.md). Differences from docker-compose.yml:
+#   - postgres/redis/minio publish no host ports at all — only the four
+#     app containers reach them, over the internal Docker network.
+#   - each app keeps a single 127.0.0.1-only binding on its own port
+#     (not docker-compose.yml's dev-mode "published on every interface"
+#     bindings) — Nginx runs on the host (infra/nginx/abies.conf) and
+#     proxies to 127.0.0.1:3000-3003, so those bindings have to survive
+#     the overlay; only Nginx's own :80/:443 are ever reachable from
+#     outside the host.
 #   - restart policy is "always" for unattended recovery after VM reboot.
 #   - a one-shot `migrate` service runs `prisma migrate deploy` (Dockerfile's
-#     `migrator` stage) before `app` starts, so a deploy never depends on
-#     someone remembering to run migrations by hand against the prod
-#     database — docs/TARGET-ARCHITECTURE.md's "migrations run automatically
-#     and safely on deploy" line, finalized here.
+#     `migrator` stage) before any app starts — migrations are shared
+#     infrastructure (one Postgres, one schema) regardless of how many
+#     app services depend on it, so this still runs exactly once per
+#     deploy, not once per app.
 #
 # Compose merges `ports:` across files by concatenation, not replacement.
 # `!reset` clears a key to empty (postgres/redis/minio below); to *replace*
-# app's dev binding with a different one, `!override` is the right tag —
-# `!reset` with a non-empty value was tried first and silently produced no
-# ports at all (verified live: `docker compose config` showed the `app`
-# service with no `ports:` key whatsoever), which would have left app
-# completely unreachable from the host in a real deployment.
+# an app's dev binding with a different one, `!override` is the right tag.
 
 services:
   postgres:
@@ -51,7 +49,7 @@ services:
     networks: [abies]
     restart: "no"
 
-  app:
+  client-web:
     restart: always
     depends_on:
       migrate:
@@ -63,3 +61,42 @@ services:
       minio:
         condition: service_healthy
     ports: !override ["127.0.0.1:3000:3000"]
+
+  partner-web:
+    restart: always
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports: !override ["127.0.0.1:3001:3000"]
+
+  management-web:
+    restart: always
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports: !override ["127.0.0.1:3002:3000"]
+
+  platform-api:
+    restart: always
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports: !override ["127.0.0.1:3003:3000"]

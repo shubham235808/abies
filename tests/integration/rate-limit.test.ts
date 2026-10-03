@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, describe, expect, it } from 'vitest';
-import { redis } from '@/lib/redis';
-import { checkRateLimit } from '@/server/rate-limit';
+import { redis } from '@abies/domain/lib/redis';
+import { checkRateLimit } from '@abies/domain/server/rate-limit';
 
 const testKeys: string[] = [];
 

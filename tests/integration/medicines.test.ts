@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { prisma } from '@/lib/db';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@/lib/errors';
-import { requestOtp, verifyOtp } from '@/modules/auth/auth.service';
-import { approve as approveDoctor, reviewDocument } from '@/modules/doctors/admin-doctors.service';
-import { addAvailability, addDocument, submit as submitDoctor, updateMe } from '@/modules/doctors/doctors.service';
+import { prisma } from '@abies/domain/lib/db';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@abies/domain/lib/errors';
+import { requestOtp, verifyOtp } from '@abies/domain/modules/auth/auth.service';
+import { approve as approveDoctor, reviewDocument } from '@abies/domain/modules/doctors/admin-doctors.service';
+import { addAvailability, addDocument, submit as submitDoctor, updateMe } from '@abies/domain/modules/doctors/doctors.service';
 
 const razorpayMock = vi.hoisted(() => ({
   isConfigured: vi.fn(() => true),
@@ -17,16 +17,16 @@ const razorpayMock = vi.hoisted(() => ({
   verifySignature: vi.fn(() => true),
   verifyWebhookSignature: vi.fn(() => false),
 }));
-vi.mock('@/lib/payments/razorpay', () => razorpayMock);
+vi.mock('@abies/domain/lib/payments/razorpay', () => razorpayMock);
 
-import { holdSlot, verifyPayment } from '@/modules/appointments/appointments.service';
-import { createPrescription, finalizePrescription } from '@/modules/consultations/prescriptions.service';
-import { approve as approvePharmacy } from '@/modules/medicines/admin-pharmacies.service';
-import { addInventory, searchPublic, updateInventory } from '@/modules/medicines/catalogue.service';
-import { addToCart, checkoutCart, getCart, listMyCarts, removeCartItem, updateCartItem } from '@/modules/medicines/cart.service';
-import { createGstRate } from '@/modules/configuration/configuration.service';
-import { ensurePharmacyProfile, submitPharmacy, updateMyPharmacy, upsertMyTaxSettings } from '@/modules/medicines/pharmacies.service';
-import { recordSale } from '@/modules/medicines/pos.service';
+import { holdSlot, verifyPayment } from '@abies/domain/modules/appointments/appointments.service';
+import { createPrescription, finalizePrescription } from '@abies/domain/modules/consultations/prescriptions.service';
+import { approve as approvePharmacy } from '@abies/domain/modules/medicines/admin-pharmacies.service';
+import { addInventory, searchPublic, updateInventory } from '@abies/domain/modules/medicines/catalogue.service';
+import { addToCart, checkoutCart, getCart, listMyCarts, removeCartItem, updateCartItem } from '@abies/domain/modules/medicines/cart.service';
+import { createGstRate } from '@abies/domain/modules/configuration/configuration.service';
+import { ensurePharmacyProfile, submitPharmacy, updateMyPharmacy, upsertMyTaxSettings } from '@abies/domain/modules/medicines/pharmacies.service';
+import { recordSale } from '@abies/domain/modules/medicines/pos.service';
 import {
   acceptOrder,
   bookOrder,
@@ -38,7 +38,7 @@ import {
   markPacking,
   matchPrescriptionAtPharmacy,
   verifyOrderPayment,
-} from '@/modules/medicines/orders.service';
+} from '@abies/domain/modules/medicines/orders.service';
 
 function freshMobile(): string {
   return `9${randomInt(100000000, 999999999)}`;

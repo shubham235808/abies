@@ -15,9 +15,10 @@ services:
       timeout: 5s
       retries: 10
     networks: [abies]
-    # Bound to localhost only, for running the Next.js app directly on the
-    # host during development. docker-compose.prod.yml has no equivalent —
-    # in production only the internal Docker network reaches Postgres.
+    # Bound to localhost only, for running pnpm/vitest/prisma directly on
+    # the host during development. docker-compose.prod.yml has no
+    # equivalent — in production only the internal Docker network reaches
+    # Postgres.
     ports:
       - "127.0.0.1:5432:5432"
 
@@ -61,11 +62,7 @@ services:
       - "127.0.0.1:9001:9001"
 
   # One-shot: creates STORAGE_BUCKET if it doesn't already exist, then
-  # exits. Nothing else in this repo ever creates the bucket — a fresh
-  # `docker compose up` on a brand-new environment (a real deploy, CI) had
-  # no automated way to get one until this existed; it was only ever
-  # present here because it got created by hand at some point. Idempotent
-  # (--ignore-existing), so safe to run on every `up`.
+  # exits. Idempotent (--ignore-existing), so safe to run on every `up`.
   storage-init:
     image: quay.io/minio/mc:latest
     container_name: abies-storage-init
@@ -82,11 +79,18 @@ services:
     networks: [abies]
     restart: "no"
 
-  app:
+  # EXPANSION-5 — four deployables sharing one Dockerfile (parameterized by
+  # APP_NAME), the same Postgres/Redis/MinIO, and the same .env. Each one's
+  # own next.config.mjs sets output:'standalone', so build/runtime shape is
+  # identical across all four — see docs/EXPANSION-TARGET-ARCHITECTURE.md.
+  client-web:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: abies-app
+      args:
+        APP_NAME: client-web
+      target: runner
+    container_name: abies-client-web
     restart: unless-stopped
     env_file: .env
     environment:
@@ -105,9 +109,106 @@ services:
     ports:
       # Bound to all interfaces (not just localhost) for LAN access during
       # development review. docker-compose.prod.yml strips this back to
-      # internal-only (see its !reset ports note) — only Nginx is ever
-      # public in the real deployment target.
+      # internal-only — only Nginx is ever public in the real deployment.
       - "3000:3000"
+    networks: [abies]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  partner-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: partner-web
+      target: runner
+    container_name: abies-partner-web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-abies}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-abies_ayurveda}?schema=public
+      REDIS_URL: redis://redis:6379
+      STORAGE_ENDPOINT: http://minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+    ports:
+      - "3001:3000"
+    networks: [abies]
+    healthcheck:
+      # No /api/health in this app (that route lives in platform-api) —
+      # the homepage response itself is the liveness signal.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/partner/doctor').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  management-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: management-web
+      target: runner
+    container_name: abies-management-web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-abies}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-abies_ayurveda}?schema=public
+      REDIS_URL: redis://redis:6379
+      STORAGE_ENDPOINT: http://minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+    ports:
+      - "3002:3000"
+    networks: [abies]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/ops/admin').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  platform-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: platform-api
+      target: runner
+    container_name: abies-platform-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-abies}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-abies_ayurveda}?schema=public
+      REDIS_URL: redis://redis:6379
+      STORAGE_ENDPOINT: http://minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+    ports:
+      - "3003:3000"
     networks: [abies]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]

@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, describe, expect, it } from 'vitest';
-import { prisma } from '@/lib/db';
-import { requestOtp, verifyOtp } from '@/modules/auth/auth.service';
-import { acceptConsent, listActiveArtifacts, withdrawConsent } from '@/modules/consent/consent.service';
+import { prisma } from '@abies/domain/lib/db';
+import { requestOtp, verifyOtp } from '@abies/domain/modules/auth/auth.service';
+import { acceptConsent, listActiveArtifacts, withdrawConsent } from '@abies/domain/modules/consent/consent.service';
 
 function freshMobile(): string {
   return `9${randomInt(100000000, 999999999)}`;

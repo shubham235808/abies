@@ -2,7 +2,7 @@ import nextConfig from 'eslint-config-next';
 import prettierConfig from 'eslint-config-prettier';
 
 const config = [
-  { ignores: ['.next/**', 'node_modules/**', 'ABIES_Agent_Knowledge_Pack/**'] },
+  { ignores: ['**/.next/**', '**/node_modules/**', '**/dist/**', 'ABIES_Agent_Knowledge_Pack/**'] },
   ...nextConfig,
   prettierConfig,
   {

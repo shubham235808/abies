@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { prisma } from '@/lib/db';
-import { ConflictError, ServiceUnavailableError } from '@/lib/errors';
-import { requestOtp, verifyOtp } from '@/modules/auth/auth.service';
-import { approve, reviewDocument } from '@/modules/doctors/admin-doctors.service';
-import { addAvailability, addDocument, submit, updateMe } from '@/modules/doctors/doctors.service';
+import { prisma } from '@abies/domain/lib/db';
+import { ConflictError, ServiceUnavailableError } from '@abies/domain/lib/errors';
+import { requestOtp, verifyOtp } from '@abies/domain/modules/auth/auth.service';
+import { approve, reviewDocument } from '@abies/domain/modules/doctors/admin-doctors.service';
+import { addAvailability, addDocument, submit, updateMe } from '@abies/domain/modules/doctors/doctors.service';
 
 // vi.mock calls are hoisted above every import in this file by Vitest's
 // transform, so the appointments module resolves this mock regardless of
@@ -22,9 +22,9 @@ const razorpayMock = vi.hoisted(() => ({
   verifySignature: vi.fn(() => true),
   verifyWebhookSignature: vi.fn(() => false),
 }));
-vi.mock('@/lib/payments/razorpay', () => razorpayMock);
+vi.mock('@abies/domain/lib/payments/razorpay', () => razorpayMock);
 
-import { cancelAppointment, holdSlot, listAvailableSlots, verifyPayment } from '@/modules/appointments/appointments.service';
+import { cancelAppointment, holdSlot, listAvailableSlots, verifyPayment } from '@abies/domain/modules/appointments/appointments.service';
 
 function freshMobile(): string {
   return `9${randomInt(100000000, 999999999)}`;

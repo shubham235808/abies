@@ -1,17 +1,17 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, describe, expect, it } from 'vitest';
-import { prisma } from '@/lib/db';
-import { NotFoundError } from '@/lib/errors';
-import { requestOtp, verifyOtp } from '@/modules/auth/auth.service';
+import { prisma } from '@abies/domain/lib/db';
+import { NotFoundError } from '@abies/domain/lib/errors';
+import { requestOtp, verifyOtp } from '@abies/domain/modules/auth/auth.service';
 import {
   addTherapistDocument,
   createTherapist,
   listTherapistDocuments,
   removeTherapistDocument,
-} from '@/modules/panchakarma/catalogue.service';
-import { detail, queue, reviewDocument } from '@/modules/panchakarma/admin-therapists.service';
-import { updateMyCentre } from '@/modules/panchakarma/centres.service';
+} from '@abies/domain/modules/panchakarma/catalogue.service';
+import { detail, queue, reviewDocument } from '@abies/domain/modules/panchakarma/admin-therapists.service';
+import { updateMyCentre } from '@abies/domain/modules/panchakarma/centres.service';
 
 function freshMobile(): string {
   return `9${randomInt(100000000, 999999999)}`;

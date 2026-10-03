@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { prisma } from '@/lib/db';
-import { BadRequestError, ConflictError, NotFoundError } from '@/lib/errors';
+import { prisma } from '@abies/domain/lib/db';
+import { BadRequestError, ConflictError, NotFoundError } from '@abies/domain/lib/errors';
 
 const razorpayMock = vi.hoisted(() => ({
   isConfigured: vi.fn(() => false),
@@ -15,10 +15,10 @@ const razorpayMock = vi.hoisted(() => ({
     status: 'processed',
   })),
 }));
-vi.mock('@/lib/payments/razorpay', () => razorpayMock);
+vi.mock('@abies/domain/lib/payments/razorpay', () => razorpayMock);
 
-import { approveRefund, listRefundablePayments, rejectRefund, requestRefund } from '@/modules/payments/refunds.service';
-import { listAuditEvents, listDistinctEventTypes } from '@/modules/audit/audit.service';
+import { approveRefund, listRefundablePayments, rejectRefund, requestRefund } from '@abies/domain/modules/payments/refunds.service';
+import { listAuditEvents, listDistinctEventTypes } from '@abies/domain/modules/audit/audit.service';
 
 function freshMobile(): string {
   return `+919${randomInt(100000000, 999999999)}`;

@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { prisma } from '@/lib/db';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@/lib/errors';
-import { requestOtp, verifyOtp } from '@/modules/auth/auth.service';
-import { approve as approveDoctor, reviewDocument } from '@/modules/doctors/admin-doctors.service';
-import { addAvailability, addDocument, submit as submitDoctor, updateMe } from '@/modules/doctors/doctors.service';
+import { prisma } from '@abies/domain/lib/db';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@abies/domain/lib/errors';
+import { requestOtp, verifyOtp } from '@abies/domain/modules/auth/auth.service';
+import { approve as approveDoctor, reviewDocument } from '@abies/domain/modules/doctors/admin-doctors.service';
+import { addAvailability, addDocument, submit as submitDoctor, updateMe } from '@abies/domain/modules/doctors/doctors.service';
 
 const razorpayMock = vi.hoisted(() => ({
   isConfigured: vi.fn(() => true),
@@ -17,13 +17,13 @@ const razorpayMock = vi.hoisted(() => ({
   verifySignature: vi.fn(() => true),
   verifyWebhookSignature: vi.fn(() => false),
 }));
-vi.mock('@/lib/payments/razorpay', () => razorpayMock);
+vi.mock('@abies/domain/lib/payments/razorpay', () => razorpayMock);
 
-import { holdSlot, verifyPayment } from '@/modules/appointments/appointments.service';
-import { approve as approveCentre } from '@/modules/panchakarma/admin-centres.service';
-import { createTherapy, searchPublic } from '@/modules/panchakarma/catalogue.service';
-import { ensureCentreProfile, submitCentre, updateMyCentre } from '@/modules/panchakarma/centres.service';
-import { createRecommendation } from '@/modules/panchakarma/recommendations.service';
+import { holdSlot, verifyPayment } from '@abies/domain/modules/appointments/appointments.service';
+import { approve as approveCentre } from '@abies/domain/modules/panchakarma/admin-centres.service';
+import { createTherapy, searchPublic } from '@abies/domain/modules/panchakarma/catalogue.service';
+import { ensureCentreProfile, submitCentre, updateMyCentre } from '@abies/domain/modules/panchakarma/centres.service';
+import { createRecommendation } from '@abies/domain/modules/panchakarma/recommendations.service';
 import {
   bookTherapy,
   cancelBooking,
@@ -32,7 +32,7 @@ import {
   markSessionAttended,
   scheduleSession,
   verifyBookingPayment,
-} from '@/modules/panchakarma/bookings.service';
+} from '@abies/domain/modules/panchakarma/bookings.service';
 
 function freshMobile(): string {
   return `9${randomInt(100000000, 999999999)}`;

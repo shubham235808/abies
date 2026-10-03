@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, describe, expect, it } from 'vitest';
-import { prisma } from '@/lib/db';
-import { NotFoundError } from '@/lib/errors';
-import { requestOtp, verifyOtp } from '@/modules/auth/auth.service';
+import { prisma } from '@abies/domain/lib/db';
+import { NotFoundError } from '@abies/domain/lib/errors';
+import { requestOtp, verifyOtp } from '@abies/domain/modules/auth/auth.service';
 import {
   addFamilyMember,
   getMyProfile,
@@ -11,7 +11,7 @@ import {
   removeFamilyMember,
   updateFamilyMember,
   updateMyProfile,
-} from '@/modules/patients/patients.service';
+} from '@abies/domain/modules/patients/patients.service';
 
 function freshMobile(): string {
   return `9${randomInt(100000000, 999999999)}`;

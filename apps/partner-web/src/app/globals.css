@@ -1,0 +1,5 @@
+/* EXPANSION-5 — canonical brand tokens live in @abies/design-system
+   (packages/design-system/src/globals.css); every app imports them by
+   relative path (CSS @import package-name resolution isn't guaranteed
+   across every PostCSS/Tailwind setup, relative paths always work). */
+@import '../../../../packages/design-system/src/globals.css';

@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { prisma } from '@/lib/db';
-import { getEnv } from '@/lib/env';
-import { AppError } from '@/lib/errors';
-import { logout, requestOtp, verifyAdminMfa, verifyOtp } from '@/modules/auth/auth.service';
-import { getSessionByToken } from '@/server/session';
+import { prisma } from '@abies/domain/lib/db';
+import { getEnv } from '@abies/domain/lib/env';
+import { AppError } from '@abies/domain/lib/errors';
+import { logout, requestOtp, verifyAdminMfa, verifyOtp } from '@abies/domain/modules/auth/auth.service';
+import { getSessionByToken } from '@abies/domain/server/session';
 
 // Exercises the OTP/session/MFA flow against a real Postgres + Redis, at
 // the service layer (not over HTTP) — re-deriving the scenarios from

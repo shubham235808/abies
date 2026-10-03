@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { prisma } from '@/lib/db';
-import { requestOtp, verifyOtp } from '@/modules/auth/auth.service';
-import { approve as approveDoctor, reviewDocument } from '@/modules/doctors/admin-doctors.service';
-import { addAvailability, addDocument, submit as submitDoctor, updateMe } from '@/modules/doctors/doctors.service';
+import { prisma } from '@abies/domain/lib/db';
+import { requestOtp, verifyOtp } from '@abies/domain/modules/auth/auth.service';
+import { approve as approveDoctor, reviewDocument } from '@abies/domain/modules/doctors/admin-doctors.service';
+import { addAvailability, addDocument, submit as submitDoctor, updateMe } from '@abies/domain/modules/doctors/doctors.service';
 
 const razorpayMock = vi.hoisted(() => ({
   isConfigured: vi.fn(() => true),
@@ -16,12 +16,12 @@ const razorpayMock = vi.hoisted(() => ({
   verifySignature: vi.fn(() => true),
   verifyWebhookSignature: vi.fn(() => false),
 }));
-vi.mock('@/lib/payments/razorpay', () => razorpayMock);
+vi.mock('@abies/domain/lib/payments/razorpay', () => razorpayMock);
 
-import { holdSlot, myPracticeSummary, verifyPayment } from '@/modules/appointments/appointments.service';
-import { operationalVolumeReport, partnerFunnelReport, revenueReport, supportSlaReport, toCsv } from '@/modules/admin/reports.service';
-import { createLead, updateLead } from '@/modules/partners/leads.service';
-import { createTicket, supportVolumeBreakdown, updateStatus } from '@/modules/support/tickets.service';
+import { holdSlot, myPracticeSummary, verifyPayment } from '@abies/domain/modules/appointments/appointments.service';
+import { operationalVolumeReport, partnerFunnelReport, revenueReport, supportSlaReport, toCsv } from '@abies/domain/modules/admin/reports.service';
+import { createLead, updateLead } from '@abies/domain/modules/partners/leads.service';
+import { createTicket, supportVolumeBreakdown, updateStatus } from '@abies/domain/modules/support/tickets.service';
 
 function freshMobile(): string {
   return `9${randomInt(100000000, 999999999)}`;

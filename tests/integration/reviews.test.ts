@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { prisma } from '@/lib/db';
-import { BadRequestError, ConflictError, NotFoundError } from '@/lib/errors';
-import { requestOtp, verifyOtp } from '@/modules/auth/auth.service';
-import { approve, reviewDocument } from '@/modules/doctors/admin-doctors.service';
-import { addAvailability, addDocument, submit, updateMe } from '@/modules/doctors/doctors.service';
+import { prisma } from '@abies/domain/lib/db';
+import { BadRequestError, ConflictError, NotFoundError } from '@abies/domain/lib/errors';
+import { requestOtp, verifyOtp } from '@abies/domain/modules/auth/auth.service';
+import { approve, reviewDocument } from '@abies/domain/modules/doctors/admin-doctors.service';
+import { addAvailability, addDocument, submit, updateMe } from '@abies/domain/modules/doctors/doctors.service';
 
 const razorpayMock = vi.hoisted(() => ({
   isConfigured: vi.fn(() => true),
@@ -17,15 +17,15 @@ const razorpayMock = vi.hoisted(() => ({
   verifySignature: vi.fn(() => true),
   verifyWebhookSignature: vi.fn(() => false),
 }));
-vi.mock('@/lib/payments/razorpay', () => razorpayMock);
+vi.mock('@abies/domain/lib/payments/razorpay', () => razorpayMock);
 
-import { holdSlot, verifyPayment } from '@/modules/appointments/appointments.service';
-import { completeConsultation, startConsultation } from '@/modules/consultations/consultations.service';
-import { approve as approvePharmacy } from '@/modules/medicines/admin-pharmacies.service';
-import { addInventory } from '@/modules/medicines/catalogue.service';
-import { acceptOrder, bookOrder, dispatchOrder, markDelivered, markPacking, verifyOrderPayment } from '@/modules/medicines/orders.service';
-import { ensurePharmacyProfile, submitPharmacy, updateMyPharmacy } from '@/modules/medicines/pharmacies.service';
-import { listForDoctor, listForMedicine, moderate, reviewDoctor, reviewMedicine } from '@/modules/reviews/reviews.service';
+import { holdSlot, verifyPayment } from '@abies/domain/modules/appointments/appointments.service';
+import { completeConsultation, startConsultation } from '@abies/domain/modules/consultations/consultations.service';
+import { approve as approvePharmacy } from '@abies/domain/modules/medicines/admin-pharmacies.service';
+import { addInventory } from '@abies/domain/modules/medicines/catalogue.service';
+import { acceptOrder, bookOrder, dispatchOrder, markDelivered, markPacking, verifyOrderPayment } from '@abies/domain/modules/medicines/orders.service';
+import { ensurePharmacyProfile, submitPharmacy, updateMyPharmacy } from '@abies/domain/modules/medicines/pharmacies.service';
+import { listForDoctor, listForMedicine, moderate, reviewDoctor, reviewMedicine } from '@abies/domain/modules/reviews/reviews.service';
 
 function freshMobile(): string {
   return `9${randomInt(100000000, 999999999)}`;

@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, describe, expect, it } from 'vitest';
-import { prisma } from '@/lib/db';
-import { NotFoundError } from '@/lib/errors';
+import { prisma } from '@abies/domain/lib/db';
+import { NotFoundError } from '@abies/domain/lib/errors';
 import {
   activePromotionsForPlacement,
   createPromotion,
@@ -11,7 +11,7 @@ import {
   removePromotion,
   updatePromotion,
   type UploadedImage,
-} from '@/modules/promotions/promotions.service';
+} from '@abies/domain/modules/promotions/promotions.service';
 
 const createdPromotionIds: string[] = [];
 const titleTag = `TEST_PROMO_${randomInt(100000, 999999)}`;
@@ -66,7 +66,7 @@ describe('promotion CRUD (ENTERPRISE-13)', () => {
   });
 
   it('rejects entityType without a matching entityId at the schema layer', async () => {
-    const { createPromotionSchema } = await import('@/modules/promotions/promotions.schemas');
+    const { createPromotionSchema } = await import('@abies/domain/modules/promotions/promotions.schemas');
     const result = createPromotionSchema.safeParse({
       title: 'x',
       placement: 'PUBLIC_HOME_HERO',
@@ -77,7 +77,7 @@ describe('promotion CRUD (ENTERPRISE-13)', () => {
   });
 
   it('rejects a ctaHref that is not a relative path or an https:// URL (ENTERPRISE-15)', async () => {
-    const { createPromotionSchema } = await import('@/modules/promotions/promotions.schemas');
+    const { createPromotionSchema } = await import('@abies/domain/modules/promotions/promotions.schemas');
     const base = { title: 'x', placement: 'PUBLIC_HOME_HERO' as const, ...windowNow(0, 1) };
     expect(createPromotionSchema.safeParse({ ...base, ctaHref: 'javascript:alert(1)' }).success).toBe(false);
     expect(createPromotionSchema.safeParse({ ...base, ctaHref: 'data:text/html,<script>alert(1)</script>' }).success).toBe(false);

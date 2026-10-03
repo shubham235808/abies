@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, describe, expect, it } from 'vitest';
-import { prisma } from '@/lib/db';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@/lib/errors';
+import { prisma } from '@abies/domain/lib/db';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@abies/domain/lib/errors';
 import {
   addMessage,
   browserContextFromUserAgent,
@@ -12,9 +12,9 @@ import {
   technicalIncidentBreakdown,
   triageTicket,
   updateStatus,
-} from '@/modules/support/tickets.service';
-import { createStaffAccount } from '@/modules/staff/staff.service';
-import { claimLead, createLead, updateLead } from '@/modules/partners/leads.service';
+} from '@abies/domain/modules/support/tickets.service';
+import { createStaffAccount } from '@abies/domain/modules/staff/staff.service';
+import { claimLead, createLead, updateLead } from '@abies/domain/modules/partners/leads.service';
 
 // 10 digits, starting 6-9 — matches auth.service.ts's normalizeMobile so the
 // same value works both as a raw prisma-create mobile (below) and as

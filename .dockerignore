@@ -1,0 +1,19 @@
+# Keeps the build context small and prevents host-platform node_modules
+# (and other local build output) from ever being copied over the
+# container's own correctly-installed node_modules in the Dockerfile's
+# builder stage.
+**/node_modules
+**/.next
+**/.turbo
+**/.pnpm-store
+**/dist
+.git
+.env
+.env.*
+!.env.example
+test-results
+playwright-report
+coverage
+tsconfig.tsbuildinfo
+ABIES_Agent_Knowledge_Pack
+certs

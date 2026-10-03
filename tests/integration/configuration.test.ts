@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, describe, expect, it } from 'vitest';
-import { prisma } from '@/lib/db';
-import { ConflictError, NotFoundError } from '@/lib/errors';
+import { prisma } from '@abies/domain/lib/db';
+import { ConflictError, NotFoundError } from '@abies/domain/lib/errors';
 import {
   createConfigCategory,
   createCourierProvider,
@@ -20,8 +20,8 @@ import {
   removeServiceLocation,
   updateConfigCategory,
   updateGstRate,
-} from '@/modules/configuration/configuration.service';
-import { listAuditEvents, listDistinctEventTypes } from '@/modules/audit/audit.service';
+} from '@abies/domain/modules/configuration/configuration.service';
+import { listAuditEvents, listDistinctEventTypes } from '@abies/domain/modules/audit/audit.service';
 
 const createdCategoryIds: string[] = [];
 const createdLocationIds: string[] = [];

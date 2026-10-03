@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { randomInt } from 'crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { prisma } from '@/lib/db';
-import { BadRequestError, ConflictError } from '@/lib/errors';
-import { computeCommission } from '@/modules/settlement/commission.service';
-import { createFeeTerm, listPartnerOptions } from '@/modules/settlement/fee-terms.service';
+import { prisma } from '@abies/domain/lib/db';
+import { BadRequestError, ConflictError } from '@abies/domain/lib/errors';
+import { computeCommission } from '@abies/domain/modules/settlement/commission.service';
+import { createFeeTerm, listPartnerOptions } from '@abies/domain/modules/settlement/fee-terms.service';
 import {
   completeSettlement,
   createSettlement,
@@ -13,7 +13,7 @@ import {
   markPayoutFailed,
   markPayoutPaid,
   recordReconciliation,
-} from '@/modules/settlement/settlements.service';
+} from '@abies/domain/modules/settlement/settlements.service';
 
 const createdUserIds: string[] = [];
 const createdFeeTermIds: string[] = [];
