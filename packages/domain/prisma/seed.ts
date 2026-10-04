@@ -68,11 +68,17 @@ async function main() {
     });
   }
 
+  // Emails on these two specifically so OTP_DELIVERY_CHANNEL=email
+  // (packages/domain/src/lib/env.ts) has something to actually send to when
+  // testing against these seeded accounts — `.test` is IANA-reserved,
+  // guaranteed never to resolve to a real mailbox, same reasoning as using
+  // example.com/.test anywhere else fake data is needed.
   const patient = await prisma.user.upsert({
     where: { mobile: '+919876543210' },
     update: {},
     create: {
       mobile: '+919876543210',
+      email: 'asha.rao@abies.test',
       role: UserRole.PATIENT,
       patientProfile: { create: { firstName: 'Asha', lastName: 'Rao', preferredLanguage: 'Hindi' } },
     },
@@ -81,7 +87,7 @@ async function main() {
   const admin = await prisma.user.upsert({
     where: { mobile: '+919876543214' },
     update: {},
-    create: { mobile: '+919876543214', role: UserRole.ADMIN, mfaEnabled: true },
+    create: { mobile: '+919876543214', email: 'admin@abies.test', role: UserRole.ADMIN, mfaEnabled: true },
   });
 
   const doctorUser = await prisma.user.upsert({

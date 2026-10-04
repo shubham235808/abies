@@ -3,6 +3,7 @@ import type { UserRole } from '@prisma/client';
 import { prisma } from '../../lib/db';
 import { getEnv, isLockedDownDeployment } from '../../lib/env';
 import { BadRequestError, ForbiddenError, UnauthorizedError } from '../../lib/errors';
+import { notify } from '../notifications/notifications.service';
 import { recordAuditEvent } from '../../server/audit';
 import { createSession, markMfaVerified, revokeSession, type SessionInfo } from '../../server/session';
 
@@ -30,8 +31,16 @@ export async function requestOtp(rawMobile: string, role: UserRole): Promise<Req
   const env = getEnv();
   const mobile = normalizeMobile(rawMobile);
 
+  // Looked up for every role now (previously skipped for PATIENT, since
+  // nothing needed it before) — a returning user's own email, when they
+  // have one on file, is how OTP_DELIVERY_CHANNEL=email below knows where
+  // to send the code. A brand-new patient has no User row yet at this
+  // point regardless (they're created on first OTP verify), so email
+  // delivery simply isn't available for that case — not fixable here, see
+  // docs/platform/SECURITY-GAP-ANALYSIS.md §1.
+  const user = await prisma.user.findUnique({ where: { mobile } });
+
   if (role !== 'PATIENT') {
-    const user = await prisma.user.findUnique({ where: { mobile } });
     const selfOnboardingAllowed =
       (role === 'DOCTOR' && env.ALLOW_DOCTOR_SELF_ONBOARDING) ||
       (role === 'LAB' && env.ALLOW_LAB_SELF_ONBOARDING) ||
@@ -59,6 +68,14 @@ export async function requestOtp(rawMobile: string, role: UserRole): Promise<Req
       expiresAt: new Date(Date.now() + env.OTP_TTL_SECONDS * 1000),
     },
   });
+
+  // Real delivery, alongside (not instead of) the dev-bypass devOtp below —
+  // notify() never throws, so a delivery failure here doesn't block the
+  // request. Silently does nothing when there's no user yet or no email on
+  // file; the dev-bypass remains the only way to get the code in that case.
+  if (env.OTP_DELIVERY_CHANNEL === 'email' && user?.email) {
+    await notify(user.id, 'EMAIL', 'auth.otp_code', { otp, expiresInSeconds: env.OTP_TTL_SECONDS });
+  }
 
   return {
     requestId: challenge.id,

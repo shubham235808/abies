@@ -60,17 +60,36 @@ const envSchema = z.object({
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
 
-  // Notification adapters, one provider name per channel. 'mock' is the
-  // only implemented provider today (logs to console — src/lib/notifications)
-  // and is hard-disabled in production, same rule as OTP_DEV_CODE above:
-  // no channel silently pretends to deliver in prod without a real
-  // provider wired up.
+  // Notification adapters, one provider name per channel. 'mock' is
+  // hard-disabled in production (no channel silently pretends to deliver
+  // without a real provider wired up) — same rule as OTP_DEV_CODE above.
+  // 'smtp' (EMAIL_PROVIDER only, docs/platform/SECURITY-GAP-ANALYSIS.md §1)
+  // is a real adapter and is allowed to run anywhere, including locked-down
+  // deployments.
   SMS_PROVIDER: z.string().default('mock'),
   SMS_API_KEY: z.string().optional(),
   EMAIL_PROVIDER: z.string().default('mock'),
   EMAIL_API_KEY: z.string().optional(),
   WHATSAPP_PROVIDER: z.string().default('mock'),
   WHATSAPP_API_KEY: z.string().optional(),
+
+  // SMTP connection for EMAIL_PROVIDER=smtp. All optional in the schema
+  // (only actually needed at that point) — same convention as Razorpay's
+  // keys above: blank means "not configured," surfaced honestly by the
+  // adapter's own send() failing, not validated eagerly here.
+  EMAIL_SMTP_HOST: z.string().optional(),
+  EMAIL_SMTP_PORT: z.coerce.number().default(587),
+  EMAIL_SMTP_USER: z.string().optional(),
+  EMAIL_SMTP_PASSWORD: z.string().optional(),
+  EMAIL_FROM_ADDRESS: z.string().optional(),
+
+  // Which channel requestOtp() (modules/auth/auth.service.ts) actually
+  // dispatches the code through, once a user+matching contact method
+  // exists. 'sms' is still a no-op today (no real SMS provider — see
+  // docs/platform/SECURITY-GAP-ANALYSIS.md §1); 'email' is real via the
+  // smtp adapter above, intended for abies-dev while a real SMS decision
+  // for abies-prod is still pending.
+  OTP_DELIVERY_CHANNEL: z.enum(['sms', 'email']).default('sms'),
 });
 
 export type Env = z.infer<typeof envSchema>;
