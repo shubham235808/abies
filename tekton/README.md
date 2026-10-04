@@ -87,8 +87,3 @@ ordered runbook covering both repos. The sections below are reference.
 - **`triggers/`'s git-host assumption**: written for GitHub's webhook
   payload shape — Gitea's is close but not confirmed identical; see
   `triggers/README.md`'s "Still open" before relying on it.
-- **imagePullSecrets**: if Harbor requires auth to *pull* (not just
-  push), add `imagePullSecrets: [{name: harbor-pull}]` to each
-  Deployment's pod spec in `abies-gitops`'s `applications/*/base/
-  deployment.yaml` — not added yet since it's unconfirmed whether
-  `abies-dev` has some other unauthenticated-pull arrangement.
