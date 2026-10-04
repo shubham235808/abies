@@ -29,7 +29,7 @@ export function DocumentRequirementsManager({ initial }: { initial: DocumentRequ
     <ConfigManagerShell
       columns={COLUMNS}
       initialRows={initial}
-      apiBase="/api/admin/configuration/document-requirements"
+      apiBase="/api/v1/admin/configuration/document-requirements"
       addModalTitle="Add a document requirement"
       entityLabel="Requirement"
       renderAddForm={({ onCreated, onCancel }) => <AddForm onCreated={onCreated} onCancel={onCancel} />}
@@ -49,7 +49,7 @@ function AddForm({ onCreated, onCancel }: { onCreated: (row: DocumentRequirement
     setError(null);
     try {
       const { requirement } = await api.post<{ requirement: DocumentRequirementRow }>(
-        '/api/admin/configuration/document-requirements',
+        '/api/v1/admin/configuration/document-requirements',
         { partnerType, documentType, required },
       );
       onCreated(requirement);

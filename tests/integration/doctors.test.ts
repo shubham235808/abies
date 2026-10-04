@@ -52,6 +52,9 @@ async function registerAdmin() {
 }
 
 const pdf = { mimeType: 'application/pdf', size: 1024, buffer: Buffer.from('%PDF-1.4 test') };
+// assertUploadAllowed checks the JPEG magic bytes (0xFF 0xD8 0xFF) now, not
+// just the declared mimeType — needs a real-looking prefix.
+const jpegBuffer = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.from('fake-jpeg')]);
 
 async function completeAndSubmitDoctor(userId: string, overrides?: { languages?: string[]; lastName?: string }) {
   await updateMe(
@@ -252,7 +255,7 @@ describe('doctor profile photo (EXPANSION-1d)', () => {
     ).rejects.toThrow(ForbiddenError);
 
     // A profile photo is marketing content, not a credential — always editable.
-    const photo = await addDocument(userId, 'PROFILE_PHOTO', { originalName: 'photo.jpg', mimeType: 'image/jpeg', size: 1024, buffer: Buffer.from('fake-jpeg') }, { userId });
+    const photo = await addDocument(userId, 'PROFILE_PHOTO', { originalName: 'photo.jpg', mimeType: 'image/jpeg', size: 1024, buffer: jpegBuffer }, { userId });
     expect(photo.type).toBe('PROFILE_PHOTO');
 
     await removeDocument(userId, photo.id, { userId });
@@ -268,7 +271,7 @@ describe('doctor profile photo (EXPANSION-1d)', () => {
     let { doctor } = await publicProfile(submitted.slug);
     expect(doctor.photoUrl).toBeNull();
 
-    const photo = await addDocument(userId, 'PROFILE_PHOTO', { originalName: 'photo.jpg', mimeType: 'image/jpeg', size: 1024, buffer: Buffer.from('fake-jpeg') }, { userId });
+    const photo = await addDocument(userId, 'PROFILE_PHOTO', { originalName: 'photo.jpg', mimeType: 'image/jpeg', size: 1024, buffer: jpegBuffer }, { userId });
 
     ({ doctor } = await publicProfile(submitted.slug));
     expect(doctor.photoUrl).toBeNull(); // uploaded, not yet verified
@@ -277,7 +280,7 @@ describe('doctor profile photo (EXPANSION-1d)', () => {
     await reviewDocument(submitted.id, photo.id, { userId: adminId }, 'VERIFY');
 
     ({ doctor } = await publicProfile(submitted.slug));
-    expect(doctor.photoUrl).toBe(`/api/public/doctors/${submitted.slug}/photo`);
+    expect(doctor.photoUrl).toBe(`/api/v1/public/doctors/${submitted.slug}/photo`);
   });
 });
 

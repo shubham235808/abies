@@ -41,7 +41,7 @@ export function FamilyManager({ initial }: { initial: FamilyMember[] }) {
     setError(null);
     try {
       const cleaned = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== ''));
-      const { member } = await api.post<{ member: FamilyMember }>('/api/patients/me/family', cleaned);
+      const { member } = await api.post<{ member: FamilyMember }>('/api/v1/patients/me/family', cleaned);
       setMembers((prev) => [...prev, member]);
       reset({ name: '', relation: 'CHILD', dateOfBirth: '', gender: '', mobile: '' });
       setShowForm(false);
@@ -53,7 +53,7 @@ export function FamilyManager({ initial }: { initial: FamilyMember[] }) {
   async function handleRemove(id: string) {
     setError(null);
     try {
-      await api.delete(`/api/patients/me/family/${id}`);
+      await api.delete(`/api/v1/patients/me/family/${id}`);
       setMembers((prev) => prev.filter((m) => m.id !== id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not remove family member.');

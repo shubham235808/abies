@@ -60,7 +60,7 @@ export function AdmissionBoard({ initial, doctorOptions }: { initial: BoardFacil
   async function handleDischarge(admissionId: string, bedId: string) {
     setError(null);
     try {
-      await api.post(`/api/admin/hospital-admissions/${admissionId}/discharge`, {});
+      await api.post(`/api/v1/admin/hospital-admissions/${admissionId}/discharge`, {});
       patchBed(bedId, { status: 'AVAILABLE', admission: null });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not discharge this admission.');
@@ -186,7 +186,7 @@ function AdmitForm({
     setError(null);
     try {
       const { admission } = await api.post<{ admission: { id: string; reason: string; admittedAt: string; patientUser: { mobile: string; patientProfile: { firstName: string | null; lastName: string | null } | null }; admittingDoctor: { firstName: string | null; lastName: string | null } } }>(
-        '/api/admin/hospital-admissions',
+        '/api/v1/admin/hospital-admissions',
         { patientMobile, admittingDoctorProfileId, bedId, reason },
       );
       onAdmitted(
@@ -263,7 +263,7 @@ function TransferForm({
     setBusy(true);
     setError(null);
     try {
-      await api.post(`/api/admin/hospital-admissions/${admissionId}/transfer`, { toBedId, reason: reason || undefined });
+      await api.post(`/api/v1/admin/hospital-admissions/${admissionId}/transfer`, { toBedId, reason: reason || undefined });
       onTransferred(toBedId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not transfer this admission.');

@@ -34,7 +34,7 @@ export function TherapiesManager({ initial }: { initial: Therapy[] }) {
   async function toggleActive(therapy: Therapy) {
     setError(null);
     try {
-      const { therapy: updated } = await api.patch<{ therapy: Therapy }>(`/api/panchakarma-centres/me/therapies/${therapy.id}`, {
+      const { therapy: updated } = await api.patch<{ therapy: Therapy }>(`/api/v1/panchakarma-centres/me/therapies/${therapy.id}`, {
         active: !therapy.active,
       });
       setTherapies((prev) => prev.map((t) => (t.id === therapy.id ? updated : t)));
@@ -46,7 +46,7 @@ export function TherapiesManager({ initial }: { initial: Therapy[] }) {
   async function handleRemove(id: string) {
     setError(null);
     try {
-      await api.delete(`/api/panchakarma-centres/me/therapies/${id}`);
+      await api.delete(`/api/v1/panchakarma-centres/me/therapies/${id}`);
       setTherapies((prev) => prev.filter((t) => t.id !== id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not remove this therapy.');
@@ -114,7 +114,7 @@ function NewTherapyForm({ onCreated, onCancel }: { onCreated: (therapy: Therapy)
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     try {
-      const { therapy } = await api.post<{ therapy: Therapy }>('/api/panchakarma-centres/me/therapies', values);
+      const { therapy } = await api.post<{ therapy: Therapy }>('/api/v1/panchakarma-centres/me/therapies', values);
       onCreated(therapy);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not add this therapy.');

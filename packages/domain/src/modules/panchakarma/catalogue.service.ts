@@ -86,7 +86,7 @@ export interface UploadedTherapistFile {
 
 export async function addTherapistDocument(userId: string, therapistId: string, type: string, file: UploadedTherapistFile, auditCtx: AuditContext) {
   const therapist = await ownedTherapist(userId, therapistId);
-  assertUploadAllowed({ mimetype: file.mimeType, size: file.size });
+  assertUploadAllowed({ mimetype: file.mimeType, size: file.size, buffer: file.buffer });
 
   const storedName = `${randomUUID()}-${file.originalName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   const storagePath = `therapist-documents/${therapist.id}/${storedName}`;

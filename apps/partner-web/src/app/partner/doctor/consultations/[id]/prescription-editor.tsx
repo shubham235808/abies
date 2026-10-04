@@ -64,8 +64,8 @@ export function PrescriptionEditor({
     setError(null);
     try {
       const result = prescriptionId
-        ? await api.patch<{ prescription: PrescriptionResult }>(`/api/prescriptions/${prescriptionId}`, values)
-        : await api.post<{ prescription: PrescriptionResult }>(`/api/consultations/${consultationId}/prescriptions`, values);
+        ? await api.patch<{ prescription: PrescriptionResult }>(`/api/v1/prescriptions/${prescriptionId}`, values)
+        : await api.post<{ prescription: PrescriptionResult }>(`/api/v1/consultations/${consultationId}/prescriptions`, values);
       onSaved(result.prescription);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save this prescription.');

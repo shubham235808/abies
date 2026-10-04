@@ -44,7 +44,7 @@ export function PayoutRow({ payout }: { payout: PayoutRowData }) {
     setBusy(true);
     setError(null);
     try {
-      const { payout: updated } = await api.post<{ payout: PayoutStatusFields }>(`/api/admin/settlement/payouts/${state.id}/mark-paid`, { gatewayPayoutRef: ref });
+      const { payout: updated } = await api.post<{ payout: PayoutStatusFields }>(`/api/v1/admin/settlement/payouts/${state.id}/mark-paid`, { gatewayPayoutRef: ref });
       setState({ ...state, ...updated });
       setMode('idle');
       // CycleActions' "every payout resolved" check is computed server-side
@@ -63,7 +63,7 @@ export function PayoutRow({ payout }: { payout: PayoutRowData }) {
     setBusy(true);
     setError(null);
     try {
-      const { payout: updated } = await api.post<{ payout: PayoutStatusFields }>(`/api/admin/settlement/payouts/${state.id}/mark-failed`, { failureReason: reason });
+      const { payout: updated } = await api.post<{ payout: PayoutStatusFields }>(`/api/v1/admin/settlement/payouts/${state.id}/mark-failed`, { failureReason: reason });
       setState({ ...state, ...updated });
       setMode('idle');
       router.refresh();

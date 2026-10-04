@@ -57,7 +57,7 @@ function DoctorReviewForm({ appointmentId, onSubmitted }: { appointmentId: strin
     setSubmitting(true);
     setError(null);
     try {
-      await api.post(`/api/appointments/${appointmentId}/review`, { rating, comment: comment || undefined });
+      await api.post(`/api/v1/appointments/${appointmentId}/review`, { rating, comment: comment || undefined });
       onSubmitted();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not submit your review.');
@@ -106,7 +106,7 @@ export function AppointmentList({ initial }: { initial: Appointment[]; viewerRol
     setSubmitting(true);
     setError(null);
     try {
-      const { appointment } = await api.post<{ appointment: { status: string } }>(`/api/appointments/${id}/cancel`, {
+      const { appointment } = await api.post<{ appointment: { status: string } }>(`/api/v1/appointments/${id}/cancel`, {
         reason: reason || undefined,
       });
       setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status: appointment.status } : a)));

@@ -34,7 +34,7 @@ export function TestsManager({ initial }: { initial: Test[] }) {
   async function toggleActive(test: Test) {
     setError(null);
     try {
-      const { test: updated } = await api.patch<{ test: Test }>(`/api/labs/me/tests/${test.id}`, { active: !test.active });
+      const { test: updated } = await api.patch<{ test: Test }>(`/api/v1/labs/me/tests/${test.id}`, { active: !test.active });
       setTests((prev) => prev.map((t) => (t.id === test.id ? updated : t)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update this test.');
@@ -44,7 +44,7 @@ export function TestsManager({ initial }: { initial: Test[] }) {
   async function handleRemove(id: string) {
     setError(null);
     try {
-      await api.delete(`/api/labs/me/tests/${id}`);
+      await api.delete(`/api/v1/labs/me/tests/${id}`);
       setTests((prev) => prev.filter((t) => t.id !== id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not remove this test.');
@@ -113,7 +113,7 @@ function NewTestForm({ onCreated, onCancel }: { onCreated: (test: Test) => void;
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     try {
-      const { test } = await api.post<{ test: Test }>('/api/labs/me/tests', values);
+      const { test } = await api.post<{ test: Test }>('/api/v1/labs/me/tests', values);
       onCreated(test);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not add this test.');

@@ -93,7 +93,7 @@ export function ProfileForm({
               .filter(Boolean)
           : [],
       });
-      await api.patch('/api/patients/me', payload);
+      await api.patch('/api/v1/patients/me', payload);
       setSaved(true);
       router.refresh();
     } catch (err) {

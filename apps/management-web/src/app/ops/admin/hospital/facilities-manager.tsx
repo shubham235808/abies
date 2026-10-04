@@ -33,7 +33,7 @@ export function FacilitiesManager({ initial }: { initial: FacilityRow[] }) {
   async function toggleActive(facility: FacilityRow) {
     setError(null);
     try {
-      const { facility: updated } = await api.patch<{ facility: FacilityRow }>(`/api/admin/hospital-facilities/${facility.id}`, { active: !facility.active });
+      const { facility: updated } = await api.patch<{ facility: FacilityRow }>(`/api/v1/admin/hospital-facilities/${facility.id}`, { active: !facility.active });
       setFacilities((prev) => prev.map((f) => (f.id === facility.id ? { ...f, ...updated } : f)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update this facility.');
@@ -106,7 +106,7 @@ function NewFacilityForm({ onCreated, onCancel }: { onCreated: (facility: Omit<F
     setError(null);
     try {
       const dto = createFacilitySchema.parse({ ...values, addressLine2: values.addressLine2 || undefined });
-      const { facility } = await api.post<{ facility: Omit<FacilityRow, '_count'> }>('/api/admin/hospital-facilities', dto);
+      const { facility } = await api.post<{ facility: Omit<FacilityRow, '_count'> }>('/api/v1/admin/hospital-facilities', dto);
       onCreated(facility);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not add this facility.');

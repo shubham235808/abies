@@ -125,7 +125,7 @@ export function DoctorProfileForm({ initial, editable }: { initial: DoctorProfil
       };
       const cleaned = Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== '' && v !== undefined));
       const payload = updateDoctorProfileSchema.parse(cleaned);
-      await api.patch('/api/doctors/me', payload);
+      await api.patch('/api/v1/doctors/me', payload);
       setSaved(true);
       router.refresh();
     } catch (err) {

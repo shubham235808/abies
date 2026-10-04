@@ -37,7 +37,7 @@ export function TestCard({ test, viewerRole }: { test: PublicTest; viewerRole: s
         order: { id: string };
         razorpayOrder: { id: string; amount: number; currency: string };
         razorpayKeyId: string;
-      }>('/api/diagnostic-orders', {
+      }>('/api/v1/diagnostic-orders', {
         labId: test.lab.id,
         testIds: [test.id],
         collectionMode,
@@ -58,7 +58,7 @@ export function TestCard({ test, viewerRole }: { test: PublicTest; viewerRole: s
         theme: { color: '#7A1783' },
         handler: async (response) => {
           try {
-            await api.post('/api/diagnostic-orders/verify-payment', {
+            await api.post('/api/v1/diagnostic-orders/verify-payment', {
               orderId: result.order.id,
               razorpayOrderId: response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,

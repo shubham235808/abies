@@ -49,7 +49,11 @@ export class ServiceUnavailableError extends AppError {
   }
 }
 
-export function errorResponse(error: unknown): Response {
+// `req` is optional only so this stays callable from contexts with no
+// request object (tests, scripts) — every real route handler has one and
+// should pass it, so its x-request-id (stamped by src/proxy.ts onto the
+// forwarded request headers) ends up on the error's log line.
+export function errorResponse(error: unknown, req?: Request): Response {
   if (error instanceof AppError) {
     return Response.json({ error: error.message }, { status: error.statusCode });
   }
@@ -61,7 +65,8 @@ export function errorResponse(error: unknown): Response {
   }
   // Unexpected errors: never leak internals (stack traces, DB error text) to
   // the client — log server-side, return a generic message.
-  logger.error('http', 'unhandled error in route handler', error);
+  const requestId = req?.headers.get('x-request-id') ?? undefined;
+  logger.error('http', 'unhandled error in route handler', error, requestId ? { requestId } : undefined);
   return Response.json({ error: 'Something went wrong' }, { status: 500 });
 }
 
@@ -75,7 +80,7 @@ export function withErrorHandling(handler: RouteHandler): RouteHandler {
     try {
       return await handler(req, ctx);
     } catch (error) {
-      return errorResponse(error);
+      return errorResponse(error, req);
     }
   };
 }

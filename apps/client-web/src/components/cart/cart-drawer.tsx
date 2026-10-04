@@ -49,7 +49,7 @@ export function CartDrawer({ open, onClose, onCountChange }: { open: boolean; on
   useEffect(() => {
     if (!open) return;
     api
-      .get<{ carts: Cart[] }>('/api/patients/me/cart')
+      .get<{ carts: Cart[] }>('/api/v1/patients/me/cart')
       .then((res) => {
         setCarts(res.carts);
         setError(null);
@@ -70,7 +70,7 @@ export function CartDrawer({ open, onClose, onCountChange }: { open: boolean; on
     setRemovingId(itemId);
     setError(null);
     try {
-      await api.delete(`/api/patients/me/cart/items/${itemId}`);
+      await api.delete(`/api/v1/patients/me/cart/items/${itemId}`);
       setCarts((prev) =>
         (prev ?? [])
           .map((c) => ({ ...c, items: c.items.filter((i) => i.id !== itemId) }))

@@ -56,7 +56,7 @@ export function FeeTermsManager({ initial, partnerOptions }: { initial: FeeTermR
     <ConfigManagerShell
       columns={COLUMNS(partnerNames)}
       initialRows={initial}
-      apiBase="/api/admin/settlement/fee-terms"
+      apiBase="/api/v1/admin/settlement/fee-terms"
       addModalTitle="Add a partner fee term"
       entityLabel="Fee term"
       deleteConfirmDescription="Commissions already computed keep the numbers they were recorded with — this only removes the term from future use."
@@ -90,7 +90,7 @@ function AddForm({
     setBusy(true);
     setError(null);
     try {
-      const { feeTerm } = await api.post<{ feeTerm: FeeTermRow }>('/api/admin/settlement/fee-terms', {
+      const { feeTerm } = await api.post<{ feeTerm: FeeTermRow }>('/api/v1/admin/settlement/fee-terms', {
         partnerKind,
         partnerId,
         feeModel,

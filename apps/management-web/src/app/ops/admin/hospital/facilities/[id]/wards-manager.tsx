@@ -29,7 +29,7 @@ export function WardsManager({ facilityId, initial }: { facilityId: string; init
   async function toggleActive(ward: WardRow) {
     setError(null);
     try {
-      const { ward: updated } = await api.patch<{ ward: WardRow }>(`/api/admin/hospital-wards/${ward.id}`, { active: !ward.active });
+      const { ward: updated } = await api.patch<{ ward: WardRow }>(`/api/v1/admin/hospital-wards/${ward.id}`, { active: !ward.active });
       setWards((prev) => prev.map((w) => (w.id === ward.id ? { ...w, ...updated } : w)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update this ward.');
@@ -103,7 +103,7 @@ function NewWardForm({ facilityId, onCreated, onCancel }: { facilityId: string; 
     setError(null);
     try {
       const dto = createWardSchema.parse(values);
-      const { ward } = await api.post<{ ward: Omit<WardRow, '_count'> }>(`/api/admin/hospital-facilities/${facilityId}/wards`, dto);
+      const { ward } = await api.post<{ ward: Omit<WardRow, '_count'> }>(`/api/v1/admin/hospital-facilities/${facilityId}/wards`, dto);
       onCreated(ward);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not add this ward.');

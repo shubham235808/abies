@@ -33,7 +33,7 @@ export function ProfileForm({ initial, editable }: { initial: Initial; editable:
     setSaving(true);
     setError(null);
     try {
-      await api.patch('/api/panchakarma-centres/me', {
+      await api.patch('/api/v1/panchakarma-centres/me', {
         name: name || undefined,
         addressLine1: addressLine1 || undefined,
         city: city || undefined,

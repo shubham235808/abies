@@ -35,7 +35,7 @@ export default async function AdminReportsPage({ searchParams }: { searchParams:
 
   const fromStr = toDateInputValue(from);
   const toStr = toDateInputValue(to);
-  const exportHref = (report: string) => `/api/admin/reports/${report}?from=${fromStr}&to=${toStr}`;
+  const exportHref = (report: string) => `/api/v1/admin/reports/${report}?from=${fromStr}&to=${toStr}`;
 
   const revenueColumns: DataTableColumn<(typeof revenue)[number]>[] = [
     { key: 'purpose', label: 'Service', render: (r) => r.purpose.replace(/_/g, ' ') },

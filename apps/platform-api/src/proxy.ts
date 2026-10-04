@@ -22,18 +22,18 @@ interface RateLimitRule {
 
 const RATE_LIMIT_RULES: RateLimitRule[] = [
   {
-    prefix: '/api/auth/otp/request',
+    prefix: '/api/v1/auth/otp/request',
     limit: (env) => env.RATE_LIMIT_OTP_REQUEST_MAX,
     windowSeconds: (env) => env.RATE_LIMIT_OTP_REQUEST_WINDOW_SECONDS,
   },
   {
-    prefix: '/api/support/tickets',
+    prefix: '/api/v1/support/tickets',
     method: 'POST',
     limit: (env) => env.RATE_LIMIT_TICKET_CREATE_MAX,
     windowSeconds: (env) => env.RATE_LIMIT_TICKET_CREATE_WINDOW_SECONDS,
   },
   {
-    prefix: '/api/payments/webhook',
+    prefix: '/api/v1/payments/webhook',
     limit: (env) => env.RATE_LIMIT_WEBHOOK_MAX,
     windowSeconds: (env) => env.RATE_LIMIT_WEBHOOK_WINDOW_SECONDS,
   },

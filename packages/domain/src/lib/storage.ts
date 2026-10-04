@@ -78,8 +78,21 @@ export async function checkStorageHealth(): Promise<boolean> {
 // doctor-document allowlist (docs/DECISIONS.md D3) and generalized.
 const DEFAULT_ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 
+// Magic-byte check per declared MIME type — the declared type alone is
+// just the uploader's Content-Type claim, not evidence of what the file
+// actually is. Only covers the types this app ever allows (docs/platform/
+// SECURITY-GAP-ANALYSIS.md §3); add a signature here before adding a new
+// type to DEFAULT_ALLOWED_MIME_TYPES or any call site's own allow-list.
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+const MAGIC_BYTE_CHECKS: Record<string, (buf: Buffer) => boolean> = {
+  'application/pdf': (buf) => buf.subarray(0, 5).toString('latin1') === '%PDF-',
+  'image/jpeg': (buf) => buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff,
+  'image/png': (buf) => buf.length >= 8 && buf.subarray(0, 8).equals(PNG_SIGNATURE),
+};
+
 export function assertUploadAllowed(
-  file: { mimetype: string; size: number },
+  file: { mimetype: string; size: number; buffer: Buffer },
   opts: { allowedMimeTypes?: Set<string>; maxBytes?: number } = {},
 ): void {
   const allowed = opts.allowedMimeTypes ?? DEFAULT_ALLOWED_MIME_TYPES;
@@ -89,5 +102,9 @@ export function assertUploadAllowed(
   }
   if (file.size > maxBytes) {
     throw new Error(`File exceeds maximum allowed size of ${maxBytes} bytes`);
+  }
+  const matchesContent = MAGIC_BYTE_CHECKS[file.mimetype];
+  if (matchesContent && !matchesContent(file.buffer)) {
+    throw new Error(`File content does not match declared type: ${file.mimetype}`);
   }
 }

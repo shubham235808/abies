@@ -25,7 +25,7 @@ export function ItemList({ items: initial }: { items: Item[] }) {
     setBusyId(item.id);
     setError(null);
     try {
-      const { item: updated } = await api.post<{ item: Item }>(`/api/care-plan-items/${item.id}/acknowledge`, {
+      const { item: updated } = await api.post<{ item: Item }>(`/api/v1/care-plan-items/${item.id}/acknowledge`, {
         done: !item.patientMarkedDoneAt,
       });
       setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));

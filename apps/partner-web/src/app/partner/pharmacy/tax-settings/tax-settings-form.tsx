@@ -29,7 +29,7 @@ export function TaxSettingsForm({ initial }: { initial: TaxSettings | null }) {
     setError(null);
     setSaved(false);
     try {
-      await api.put('/api/pharmacies/me/tax-settings', {
+      await api.put('/api/v1/pharmacies/me/tax-settings', {
         legalBusinessName,
         gstin: gstin.toUpperCase(),
         registeredState,

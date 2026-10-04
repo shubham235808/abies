@@ -27,7 +27,7 @@ export function ProfileForm({ initial, editable }: { initial: Initial; editable:
     setSaving(true);
     setError(null);
     try {
-      await api.patch('/api/labs/me', {
+      await api.patch('/api/v1/labs/me', {
         name: name || undefined,
         licenseNumbers: licenseNumbersText.split('\n').map((l) => l.trim()).filter(Boolean),
         serviceCities: serviceCitiesText.split('\n').map((c) => c.trim()).filter(Boolean),

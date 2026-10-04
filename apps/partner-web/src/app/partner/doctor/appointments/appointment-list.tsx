@@ -41,7 +41,7 @@ export function AppointmentList({ initial }: { initial: Appointment[] }) {
     setSubmitting(true);
     setError(null);
     try {
-      const { appointment } = await api.post<{ appointment: { status: string } }>(`/api/appointments/${id}/cancel`, {
+      const { appointment } = await api.post<{ appointment: { status: string } }>(`/api/v1/appointments/${id}/cancel`, {
         reason: reason || undefined,
       });
       setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status: appointment.status } : a)));

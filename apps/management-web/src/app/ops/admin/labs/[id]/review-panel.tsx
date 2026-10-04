@@ -30,7 +30,7 @@ export function ReviewPanel({ lab }: { lab: Lab }) {
     setError(null);
     setBusy(action);
     try {
-      await api.post(`/api/admin/labs/${lab.id}/${action}`, body ?? {});
+      await api.post(`/api/v1/admin/labs/${lab.id}/${action}`, body ?? {});
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Action failed.');

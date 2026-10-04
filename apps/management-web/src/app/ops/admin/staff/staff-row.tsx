@@ -25,7 +25,7 @@ export function StaffRow({
     setBusy(true);
     setError(null);
     try {
-      await api.post(`/api/admin/staff/${userId}/${active ? 'deactivate' : 'reactivate'}`, {});
+      await api.post(`/api/v1/admin/staff/${userId}/${active ? 'deactivate' : 'reactivate'}`, {});
       setActive(!active);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update this account.');

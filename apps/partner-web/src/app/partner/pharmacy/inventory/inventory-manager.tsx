@@ -32,7 +32,7 @@ export function InventoryManager({ initial }: { initial: InventoryRow[] }) {
   async function handleRemove(id: string) {
     setError(null);
     try {
-      await api.delete(`/api/pharmacies/me/inventory/${id}`);
+      await api.delete(`/api/v1/pharmacies/me/inventory/${id}`);
       setRows((prev) => prev.filter((r) => r.id !== id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not remove this batch.');
@@ -122,7 +122,7 @@ function NewBatchForm({ onCreated, onCancel }: { onCreated: (item: InventoryRow)
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     try {
-      const { item } = await api.post<{ item: InventoryRow }>('/api/pharmacies/me/inventory', values);
+      const { item } = await api.post<{ item: InventoryRow }>('/api/v1/pharmacies/me/inventory', values);
       onCreated(item);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not add this batch.');

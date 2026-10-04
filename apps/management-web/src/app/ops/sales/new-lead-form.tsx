@@ -26,7 +26,7 @@ export function NewLeadForm() {
     setBusy(true);
     setError(null);
     try {
-      await api.post('/api/partner-leads', { kind, contactName, contactPhone, city: city || undefined, source: source || undefined });
+      await api.post('/api/v1/partner-leads', { kind, contactName, contactPhone, city: city || undefined, source: source || undefined });
       setOpen(false);
       setContactName('');
       setContactPhone('');

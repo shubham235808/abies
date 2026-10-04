@@ -89,7 +89,7 @@ export function ConsultationWorkspace({
     setError(null);
     try {
       const { consultation: updated } = await api.post<{ consultation: { status: ConsultationDetail['status'] } }>(
-        `/api/consultations/${consultation.id}/start`,
+        `/api/v1/consultations/${consultation.id}/start`,
       );
       setConsultation((c) => ({ ...c, status: updated.status }));
     } catch (err) {
@@ -104,7 +104,7 @@ export function ConsultationWorkspace({
     setError(null);
     try {
       const { consultation: updated } = await api.post<{ consultation: { status: ConsultationDetail['status'] } }>(
-        `/api/consultations/${consultation.id}/complete`,
+        `/api/v1/consultations/${consultation.id}/complete`,
         {},
       );
       setConsultation((c) => ({ ...c, status: updated.status }));
@@ -238,7 +238,7 @@ function DiagnosticsSection({
     try {
       const [kind, id] = selection ? selection.split(':') : [undefined, undefined];
       const { recommendation } = await api.post<{ recommendation: { id: string; status: string; clinicalReason: string | null } }>(
-        `/api/consultations/${consultationId}/diagnostic-recommendations`,
+        `/api/v1/consultations/${consultationId}/diagnostic-recommendations`,
         { clinicalReason, testId: kind === 'test' ? id : undefined, packageId: kind === 'package' ? id : undefined },
       );
       const name = kind === 'test' ? tests.find((t) => t.id === id)?.name : packages.find((p) => p.id === id)?.name;
@@ -342,7 +342,7 @@ function PanchakarmaSection({
     try {
       const { recommendation } = await api.post<{
         recommendation: { id: string; status: string; clinicalReason: string | null; sessionCountRecommended: number | null };
-      }>(`/api/consultations/${consultationId}/panchakarma-recommendations`, {
+      }>(`/api/v1/consultations/${consultationId}/panchakarma-recommendations`, {
         clinicalReason,
         therapyId: therapyId || undefined,
         sessionCountRecommended: sessionCountRecommended ? Number(sessionCountRecommended) : undefined,
@@ -445,7 +445,7 @@ function CarePlansSection({
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     try {
-      const { carePlan } = await api.post<{ carePlan: CarePlanSummary }>('/api/care-plans', {
+      const { carePlan } = await api.post<{ carePlan: CarePlanSummary }>('/api/v1/care-plans', {
         ...values,
         patientUserId,
         consultationId,
@@ -522,7 +522,7 @@ function DetailsForm({
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     try {
-      await api.patch(`/api/consultations/${consultation.id}`, values);
+      await api.patch(`/api/v1/consultations/${consultation.id}`, values);
       onSaved(values);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save these details.');
@@ -605,7 +605,7 @@ function ClinicalNoteForm({
     setError(null);
     try {
       const { note: saved } = await api.put<{ note: { ayurvedaAssessment: Record<string, string>; diagnosis: string | null; treatmentPlan: string | null; recommendations: string | null; followUpDate: string | null; finalizedAt: string | null } }>(
-        `/api/consultations/${consultationId}/clinical-note`,
+        `/api/v1/consultations/${consultationId}/clinical-note`,
         values,
       );
       onSaved(saved);
@@ -619,7 +619,7 @@ function ClinicalNoteForm({
     setError(null);
     try {
       const { note: saved } = await api.post<{ note: ConsultationDetail['clinicalNote'] }>(
-        `/api/consultations/${consultationId}/clinical-note/finalize`,
+        `/api/v1/consultations/${consultationId}/clinical-note/finalize`,
       );
       onSaved(saved);
     } catch (err) {
@@ -743,7 +743,7 @@ function PrescriptionsSection({
     setBusyId(id);
     setError(null);
     try {
-      const { prescription } = await api.post<{ prescription: PrescriptionResult }>(`/api/prescriptions/${id}/finalize`);
+      const { prescription } = await api.post<{ prescription: PrescriptionResult }>(`/api/v1/prescriptions/${id}/finalize`);
       upsert(prescription);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not finalize this prescription.');
@@ -756,7 +756,7 @@ function PrescriptionsSection({
     setBusyId(id);
     setError(null);
     try {
-      const { prescription } = await api.post<{ prescription: PrescriptionResult }>(`/api/prescriptions/${id}/correct`);
+      const { prescription } = await api.post<{ prescription: PrescriptionResult }>(`/api/v1/prescriptions/${id}/correct`);
       onChange([prescription, ...prescriptions.map((p) => (p.id === id ? { ...p, status: 'SUPERSEDED' } : p))]);
       setEditingId(prescription.id);
     } catch (err) {

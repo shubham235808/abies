@@ -69,7 +69,7 @@ export function PosTerminal({ inventory }: { inventory: InventoryLine[] }) {
     setBusy(true);
     setError(null);
     try {
-      const { sale } = await api.post<{ sale: { id: string } }>('/api/pharmacies/me/pos/sales', {
+      const { sale } = await api.post<{ sale: { id: string } }>('/api/v1/pharmacies/me/pos/sales', {
         customerName: customerName || undefined,
         customerPhone: customerPhone || undefined,
         paymentMethod,

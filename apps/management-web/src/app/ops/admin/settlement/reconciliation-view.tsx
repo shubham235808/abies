@@ -92,7 +92,7 @@ function PendingReconciliationRow({
     setError(null);
     try {
       const { reconciliation } = await api.post<{ reconciliation: ReconciledPayoutRow['reconciliation'] }>(
-        `/api/admin/settlement/payouts/${payout.id}/reconciliation`,
+        `/api/v1/admin/settlement/payouts/${payout.id}/reconciliation`,
         { externalReference, matchedAmount: Number(matchedAmount), notes: notes || undefined },
       );
       onRecorded(reconciliation);

@@ -22,7 +22,15 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-const fakeImage: UploadedImage = { originalName: 'banner.jpg', mimeType: 'image/jpeg', size: 1024, buffer: Buffer.from('fake-jpeg-bytes') };
+// assertUploadAllowed (packages/domain/src/lib/storage.ts) checks the JPEG
+// magic bytes (0xFF 0xD8 0xFF) now, not just the declared mimeType — this
+// buffer needs a real-looking prefix even though the rest is fake content.
+const fakeImage: UploadedImage = {
+  originalName: 'banner.jpg',
+  mimeType: 'image/jpeg',
+  size: 1024,
+  buffer: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.from('fake-jpeg-bytes')]),
+};
 
 function windowNow(offsetStartHours: number, offsetEndHours: number) {
   const now = Date.now();

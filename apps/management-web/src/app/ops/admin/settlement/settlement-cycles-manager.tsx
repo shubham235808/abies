@@ -83,7 +83,7 @@ function NewCycleForm({ onCreated, onCancel }: { onCreated: (row: SettlementRow)
     setBusy(true);
     setError(null);
     try {
-      const { settlement } = await api.post<{ settlement: SettlementRow }>('/api/admin/settlement/settlements', {
+      const { settlement } = await api.post<{ settlement: SettlementRow }>('/api/v1/admin/settlement/settlements', {
         cycleStart: new Date(`${cycleStart}T00:00:00.000Z`).toISOString(),
         // End-of-day on the selected end date — a date picker's "end" is
         // the last day to include, not midnight at its start.

@@ -13,7 +13,7 @@ export function ReportButton({ orderId, hasFile, acknowledged }: { orderId: stri
   async function handleView() {
     setError(null);
     try {
-      const { url } = await api.get<{ url: string }>(`/api/diagnostic-orders/${orderId}/report-download`);
+      const { url } = await api.get<{ url: string }>(`/api/v1/diagnostic-orders/${orderId}/report-download`);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not open this report.');
@@ -24,7 +24,7 @@ export function ReportButton({ orderId, hasFile, acknowledged }: { orderId: stri
     setBusy(true);
     setError(null);
     try {
-      await api.post(`/api/diagnostic-orders/${orderId}/acknowledge`);
+      await api.post(`/api/v1/diagnostic-orders/${orderId}/acknowledge`);
       setAck(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not acknowledge this report.');

@@ -62,7 +62,7 @@ export default function NewTicketPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await api.post<{ ticket: { id: string } }>('/api/support/tickets', {
+      const result = await api.post<{ ticket: { id: string } }>('/api/v1/support/tickets', {
         category,
         subject,
         description,

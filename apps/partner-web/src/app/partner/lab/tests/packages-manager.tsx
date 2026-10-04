@@ -29,7 +29,7 @@ export function PackagesManager({ initial, availableTests }: { initial: Package[
   async function toggleActive(pkg: Package) {
     setError(null);
     try {
-      const { package: updated } = await api.patch<{ package: Package }>(`/api/labs/me/packages/${pkg.id}`, { active: !pkg.active });
+      const { package: updated } = await api.patch<{ package: Package }>(`/api/v1/labs/me/packages/${pkg.id}`, { active: !pkg.active });
       setPackages((prev) => prev.map((p) => (p.id === pkg.id ? updated : p)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update this package.');
@@ -39,7 +39,7 @@ export function PackagesManager({ initial, availableTests }: { initial: Package[
   async function handleRemove(id: string) {
     setError(null);
     try {
-      await api.delete(`/api/labs/me/packages/${id}`);
+      await api.delete(`/api/v1/labs/me/packages/${id}`);
       setPackages((prev) => prev.filter((p) => p.id !== id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not remove this package.');
@@ -130,7 +130,7 @@ function NewPackageForm({
     setBusy(true);
     setError(null);
     try {
-      const { package: pkg } = await api.post<{ package: Package }>('/api/labs/me/packages', {
+      const { package: pkg } = await api.post<{ package: Package }>('/api/v1/labs/me/packages', {
         name,
         description: description || undefined,
         price: Number(price),

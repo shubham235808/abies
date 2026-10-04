@@ -27,7 +27,7 @@ export function LocationsManager({ initial }: { initial: ServiceLocationRow[] })
     <ConfigManagerShell
       columns={COLUMNS}
       initialRows={initial}
-      apiBase="/api/admin/configuration/locations"
+      apiBase="/api/v1/admin/configuration/locations"
       addModalTitle="Add a serviceable location"
       entityLabel="Location"
       renderAddForm={({ onCreated, onCancel }) => <AddForm onCreated={onCreated} onCancel={onCancel} />}
@@ -46,7 +46,7 @@ function AddForm({ onCreated, onCancel }: { onCreated: (row: ServiceLocationRow)
     setBusy(true);
     setError(null);
     try {
-      const { location } = await api.post<{ location: ServiceLocationRow }>('/api/admin/configuration/locations', {
+      const { location } = await api.post<{ location: ServiceLocationRow }>('/api/v1/admin/configuration/locations', {
         city,
         state,
         pinCodes: pinCodes

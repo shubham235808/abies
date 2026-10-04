@@ -23,7 +23,7 @@ export function TherapistsManager({ initial }: { initial: Therapist[] }) {
     setError(null);
     try {
       const { therapist: updated } = await api.patch<{ therapist: Therapist }>(
-        `/api/panchakarma-centres/me/therapists/${therapist.id}`,
+        `/api/v1/panchakarma-centres/me/therapists/${therapist.id}`,
         { active: !therapist.active },
       );
       setTherapists((prev) => prev.map((t) => (t.id === therapist.id ? updated : t)));
@@ -35,7 +35,7 @@ export function TherapistsManager({ initial }: { initial: Therapist[] }) {
   async function handleRemove(id: string) {
     setError(null);
     try {
-      await api.delete(`/api/panchakarma-centres/me/therapists/${id}`);
+      await api.delete(`/api/v1/panchakarma-centres/me/therapists/${id}`);
       setTherapists((prev) => prev.filter((t) => t.id !== id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not remove this therapist.');
@@ -119,7 +119,7 @@ function NewTherapistForm({ onCreated, onCancel }: { onCreated: (therapist: Ther
               .filter(Boolean)
           : undefined,
       });
-      const { therapist } = await api.post<{ therapist: Therapist }>('/api/panchakarma-centres/me/therapists', dto);
+      const { therapist } = await api.post<{ therapist: Therapist }>('/api/v1/panchakarma-centres/me/therapists', dto);
       onCreated(therapist);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not add this therapist.');

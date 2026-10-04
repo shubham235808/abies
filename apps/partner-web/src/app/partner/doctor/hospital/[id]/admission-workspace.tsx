@@ -119,7 +119,7 @@ function RoundNoteForm({ admissionId, onAdded }: { admissionId: string; onAdded:
     setBusy(true);
     setError(null);
     try {
-      const { note: created } = await api.post<{ note: RoundNote }>(`/api/hospital-admissions/${admissionId}/round-notes`, { note });
+      const { note: created } = await api.post<{ note: RoundNote }>(`/api/v1/hospital-admissions/${admissionId}/round-notes`, { note });
       onAdded(created);
       setNote('');
     } catch (err) {
@@ -157,7 +157,7 @@ function DischargeSummaryForm({ admissionId, onComposed }: { admissionId: string
     setBusy(true);
     setError(null);
     try {
-      const { summary: created } = await api.post<{ summary: DischargeSummary }>(`/api/hospital-admissions/${admissionId}/discharge-summary`, {
+      const { summary: created } = await api.post<{ summary: DischargeSummary }>(`/api/v1/hospital-admissions/${admissionId}/discharge-summary`, {
         summary,
         followUpInstructions: followUpInstructions || undefined,
       });

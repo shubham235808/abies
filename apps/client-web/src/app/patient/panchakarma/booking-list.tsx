@@ -27,7 +27,7 @@ export function BookingList({ initial }: { initial: Booking[] }) {
     setCancellingId(id);
     setError(null);
     try {
-      const { booking } = await api.post<{ booking: { status: string } }>(`/api/panchakarma-bookings/${id}/cancel`, {});
+      const { booking } = await api.post<{ booking: { status: string } }>(`/api/v1/panchakarma-bookings/${id}/cancel`, {});
       setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: booking.status } : b)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not cancel this booking.');

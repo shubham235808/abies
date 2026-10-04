@@ -48,7 +48,7 @@ export function BookingActions({
     setError(null);
     try {
       const result = await api.post<{ session: SessionRow; booking: { status: string } }>(
-        `/api/panchakarma-centres/me/bookings/${bookingId}/schedule-session`,
+        `/api/v1/panchakarma-centres/me/bookings/${bookingId}/schedule-session`,
         { scheduledAt: new Date(scheduledAt).toISOString(), therapistId: therapistId || undefined },
       );
       setSessions((prev) => [...prev, result.session]);
@@ -67,7 +67,7 @@ export function BookingActions({
     setError(null);
     try {
       const result = await api.post<{ session: SessionRow; booking: { status: string } }>(
-        `/api/panchakarma-centres/me/sessions/${sessionId}/attended`,
+        `/api/v1/panchakarma-centres/me/sessions/${sessionId}/attended`,
         {},
       );
       setSessions((prev) => prev.map((s) => (s.id === sessionId ? result.session : s)));
@@ -83,7 +83,7 @@ export function BookingActions({
     setBusy(true);
     setError(null);
     try {
-      const { booking } = await api.post<{ booking: { status: string } }>(`/api/panchakarma-bookings/${bookingId}/cancel`, {});
+      const { booking } = await api.post<{ booking: { status: string } }>(`/api/v1/panchakarma-bookings/${bookingId}/cancel`, {});
       setStatus(booking.status);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not cancel this booking.');

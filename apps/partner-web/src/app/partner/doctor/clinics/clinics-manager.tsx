@@ -38,7 +38,7 @@ export function ClinicsManager({ initial }: { initial: Clinic[] }) {
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     try {
-      const { clinic } = await api.post<{ clinic: Clinic }>('/api/doctors/me/clinics', values);
+      const { clinic } = await api.post<{ clinic: Clinic }>('/api/v1/doctors/me/clinics', values);
       setClinics((prev) => [...prev, clinic]);
       reset();
       setShowForm(false);
@@ -50,7 +50,7 @@ export function ClinicsManager({ initial }: { initial: Clinic[] }) {
   async function handleRemove(id: string) {
     setError(null);
     try {
-      await api.delete(`/api/doctors/me/clinics/${id}`);
+      await api.delete(`/api/v1/doctors/me/clinics/${id}`);
       setClinics((prev) => prev.filter((c) => c.id !== id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not remove clinic.');

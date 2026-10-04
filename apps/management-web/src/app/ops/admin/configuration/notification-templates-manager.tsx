@@ -31,7 +31,7 @@ export function NotificationTemplatesManager({ initial }: { initial: Notificatio
     <ConfigManagerShell
       columns={COLUMNS}
       initialRows={initial}
-      apiBase="/api/admin/configuration/notification-templates"
+      apiBase="/api/v1/admin/configuration/notification-templates"
       addModalTitle="Add a notification template"
       entityLabel="Template"
       deleteConfirmDescription="Any notification already queued or sent using this template is unaffected — this only removes it from future use."
@@ -52,7 +52,7 @@ function AddForm({ onCreated, onCancel }: { onCreated: (row: NotificationTemplat
     setBusy(true);
     setError(null);
     try {
-      const { template } = await api.post<{ template: NotificationTemplateRow }>('/api/admin/configuration/notification-templates', {
+      const { template } = await api.post<{ template: NotificationTemplateRow }>('/api/v1/admin/configuration/notification-templates', {
         templateKey,
         channel,
         subject: subject || undefined,

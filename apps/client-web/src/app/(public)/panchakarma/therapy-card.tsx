@@ -27,7 +27,7 @@ export function TherapyCard({ therapy, viewerRole }: { therapy: PublicTherapy; v
         booking: { id: string };
         razorpayOrder: { id: string; amount: number; currency: string };
         razorpayKeyId: string;
-      }>('/api/panchakarma-bookings', {
+      }>('/api/v1/panchakarma-bookings', {
         centreId: therapy.centre.id,
         therapyId: therapy.id,
         sessionCount,
@@ -46,7 +46,7 @@ export function TherapyCard({ therapy, viewerRole }: { therapy: PublicTherapy; v
         theme: { color: '#7A1783' },
         handler: async (response) => {
           try {
-            await api.post('/api/panchakarma-bookings/verify-payment', {
+            await api.post('/api/v1/panchakarma-bookings/verify-payment', {
               bookingId: result.booking.id,
               razorpayOrderId: response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,

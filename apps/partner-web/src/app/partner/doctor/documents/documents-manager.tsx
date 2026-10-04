@@ -64,7 +64,7 @@ export function DocumentsManager({
       const formData = new FormData();
       formData.append('type', type);
       formData.append('file', file);
-      const { document } = await api.postForm<{ document: Doc }>('/api/doctors/me/documents', formData);
+      const { document } = await api.postForm<{ document: Doc }>('/api/v1/doctors/me/documents', formData);
       setDocuments((prev) => [document, ...prev]);
       if (fileInput.current) fileInput.current.value = '';
       toast.show('Document uploaded.', 'success');
@@ -79,7 +79,7 @@ export function DocumentsManager({
     setError(null);
     setRemoving(true);
     try {
-      await api.delete(`/api/doctors/me/documents/${id}`);
+      await api.delete(`/api/v1/doctors/me/documents/${id}`);
       setDocuments((prev) => prev.filter((d) => d.id !== id));
       toast.show('Document removed.', 'info');
     } catch (err) {
@@ -93,7 +93,7 @@ export function DocumentsManager({
   async function handleDownload(id: string) {
     setError(null);
     try {
-      const { url } = await api.get<{ url: string }>(`/api/doctors/me/documents/${id}/download`);
+      const { url } = await api.get<{ url: string }>(`/api/v1/doctors/me/documents/${id}/download`);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not open document.');

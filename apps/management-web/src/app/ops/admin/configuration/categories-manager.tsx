@@ -29,7 +29,7 @@ export function CategoriesManager({ initial }: { initial: ConfigCategoryRow[] })
     <ConfigManagerShell
       columns={COLUMNS}
       initialRows={initial}
-      apiBase="/api/admin/configuration/categories"
+      apiBase="/api/v1/admin/configuration/categories"
       addModalTitle="Add a category entry"
       entityLabel="Category"
       deleteConfirmDescription="Anything already using this key keeps working — new selections just won't offer it anymore."
@@ -49,7 +49,7 @@ function AddForm({ onCreated, onCancel }: { onCreated: (row: ConfigCategoryRow) 
     setBusy(true);
     setError(null);
     try {
-      const { category } = await api.post<{ category: ConfigCategoryRow }>('/api/admin/configuration/categories', {
+      const { category } = await api.post<{ category: ConfigCategoryRow }>('/api/v1/admin/configuration/categories', {
         domain,
         key,
         label,

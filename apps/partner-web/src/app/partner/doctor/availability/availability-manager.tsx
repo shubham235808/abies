@@ -56,7 +56,7 @@ export function AvailabilityManager({
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     try {
-      const { slot } = await api.post<{ slot: Slot }>('/api/doctors/me/availability', {
+      const { slot } = await api.post<{ slot: Slot }>('/api/v1/doctors/me/availability', {
         ...values,
         dayOfWeek: Number(values.dayOfWeek),
         slotMinutes: Number(values.slotMinutes),
@@ -72,7 +72,7 @@ export function AvailabilityManager({
   async function handleRemove(id: string) {
     setError(null);
     try {
-      await api.delete(`/api/doctors/me/availability/${id}`);
+      await api.delete(`/api/v1/doctors/me/availability/${id}`);
       setSlots((prev) => prev.filter((s) => s.id !== id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not remove slot.');

@@ -47,7 +47,7 @@ export function LeadActions({ lead: initialLead }: { lead: LeadDetail }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await api.post<{ lead: LeadDetail }>(`/api/partner-leads/${lead.id}/claim`, {});
+      const result = await api.post<{ lead: LeadDetail }>(`/api/v1/partner-leads/${lead.id}/claim`, {});
       setLead((prev) => ({ ...prev, owner: result.lead.owner }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not claim this lead.');
@@ -60,7 +60,7 @@ export function LeadActions({ lead: initialLead }: { lead: LeadDetail }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await api.patch<{ lead: LeadDetail }>(`/api/partner-leads/${lead.id}`, {
+      const result = await api.patch<{ lead: LeadDetail }>(`/api/v1/partner-leads/${lead.id}`, {
         stage,
         notes: notes || undefined,
         nextFollowUpAt: nextFollowUpAt ? new Date(nextFollowUpAt).toISOString() : null,

@@ -64,7 +64,7 @@ export function PromotionsManager({ initial }: { initial: PromotionRow[] }) {
     try {
       const formData = new FormData();
       formData.append('payload', JSON.stringify({ active: !p.active }));
-      const { promotion } = await api.patchForm<{ promotion: PromotionRow }>(`/api/admin/promotions/${p.id}`, formData);
+      const { promotion } = await api.patchForm<{ promotion: PromotionRow }>(`/api/v1/admin/promotions/${p.id}`, formData);
       setPromotions((prev) => prev.map((row) => (row.id === p.id ? { ...row, ...promotion } : row)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update this promotion.');
@@ -74,7 +74,7 @@ export function PromotionsManager({ initial }: { initial: PromotionRow[] }) {
   async function handleRemove(id: string) {
     setError(null);
     try {
-      await api.delete(`/api/admin/promotions/${id}`);
+      await api.delete(`/api/v1/admin/promotions/${id}`);
       setPromotions((prev) => prev.filter((p) => p.id !== id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not remove this promotion.');
@@ -206,8 +206,8 @@ function PromotionForm({
       if (mobileImage) formData.append('mobileImage', mobileImage);
 
       const { promotion } = existing
-        ? await api.patchForm<{ promotion: PromotionRow }>(`/api/admin/promotions/${existing.id}`, formData)
-        : await api.postForm<{ promotion: PromotionRow }>('/api/admin/promotions', formData);
+        ? await api.patchForm<{ promotion: PromotionRow }>(`/api/v1/admin/promotions/${existing.id}`, formData)
+        : await api.postForm<{ promotion: PromotionRow }>('/api/v1/admin/promotions', formData);
       onSaved(promotion);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save this promotion.');

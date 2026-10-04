@@ -16,7 +16,7 @@ export function SubmitButton() {
     setError(null);
     setLoading(true);
     try {
-      await api.post('/api/doctors/me/submit', { declarationAccepted });
+      await api.post('/api/v1/doctors/me/submit', { declarationAccepted });
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not submit your application.');

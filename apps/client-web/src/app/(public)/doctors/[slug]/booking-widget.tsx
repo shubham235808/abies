@@ -65,7 +65,7 @@ export function BookingWidget({
   useEffect(() => {
     if (!canBook) return;
     api
-      .get<{ members: FamilyMember[] }>('/api/patients/me/family')
+      .get<{ members: FamilyMember[] }>('/api/v1/patients/me/family')
       .then((res) => setFamilyMembers(res.members))
       .catch(() => setFamilyMembers([]));
   }, [canBook]);
@@ -74,7 +74,7 @@ export function BookingWidget({
     if (!canBook) return;
     let ignore = false;
     api
-      .get<{ slots: Slot[] }>(`/api/appointments/slots?doctorProfileId=${doctorProfileId}&mode=${mode}`)
+      .get<{ slots: Slot[] }>(`/api/v1/appointments/slots?doctorProfileId=${doctorProfileId}&mode=${mode}`)
       .then((res) => {
         if (!ignore) setResult({ key: requestKey, slots: res.slots });
       })
@@ -102,7 +102,7 @@ export function BookingWidget({
         appointment: { id: string };
         razorpayOrder: { id: string; amount: number; currency: string };
         razorpayKeyId: string;
-      }>('/api/appointments/hold', {
+      }>('/api/v1/appointments/hold', {
         doctorProfileId,
         mode,
         startsAt: selectedSlot.startsAt,
@@ -123,7 +123,7 @@ export function BookingWidget({
         theme: { color: '#7A1783' },
         handler: async (response) => {
           try {
-            await api.post('/api/appointments/verify-payment', {
+            await api.post('/api/v1/appointments/verify-payment', {
               appointmentId: result.appointment.id,
               razorpayOrderId: response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,

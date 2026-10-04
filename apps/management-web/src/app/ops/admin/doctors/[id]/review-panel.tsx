@@ -59,7 +59,7 @@ export function ReviewPanel({ doctor }: { doctor: Doctor }) {
     setError(null);
     setBusy(action);
     try {
-      await api.post(`/api/admin/doctors/${doctor.id}/${action}`, body ?? {});
+      await api.post(`/api/v1/admin/doctors/${doctor.id}/${action}`, body ?? {});
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Action failed.');
@@ -72,7 +72,7 @@ export function ReviewPanel({ doctor }: { doctor: Doctor }) {
     setError(null);
     setBusy(documentId);
     try {
-      await api.post(`/api/admin/doctors/${doctor.id}/documents/${documentId}/review`, { outcome });
+      await api.post(`/api/v1/admin/doctors/${doctor.id}/documents/${documentId}/review`, { outcome });
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not review document.');
@@ -84,7 +84,7 @@ export function ReviewPanel({ doctor }: { doctor: Doctor }) {
   async function viewDocument(documentId: string) {
     setError(null);
     try {
-      const { url } = await api.get<{ url: string }>(`/api/admin/doctors/${doctor.id}/documents/${documentId}/download`);
+      const { url } = await api.get<{ url: string }>(`/api/v1/admin/doctors/${doctor.id}/documents/${documentId}/download`);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not open document.');

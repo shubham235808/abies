@@ -24,7 +24,7 @@ export function OpenTicketButton({
     setBusy(true);
     setError(null);
     try {
-      const { ticket } = await api.post<{ ticket: { id: string } }>('/api/support/tickets', {
+      const { ticket } = await api.post<{ ticket: { id: string } }>('/api/v1/support/tickets', {
         category: 'CLINICAL_CONCERN',
         subject: `Care plan follow-up at risk: ${itemTitle}`,
         description: `${patientName}'s care plan item "${itemTitle}" was flagged at risk by care coordination and needs follow-up.`,

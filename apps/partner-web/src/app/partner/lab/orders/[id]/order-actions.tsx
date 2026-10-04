@@ -39,7 +39,7 @@ export function OrderActions({
     setBusy(true);
     setError(null);
     try {
-      const { order } = await api.post<{ order: { status: string } }>(`/api/labs/me/orders/${orderId}/sample-collected`, {
+      const { order } = await api.post<{ order: { status: string } }>(`/api/v1/labs/me/orders/${orderId}/sample-collected`, {
         collectorName: collectorName || undefined,
         sampleBarcode: sampleBarcode || undefined,
       });
@@ -60,7 +60,7 @@ export function OrderActions({
     setBusy(true);
     setError(null);
     try {
-      const { order } = await api.post<{ order: { status: string } }>(`/api/labs/me/orders/${orderId}/processing`, {});
+      const { order } = await api.post<{ order: { status: string } }>(`/api/v1/labs/me/orders/${orderId}/processing`, {});
       setStatus(order.status);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update this order.');
@@ -146,7 +146,7 @@ function ReleaseReportForm({ orderId, onReleased }: { orderId: string; onRelease
       const formData = new FormData();
       formData.set('criticalFlag', String(criticalFlag));
       if (file) formData.set('file', file);
-      await api.postForm(`/api/labs/me/orders/${orderId}/report`, formData);
+      await api.postForm(`/api/v1/labs/me/orders/${orderId}/report`, formData);
       onReleased(criticalFlag);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not release this report.');

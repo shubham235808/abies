@@ -35,7 +35,7 @@ export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicin
     setError(null);
     setAddingToCart(true);
     try {
-      await api.post('/api/patients/me/cart', {
+      await api.post('/api/v1/patients/me/cart', {
         pharmacyId: medicine.pharmacy.id,
         medicineId: medicine.medicineId,
         variantId: selectedVariantId ?? undefined,
@@ -61,7 +61,7 @@ export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicin
         order: { id: string };
         razorpayOrder: { id: string; amount: number; currency: string };
         razorpayKeyId: string;
-      }>('/api/medicine-orders', {
+      }>('/api/v1/medicine-orders', {
         pharmacyId: medicine.pharmacy.id,
         deliveryAddress: address,
         items: [{ medicineId: medicine.medicineId, variantId: selectedVariantId ?? undefined, quantity }],
@@ -80,7 +80,7 @@ export function MedicineCard({ medicine, viewerRole }: { medicine: PublicMedicin
         theme: { color: '#7A1783' },
         handler: async (response) => {
           try {
-            await api.post('/api/medicine-orders/verify-payment', {
+            await api.post('/api/v1/medicine-orders/verify-payment', {
               orderId: result.order.id,
               razorpayOrderId: response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,

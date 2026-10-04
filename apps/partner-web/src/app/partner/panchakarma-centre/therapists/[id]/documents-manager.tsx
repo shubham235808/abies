@@ -47,7 +47,7 @@ export function TherapistDocumentsManager({ therapistId, initial }: { therapistI
   const fileInput = useRef<HTMLInputElement>(null);
   const toast = useToast();
 
-  const apiBase = `/api/panchakarma-centres/me/therapists/${therapistId}/documents`;
+  const apiBase = `/api/v1/panchakarma-centres/me/therapists/${therapistId}/documents`;
 
   async function handleUpload() {
     const file = fileInput.current?.files?.[0];

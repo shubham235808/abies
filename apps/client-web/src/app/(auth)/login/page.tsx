@@ -122,7 +122,7 @@ function MobileStepForm({
 
   const onSubmit = handleSubmit(async (data) => {
     try {
-      const result = await api.post<{ requestId: string; devOtp?: string }>('/api/auth/otp/request', data);
+      const result = await api.post<{ requestId: string; devOtp?: string }>('/api/v1/auth/otp/request', data);
       onSent(result.requestId, data.role, result.devOtp);
     } catch (err) {
       onError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
@@ -185,7 +185,7 @@ function OtpStepForm({
 
   const onSubmit = handleSubmit(async (data) => {
     try {
-      const result = await api.post<{ user: { role: string }; mfaRequired: boolean }>('/api/auth/otp/verify', {
+      const result = await api.post<{ user: { role: string }; mfaRequired: boolean }>('/api/v1/auth/otp/verify', {
         requestId,
         ...data,
       });

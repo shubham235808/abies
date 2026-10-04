@@ -57,7 +57,7 @@ function MedicineReviewForm({ orderId, medicineId, medicineName, onSubmitted }: 
     setSubmitting(true);
     setError(null);
     try {
-      await api.post(`/api/medicine-orders/${orderId}/review`, { medicineId, rating, comment: comment || undefined });
+      await api.post(`/api/v1/medicine-orders/${orderId}/review`, { medicineId, rating, comment: comment || undefined });
       onSubmitted();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not submit your review.');
@@ -108,7 +108,7 @@ export function MedicinesDashboard({
     setCancellingId(id);
     setListError(null);
     try {
-      const { order } = await api.post<{ order: { status: string } }>(`/api/medicine-orders/${id}/cancel`, {});
+      const { order } = await api.post<{ order: { status: string } }>(`/api/v1/medicine-orders/${id}/cancel`, {});
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: order.status } : o)));
     } catch (err) {
       setListError(err instanceof ApiError ? err.message : 'Could not cancel this order.');
@@ -244,7 +244,7 @@ function PrescriptionCard({
     if (!id) return;
     setLoadingMatch(true);
     try {
-      const { items } = await api.get<{ items: Match[] }>(`/api/prescriptions/${prescription.id}/match?pharmacyId=${id}`);
+      const { items } = await api.get<{ items: Match[] }>(`/api/v1/prescriptions/${prescription.id}/match?pharmacyId=${id}`);
       setMatches(items);
       setQuantities(Object.fromEntries(items.filter((i) => i.available).map((i) => [i.medicineId as string, 1])));
     } catch (err) {
@@ -276,7 +276,7 @@ function PrescriptionCard({
         order: { id: string };
         razorpayOrder: { id: string; amount: number; currency: string };
         razorpayKeyId: string;
-      }>('/api/medicine-orders', {
+      }>('/api/v1/medicine-orders', {
         pharmacyId,
         prescriptionId: prescription.id,
         deliveryAddress: address,
@@ -297,7 +297,7 @@ function PrescriptionCard({
         theme: { color: '#7A1783' },
         handler: async (response) => {
           try {
-            await api.post('/api/medicine-orders/verify-payment', {
+            await api.post('/api/v1/medicine-orders/verify-payment', {
               orderId: result.order.id,
               razorpayOrderId: response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,

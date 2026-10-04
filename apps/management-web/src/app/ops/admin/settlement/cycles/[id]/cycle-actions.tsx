@@ -25,7 +25,7 @@ export function CycleActions({
     setBusy(true);
     setError(null);
     try {
-      await api.post(`/api/admin/settlement/settlements/${settlementId}/${action}`, {});
+      await api.post(`/api/v1/admin/settlement/settlements/${settlementId}/${action}`, {});
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'That action could not be completed.');

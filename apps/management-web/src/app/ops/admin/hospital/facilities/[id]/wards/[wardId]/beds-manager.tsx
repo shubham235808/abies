@@ -29,7 +29,7 @@ export function BedsManager({ wardId, initial }: { wardId: string; initial: BedR
     setError(null);
     try {
       const nextStatus = bed.status === 'MAINTENANCE' ? 'AVAILABLE' : 'MAINTENANCE';
-      const { bed: updated } = await api.patch<{ bed: BedRow }>(`/api/admin/hospital-beds/${bed.id}`, { status: nextStatus });
+      const { bed: updated } = await api.patch<{ bed: BedRow }>(`/api/v1/admin/hospital-beds/${bed.id}`, { status: nextStatus });
       setBeds((prev) => prev.map((b) => (b.id === bed.id ? updated : b)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update this bed.');
@@ -89,7 +89,7 @@ function NewBedForm({ wardId, onCreated, onCancel }: { wardId: string; onCreated
     setError(null);
     try {
       const dto = createBedSchema.parse(values);
-      const { bed } = await api.post<{ bed: BedRow }>(`/api/admin/hospital-wards/${wardId}/beds`, dto);
+      const { bed } = await api.post<{ bed: BedRow }>(`/api/v1/admin/hospital-wards/${wardId}/beds`, dto);
       onCreated(bed);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not add this bed.');

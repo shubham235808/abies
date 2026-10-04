@@ -38,7 +38,7 @@ export function RefundRow({
     setBusy(true);
     setError(null);
     try {
-      const result = await api.post<{ refund: { status: string; gatewayRefundRef: string | null } }>(`/api/admin/refunds/${id}/approve`, {});
+      const result = await api.post<{ refund: { status: string; gatewayRefundRef: string | null } }>(`/api/v1/admin/refunds/${id}/approve`, {});
       setStatus(result.refund.status);
       setGatewayRefundRef(result.refund.gatewayRefundRef);
       setDecided(true);
@@ -53,7 +53,7 @@ export function RefundRow({
     setBusy(true);
     setError(null);
     try {
-      const result = await api.post<{ refund: { status: string } }>(`/api/admin/refunds/${id}/reject`, {});
+      const result = await api.post<{ refund: { status: string } }>(`/api/v1/admin/refunds/${id}/reject`, {});
       setStatus(result.refund.status);
       setDecided(true);
     } catch (err) {

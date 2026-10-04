@@ -19,12 +19,21 @@ function serializeError(err: unknown): unknown {
 }
 
 function write(level: LogLevel, scope: string, message: string, context?: Record<string, unknown>) {
+  // requestId is promoted to a top-level field (docs/platform/CONTRACT.md
+  // §16 wants request/correlation ID alongside timestamp/level/service/
+  // environment/message, not buried inside an opaque nested object) —
+  // everything else in context stays nested. Set by src/proxy.ts's
+  // x-request-id header, read back out by errorResponse() in errors.ts.
+  const { requestId, ...rest } = context ?? {};
   const entry = {
     timestamp: new Date().toISOString(),
     level,
+    service: process.env.APP_NAME ?? 'unknown',
+    environment: process.env.NODE_ENV ?? 'unknown',
+    ...(requestId ? { requestId } : {}),
     scope,
     message,
-    ...(context ? { context } : {}),
+    ...(Object.keys(rest).length > 0 ? { context: rest } : {}),
   };
   const line = JSON.stringify(entry);
   if (level === 'error') console.error(line);

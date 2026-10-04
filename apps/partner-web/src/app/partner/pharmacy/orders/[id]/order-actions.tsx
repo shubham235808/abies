@@ -24,7 +24,7 @@ export function OrderActions({ orderId, status: initialStatus, shipment: initial
     setBusy(true);
     setError(null);
     try {
-      const { order } = await api.post<{ order: { status: string } }>(`/api/pharmacies/me/orders/${orderId}/accept`, {});
+      const { order } = await api.post<{ order: { status: string } }>(`/api/v1/pharmacies/me/orders/${orderId}/accept`, {});
       setStatus(order.status);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not accept this order.');
@@ -37,7 +37,7 @@ export function OrderActions({ orderId, status: initialStatus, shipment: initial
     setBusy(true);
     setError(null);
     try {
-      const { order } = await api.post<{ order: { status: string } }>(`/api/pharmacies/me/orders/${orderId}/packing`, {});
+      const { order } = await api.post<{ order: { status: string } }>(`/api/v1/pharmacies/me/orders/${orderId}/packing`, {});
       setStatus(order.status);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update this order.');
@@ -50,7 +50,7 @@ export function OrderActions({ orderId, status: initialStatus, shipment: initial
     setBusy(true);
     setError(null);
     try {
-      const { order } = await api.post<{ order: { status: string } }>(`/api/medicine-orders/${orderId}/cancel`, {
+      const { order } = await api.post<{ order: { status: string } }>(`/api/v1/medicine-orders/${orderId}/cancel`, {
         reason: 'Cancelled by pharmacy',
       });
       setStatus(order.status);
@@ -133,7 +133,7 @@ function DispatchForm({ orderId, onDispatched }: { orderId: string; onDispatched
     setSubmitting(true);
     setError(null);
     try {
-      await api.post(`/api/pharmacies/me/orders/${orderId}/dispatch`, {
+      await api.post(`/api/v1/pharmacies/me/orders/${orderId}/dispatch`, {
         carrier: carrier || undefined,
         trackingRef: trackingRef || undefined,
       });
@@ -171,7 +171,7 @@ function DeliveredButton({ orderId, shipment, onDelivered }: { orderId: string; 
     setBusy(true);
     setError(null);
     try {
-      await api.post(`/api/pharmacies/me/orders/${orderId}/delivered`, {});
+      await api.post(`/api/v1/pharmacies/me/orders/${orderId}/delivered`, {});
       onDelivered();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not mark this order delivered.');

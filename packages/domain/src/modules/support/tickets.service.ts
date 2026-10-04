@@ -359,7 +359,7 @@ export async function addAttachment(ticketId: string, uploaderUserId: string, up
   const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
   if (!ticket) throw new NotFoundError('Ticket not found');
   if (!canView(ticket, uploaderUserId, uploaderRole)) throw new NotFoundError('Ticket not found');
-  assertUploadAllowed({ mimetype: file.mimeType, size: file.size });
+  assertUploadAllowed({ mimetype: file.mimeType, size: file.size, buffer: file.buffer });
 
   const storedName = `${randomUUID()}-${file.originalName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   const storageKey = `support-attachments/${ticketId}/${storedName}`;

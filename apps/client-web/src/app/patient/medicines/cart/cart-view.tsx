@@ -86,7 +86,7 @@ function PharmacyCart({
     setSavingItemId(item.id);
     setError(null);
     try {
-      const { cart: updated } = await api.patch<{ cart: Cart }>(`/api/patients/me/cart/items/${item.id}`, { quantity });
+      const { cart: updated } = await api.patch<{ cart: Cart }>(`/api/v1/patients/me/cart/items/${item.id}`, { quantity });
       onUpdated(updated);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update this item.');
@@ -99,7 +99,7 @@ function PharmacyCart({
     setSavingItemId(item.id);
     setError(null);
     try {
-      const { cart: updated } = await api.delete<{ cart: Cart }>(`/api/patients/me/cart/items/${item.id}`);
+      const { cart: updated } = await api.delete<{ cart: Cart }>(`/api/v1/patients/me/cart/items/${item.id}`);
       onUpdated(updated);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not remove this item.');
@@ -120,7 +120,7 @@ function PharmacyCart({
         order: { id: string };
         razorpayOrder: { id: string; amount: number; currency: string };
         razorpayKeyId: string;
-      }>(`/api/patients/me/cart/${cart.id}/checkout`, { deliveryAddress: address });
+      }>(`/api/v1/patients/me/cart/${cart.id}/checkout`, { deliveryAddress: address });
 
       await loadRazorpayScript();
       if (!window.Razorpay) throw new Error('Payment provider script did not load');
@@ -135,7 +135,7 @@ function PharmacyCart({
         theme: { color: '#7A1783' },
         handler: async (response) => {
           try {
-            await api.post('/api/medicine-orders/verify-payment', {
+            await api.post('/api/v1/medicine-orders/verify-payment', {
               orderId: result.order.id,
               razorpayOrderId: response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,

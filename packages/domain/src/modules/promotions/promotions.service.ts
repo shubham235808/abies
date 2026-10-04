@@ -20,7 +20,7 @@ export interface UploadedImage {
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png']);
 
 function storeImage(promotionId: string, slot: 'desktop' | 'mobile', file: UploadedImage): Promise<string> {
-  assertUploadAllowed({ mimetype: file.mimeType, size: file.size }, { allowedMimeTypes: IMAGE_MIME_TYPES });
+  assertUploadAllowed({ mimetype: file.mimeType, size: file.size, buffer: file.buffer }, { allowedMimeTypes: IMAGE_MIME_TYPES });
   const storedName = `${randomUUID()}-${file.originalName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   const key = `promotions/${promotionId}/${slot}-${storedName}`;
   return putObject({ key, body: file.buffer, contentType: file.mimeType }).then(() => key);

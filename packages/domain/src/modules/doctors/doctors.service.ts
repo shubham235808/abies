@@ -233,7 +233,7 @@ export async function addDocument(
   if (type !== DoctorDocumentType.PROFILE_PHOTO && !(await documentsEditable(profile))) {
     throw new ForbiddenError('Documents can be changed only while the application is in Draft or Rejected state, or a document has been flagged for resubmission');
   }
-  assertUploadAllowed({ mimetype: file.mimeType, size: file.size });
+  assertUploadAllowed({ mimetype: file.mimeType, size: file.size, buffer: file.buffer });
 
   const storedName = `${randomUUID()}-${file.originalName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   const storagePath = `doctor-documents/${profile.id}/${storedName}`;
@@ -455,7 +455,7 @@ function publicDoctor(
     // surfaced publicly) is shown once an admin has VERIFIED it, the
     // same trust gate already used for the profile's own discoverability
     // — never an unreviewed upload shown to anonymous visitors.
-    photoUrl: d.documents.length > 0 ? `/api/public/doctors/${d.slug}/photo` : null,
+    photoUrl: d.documents.length > 0 ? `/api/v1/public/doctors/${d.slug}/photo` : null,
     clinics: d.clinics,
     availability: d.availability,
     verified: true,

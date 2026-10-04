@@ -33,7 +33,7 @@ export function ReviewPanel({ centre }: { centre: Centre }) {
     setError(null);
     setBusy(action);
     try {
-      await api.post(`/api/admin/panchakarma-centres/${centre.id}/${action}`, body ?? {});
+      await api.post(`/api/v1/admin/panchakarma-centres/${centre.id}/${action}`, body ?? {});
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Action failed.');

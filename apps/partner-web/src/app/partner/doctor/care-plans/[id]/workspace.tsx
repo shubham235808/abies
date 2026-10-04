@@ -72,7 +72,7 @@ export function CarePlanWorkspace({ plan: initial }: { plan: Plan }) {
     setTransitioning(status);
     setError(null);
     try {
-      const { carePlan } = await api.post<{ carePlan: { status: CarePlanStatus } }>(`/api/care-plans/${plan.id}/transition`, { status });
+      const { carePlan } = await api.post<{ carePlan: { status: CarePlanStatus } }>(`/api/v1/care-plans/${plan.id}/transition`, { status });
       setPlan((p) => ({ ...p, status: carePlan.status }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update this care plan.');
@@ -148,7 +148,7 @@ function DetailsForm({ plan, editable, onSaved }: { plan: Plan; editable: boolea
     setError(null);
     const goals = goalsText.split('\n').map((g) => g.trim()).filter(Boolean);
     try {
-      await api.patch(`/api/care-plans/${plan.id}`, { ...values, goals });
+      await api.patch(`/api/v1/care-plans/${plan.id}`, { ...values, goals });
       onSaved({ summary: values.summary || null, targetDate: values.targetDate || null, goals });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save these details.');
@@ -203,7 +203,7 @@ function ItemRow({ item, editable, onSaved }: { item: Item; editable: boolean; o
     setSaving(true);
     setError(null);
     try {
-      const { item: updated } = await api.patch<{ item: Item }>(`/api/care-plan-items/${item.id}`, { status: next });
+      const { item: updated } = await api.patch<{ item: Item }>(`/api/v1/care-plan-items/${item.id}`, { status: next });
       onSaved(updated);
     } catch (err) {
       setStatus(item.status);
@@ -267,7 +267,7 @@ function EditItemForm({ item, onSaved, onCancel }: { item: Item; onSaved: (item:
     setError(null);
     try {
       const dto = updateCarePlanItemSchema.parse({ title, description, dueDate, notes });
-      const { item: updated } = await api.patch<{ item: Item }>(`/api/care-plan-items/${item.id}`, dto);
+      const { item: updated } = await api.patch<{ item: Item }>(`/api/v1/care-plan-items/${item.id}`, dto);
       onSaved(updated);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save this item.');
@@ -320,7 +320,7 @@ function AddItemForm({ planId, onAdded }: { planId: string; onAdded: (item: Item
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     try {
-      const { item } = await api.post<{ item: Item }>(`/api/care-plans/${planId}/items`, values);
+      const { item } = await api.post<{ item: Item }>(`/api/v1/care-plans/${planId}/items`, values);
       onAdded(item);
       reset({ type: 'TASK', title: '', description: '', dueDate: '', notes: '' });
       setOpen(false);

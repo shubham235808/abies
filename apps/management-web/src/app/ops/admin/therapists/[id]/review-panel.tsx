@@ -41,7 +41,7 @@ export function TherapistReviewPanel({
   async function viewDocument(documentId: string) {
     setError(null);
     try {
-      const { url } = await api.get<{ url: string }>(`/api/admin/therapists/${therapistId}/documents/${documentId}/download`);
+      const { url } = await api.get<{ url: string }>(`/api/v1/admin/therapists/${therapistId}/documents/${documentId}/download`);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not open document.');
@@ -52,7 +52,7 @@ export function TherapistReviewPanel({
     setError(null);
     setBusy(documentId);
     try {
-      await api.post(`/api/admin/therapists/${therapistId}/documents/${documentId}/review`, { outcome });
+      await api.post(`/api/v1/admin/therapists/${therapistId}/documents/${documentId}/review`, { outcome });
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not review document.');

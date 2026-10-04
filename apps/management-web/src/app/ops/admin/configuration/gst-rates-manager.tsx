@@ -27,7 +27,7 @@ export function GstRatesManager({ initial }: { initial: GstRateRow[] }) {
     <ConfigManagerShell
       columns={COLUMNS}
       initialRows={initial}
-      apiBase="/api/admin/configuration/gst-rates"
+      apiBase="/api/v1/admin/configuration/gst-rates"
       addModalTitle="Add a GST rate"
       entityLabel="GST rate"
       deleteConfirmDescription="Sales already recorded keep the rate that applied at the time — this only removes it from future use."
@@ -47,7 +47,7 @@ function AddForm({ onCreated, onCancel }: { onCreated: (row: GstRateRow) => void
     setBusy(true);
     setError(null);
     try {
-      const { rate } = await api.post<{ rate: GstRateRow }>('/api/admin/configuration/gst-rates', {
+      const { rate } = await api.post<{ rate: GstRateRow }>('/api/v1/admin/configuration/gst-rates', {
         hsnCode,
         label,
         ratePercent: Number(ratePercent),

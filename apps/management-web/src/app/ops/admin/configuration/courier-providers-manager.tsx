@@ -25,7 +25,7 @@ export function CourierProvidersManager({ initial }: { initial: CourierProviderR
     <ConfigManagerShell
       columns={COLUMNS}
       initialRows={initial}
-      apiBase="/api/admin/configuration/courier-providers"
+      apiBase="/api/v1/admin/configuration/courier-providers"
       addModalTitle="Add a courier provider"
       entityLabel="Courier provider"
       deleteConfirmDescription="Existing shipments keep whatever carrier name they already recorded — this only affects what pharmacies can pick for new dispatches."
@@ -44,7 +44,7 @@ function AddForm({ onCreated, onCancel }: { onCreated: (row: CourierProviderRow)
     setBusy(true);
     setError(null);
     try {
-      const { provider } = await api.post<{ provider: CourierProviderRow }>('/api/admin/configuration/courier-providers', {
+      const { provider } = await api.post<{ provider: CourierProviderRow }>('/api/v1/admin/configuration/courier-providers', {
         code,
         label,
       });

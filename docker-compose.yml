@@ -113,7 +113,13 @@ services:
       - "3000:3000"
     networks: [abies]
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      # No /api/* route in this app (that lives in platform-api) — this
+      # was wrongly hitting /api/health before (always 404, always
+      # reporting unhealthy, pre-existing bug found and fixed here while
+      # already touching the health endpoints for API versioning).
+      # /login is a real route that always 200s regardless of session
+      # state, same pattern already used below for partner-web/management-web.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -145,8 +151,8 @@ services:
       - "3001:3000"
     networks: [abies]
     healthcheck:
-      # No /api/health in this app (that route lives in platform-api) —
-      # the homepage response itself is the liveness signal.
+      # No /api/* routes in this app (those live in platform-api) —
+      # the page response itself is the liveness signal.
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/partner/doctor').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
@@ -211,7 +217,7 @@ services:
       - "3003:3000"
     networks: [abies]
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 5

@@ -39,7 +39,7 @@ export function OrderList({ initial }: { initial: Order[] }) {
     setCancellingId(id);
     setError(null);
     try {
-      const { order } = await api.post<{ order: { status: string } }>(`/api/diagnostic-orders/${id}/cancel`, {});
+      const { order } = await api.post<{ order: { status: string } }>(`/api/v1/diagnostic-orders/${id}/cancel`, {});
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: order.status } : o)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not cancel this order.');
@@ -55,7 +55,7 @@ export function OrderList({ initial }: { initial: Order[] }) {
     setDownloadingId(reportId);
     setError(null);
     try {
-      const { url } = await api.get<{ url: string }>(`/api/reports/${reportId}/download`);
+      const { url } = await api.get<{ url: string }>(`/api/v1/reports/${reportId}/download`);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not open this report.');

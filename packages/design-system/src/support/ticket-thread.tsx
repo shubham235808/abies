@@ -101,7 +101,7 @@ export function TicketThread({ ticket: initialTicket, viewerRole }: { ticket: Ti
     setBusy(true);
     setError(null);
     try {
-      const result = await api.post<{ ticket: TicketDetail }>(`/api/support/tickets/${ticket.id}/claim`, {});
+      const result = await api.post<{ ticket: TicketDetail }>(`/api/v1/support/tickets/${ticket.id}/claim`, {});
       setTicket((prev) => ({ ...prev, ...result.ticket }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not claim this ticket.');
@@ -114,7 +114,7 @@ export function TicketThread({ ticket: initialTicket, viewerRole }: { ticket: Ti
     setBusy(true);
     setError(null);
     try {
-      const result = await api.post<{ ticket: TicketDetail }>(`/api/support/tickets/${ticket.id}/triage`, { department, priority });
+      const result = await api.post<{ ticket: TicketDetail }>(`/api/v1/support/tickets/${ticket.id}/triage`, { department, priority });
       setTicket((prev) => ({ ...prev, ...result.ticket }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update triage.');
@@ -127,7 +127,7 @@ export function TicketThread({ ticket: initialTicket, viewerRole }: { ticket: Ti
     setBusy(true);
     setError(null);
     try {
-      const result = await api.post<{ ticket: TicketDetail }>(`/api/support/tickets/${ticket.id}/status`, { status: nextStatus });
+      const result = await api.post<{ ticket: TicketDetail }>(`/api/v1/support/tickets/${ticket.id}/status`, { status: nextStatus });
       setTicket((prev) => ({ ...prev, ...result.ticket }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update status.');
@@ -146,7 +146,7 @@ export function TicketThread({ ticket: initialTicket, viewerRole }: { ticket: Ti
     setBusy(true);
     setError(null);
     try {
-      await api.post('/api/refunds', { paymentId, amount });
+      await api.post('/api/v1/refunds', { paymentId, amount });
       setRefundablePayments((prev) =>
         prev.map((p) => (p.id === paymentId ? { ...p, refunds: [...p.refunds, { id: 'pending', amount, status: 'REQUESTED' }] } : p)),
       );
@@ -162,7 +162,7 @@ export function TicketThread({ ticket: initialTicket, viewerRole }: { ticket: Ti
     setBusy(true);
     setError(null);
     try {
-      const result = await api.post<{ message: ThreadMessage }>(`/api/support/tickets/${ticket.id}/messages`, { body: reply });
+      const result = await api.post<{ message: ThreadMessage }>(`/api/v1/support/tickets/${ticket.id}/messages`, { body: reply });
       setMessages((prev) => [...prev, result.message]);
       setReply('');
       if (ticket.status === 'RESOLVED' || ticket.status === 'WAITING_CUSTOMER' || ticket.status === 'OPEN') {

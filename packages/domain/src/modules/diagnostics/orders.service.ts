@@ -268,7 +268,7 @@ export async function releaseReport(labUserId: string, orderId: string, dto: Rel
 
   let documentStorageKey: string | undefined;
   if (file) {
-    assertUploadAllowed({ mimetype: file.mimeType, size: file.size });
+    assertUploadAllowed({ mimetype: file.mimeType, size: file.size, buffer: file.buffer });
     documentStorageKey = `diagnostic-reports/${orderId}/${Date.now()}-${file.originalName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     await putObject({ key: documentStorageKey, body: file.buffer, contentType: file.mimeType });
   }

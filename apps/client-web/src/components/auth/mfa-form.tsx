@@ -27,7 +27,7 @@ export function MfaForm({ redirectTo }: { redirectTo: string }) {
   const onSubmit = handleSubmit(async (data) => {
     setError(null);
     try {
-      await api.post('/api/auth/mfa/verify', data);
+      await api.post('/api/v1/auth/mfa/verify', data);
       window.location.assign(redirectTo);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not verify that code. Please try again.');

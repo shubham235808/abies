@@ -40,7 +40,7 @@ export function PackageCard({ diagnosticPackage: pkg, viewerRole }: { diagnostic
         order: { id: string };
         razorpayOrder: { id: string; amount: number; currency: string };
         razorpayKeyId: string;
-      }>('/api/diagnostic-orders', {
+      }>('/api/v1/diagnostic-orders', {
         labId: pkg.lab.id,
         packageId: pkg.id,
         collectionMode,
@@ -61,7 +61,7 @@ export function PackageCard({ diagnosticPackage: pkg, viewerRole }: { diagnostic
         theme: { color: '#7A1783' },
         handler: async (response) => {
           try {
-            await api.post('/api/diagnostic-orders/verify-payment', {
+            await api.post('/api/v1/diagnostic-orders/verify-payment', {
               orderId: result.order.id,
               razorpayOrderId: response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,

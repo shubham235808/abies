@@ -12,7 +12,7 @@ export function LogoutButton() {
       disabled={loading}
       onClick={async () => {
         setLoading(true);
-        await api.post('/api/auth/logout').catch(() => undefined);
+        await api.post('/api/v1/auth/logout').catch(() => undefined);
         // Full navigation, not router.push: guarantees the portal shell's
         // server-side session check re-runs against the now-cleared cookie
         // instead of risking a client-side router cache hit from before logout.

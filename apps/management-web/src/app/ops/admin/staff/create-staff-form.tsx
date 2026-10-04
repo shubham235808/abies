@@ -29,7 +29,7 @@ export function CreateStaffForm() {
     setBusy(true);
     setError(null);
     try {
-      await api.post('/api/admin/staff', { mobile, role, title: title || undefined });
+      await api.post('/api/v1/admin/staff', { mobile, role, title: title || undefined });
       setOpen(false);
       setMobile('');
       setTitle('');

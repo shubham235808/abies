@@ -91,7 +91,7 @@ export async function listLeadHistory(leadId: string) {
 export async function addLeadDocument(id: string, uploaderUserId: string, file: UploadedFile, auditCtx: AuditContext) {
   const lead = await prisma.partnerLead.findUnique({ where: { id } });
   if (!lead) throw new NotFoundError('Lead not found');
-  assertUploadAllowed({ mimetype: file.mimeType, size: file.size });
+  assertUploadAllowed({ mimetype: file.mimeType, size: file.size, buffer: file.buffer });
 
   const storedName = `${randomUUID()}-${file.originalName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   const storageKey = `partner-lead-documents/${id}/${storedName}`;
