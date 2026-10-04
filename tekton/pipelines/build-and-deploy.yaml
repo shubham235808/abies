@@ -3,9 +3,12 @@
 # overlay. Run once per app (see ../pipelineruns/*.yaml) — a single app's
 # commit shouldn't force a rebuild/redeploy of the other three.
 #
-# Depends on the `git-clone` ClusterTask from the Tekton catalog. If it's
-# not already installed on this cluster:
-#   kubectl apply -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/git-clone/0.9/git-clone.yaml
+# Depends on the `git-clone` Task from the Tekton catalog (confirmed live
+# against this cluster: ClusterTask isn't even a registered kind on this
+# Tekton Pipelines version — the catalog's own v0.9 manifest already
+# ships as `kind: Task`, so this needs installing per-namespace, in
+# abies-ci specifically). If it's not already installed:
+#   kubectl apply -n abies-ci -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/git-clone/0.9/git-clone.yaml
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
@@ -45,7 +48,7 @@ spec:
       description: Holds the checked-out GitOps repo.
   tasks:
     - name: fetch-source
-      taskRef: {name: git-clone, kind: ClusterTask}
+      taskRef: {name: git-clone, kind: Task}
       workspaces:
         - {name: output, workspace: source}
       params:
@@ -58,7 +61,7 @@ spec:
     # this Pipeline (see tekton/README.md's "Gitea credentials" setup
     # step), including update-gitops-image's push later.
     - name: fetch-gitops
-      taskRef: {name: git-clone, kind: ClusterTask}
+      taskRef: {name: git-clone, kind: Task}
       workspaces:
         - {name: output, workspace: gitops}
       params:

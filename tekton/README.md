@@ -37,13 +37,13 @@ ordered runbook covering both repos. The sections below are reference.
 
 ## One-time cluster setup
 
-1. **`git-clone` ClusterTask** — install from the Tekton catalog if not
-   already present (some installs register it as a namespaced `Task`
-   instead — `kubectl get clustertask git-clone` vs. `kubectl get task
-   git-clone -n abies-ci` tells you which; if it's the latter, change
-   every `kind: ClusterTask` to `kind: Task` in `pipelines/*.yaml`):
+1. **`git-clone` Task** — confirmed live against this cluster: `ClusterTask`
+   isn't a registered kind on this Tekton Pipelines version at all
+   (`kubectl api-resources --api-group=tekton.dev` won't list it), so this
+   installs as a namespaced `Task` in `abies-ci` — the catalog's own v0.9
+   manifest already ships as `kind: Task`, no edit needed:
    ```
-   kubectl apply -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/git-clone/0.9/git-clone.yaml
+   kubectl apply -n abies-ci -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/git-clone/0.9/git-clone.yaml
    ```
 2. **Apply the Tasks and Pipelines** to `abies-ci`:
    ```

@@ -3,6 +3,14 @@
 # parameterized Dockerfile, and pushes it to the configured registry.
 # Uses kaniko (not a Docker-in-Docker build) since Tekton build Pods
 # shouldn't need a privileged container or access to a host Docker socket.
+#
+# Image, CA-mount, and registry-auth-mount shape all copied directly from
+# the platform team's own validated reference Task in abies-ci
+# (`kubectl get task kaniko-harbor-build -n abies-ci -o yaml`), not
+# guessed — confirms docs/platform/CONTRACT.md §7's
+# ghcr.io/osscontainertools/kaniko image, and that Harbor's cert is a
+# real internal CA to trust (abies-internal-ca ConfigMap), not something
+# to bypass with --insecure/--skip-tls-verify.
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
@@ -35,6 +43,14 @@ spec:
     - name: context
       type: string
       default: .
+    - name: registry-auth-secret
+      description: kubernetes.io/dockerconfigjson Secret with Harbor push credentials.
+      type: string
+      default: harbor-push
+    - name: harbor-ca-configmap
+      description: ConfigMap holding Harbor's internal root CA, keyed abies-internal-root-ca.crt.
+      type: string
+      default: abies-internal-ca
   results:
     - name: digest
       description: The pushed image's sha256 digest (e.g. sha256:abc123...), read by update-gitops-image.yaml.
@@ -43,7 +59,8 @@ spec:
       description: Checked-out app repo (see pipelines/build-and-deploy.yaml's fetch-source task).
   steps:
     - name: build-and-push
-      image: gcr.io/kaniko-project/executor:v1.23.2
+      image: ghcr.io/osscontainertools/kaniko:latest
+      command: ["/kaniko/executor"]
       workingDir: $(workspaces.source.path)
       args:
         - --dockerfile=$(params.dockerfile)
@@ -52,11 +69,15 @@ spec:
         - --target=$(params.dockerfile-target)
         - --build-arg=APP_NAME=$(params.app-name)
         - --digest-file=$(results.digest.path)
-        # TODO: Harbor (docs/platform/CONTRACT.md §6) is an enterprise
-        # platform service and likely serves a trusted/internally-trusted
-        # cert — these two flags assume it doesn't. Confirm against the
-        # real registry and drop them if so; kept conservatively on until
-        # that's actually verified, not guessed.
-        - --insecure
-        - --skip-tls-verify
         - --cache=true
+      volumeMounts:
+        - {name: registry-auth, mountPath: /kaniko/.docker, readOnly: true}
+        - {name: harbor-ca, mountPath: /kaniko/ssl/certs/abies-internal-root-ca.crt, subPath: abies-internal-root-ca.crt, readOnly: true}
+  volumes:
+    - name: registry-auth
+      secret:
+        secretName: $(params.registry-auth-secret)
+        items: [{key: .dockerconfigjson, path: config.json}]
+    - name: harbor-ca
+      configMap:
+        name: $(params.harbor-ca-configmap)

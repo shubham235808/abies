@@ -26,7 +26,7 @@ spec:
     - name: gitops
   tasks:
     - name: fetch-source
-      taskRef: {name: git-clone, kind: ClusterTask}
+      taskRef: {name: git-clone, kind: Task}
       workspaces: [{name: output, workspace: source}]
       params:
         - {name: url, value: $(params.app-repo-url)}
@@ -36,7 +36,7 @@ spec:
     # the same call; credentials come from the ServiceAccount, not a
     # workspace.
     - name: fetch-gitops
-      taskRef: {name: git-clone, kind: ClusterTask}
+      taskRef: {name: git-clone, kind: Task}
       workspaces:
         - {name: output, workspace: gitops}
       params:
