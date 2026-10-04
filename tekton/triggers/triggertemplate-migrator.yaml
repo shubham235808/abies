@@ -1,0 +1,33 @@
+# Instantiates build-migrator.yaml — separate from triggertemplate-app.yaml
+# since it targets a different Pipeline with a different param shape (no
+# app-name; overlay-path is fixed to the one migration Job).
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: build-migrator
+spec:
+  params:
+    - name: revision
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: build-migrator-
+      spec:
+        pipelineRef: {name: build-migrator}
+        params:
+          - {name: app-repo-url, value: "TODO-this-repo-clone-url"}
+          - {name: app-revision, value: $(tt.params.revision)}
+          - {name: image-repo, value: "TODO-registry-host/abies"}
+          - {name: gitops-repo-url, value: "TODO-gitops-repo-clone-url"}
+          - {name: gitops-revision, value: main}
+          - {name: overlay-path, value: "migration/overlays/production"}
+        workspaces:
+          - name: source
+            volumeClaimTemplate:
+              spec: {accessModes: ["ReadWriteOnce"], resources: {requests: {storage: 1Gi}}}
+          - name: gitops
+            volumeClaimTemplate:
+              spec: {accessModes: ["ReadWriteOnce"], resources: {requests: {storage: 256Mi}}}
+          - name: git-credentials
+            secret: {secretName: gitops-deploy-key}

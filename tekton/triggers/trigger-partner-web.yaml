@@ -1,0 +1,34 @@
+# Only fires build-and-deploy for partner-web when a push to main actually
+# touched a path it depends on — its own app dir, the two shared
+# packages, or the root Dockerfile (all four apps share one Dockerfile, so
+# a change there affects every app's build even if no app dir changed).
+# The `github` interceptor validates the webhook's HMAC signature before
+# the `cel` interceptor's path filter ever runs, so an unsigned/forged
+# request never reaches either.
+apiVersion: triggers.tekton.dev/v1beta1
+kind: Trigger
+metadata:
+  name: partner-web
+spec:
+  serviceAccountName: abies-triggers-sa
+  interceptors:
+    - ref: {name: github}
+      params:
+        - name: secretRef
+          value: {secretName: abies-webhook-secret, secretKey: secretToken}
+        - {name: eventTypes, value: ["push"]}
+    - ref: {name: cel}
+      params:
+        - name: filter
+          value: >-
+            body.ref == 'refs/heads/main' &&
+            body.commits.exists(c,
+              c.added.exists(f, f.startsWith('apps/partner-web/') || f.startsWith('packages/domain/') || f.startsWith('packages/design-system/') || f == 'Dockerfile') ||
+              c.modified.exists(f, f.startsWith('apps/partner-web/') || f.startsWith('packages/domain/') || f.startsWith('packages/design-system/') || f == 'Dockerfile') ||
+              c.removed.exists(f, f.startsWith('apps/partner-web/') || f.startsWith('packages/domain/') || f.startsWith('packages/design-system/') || f == 'Dockerfile')
+            )
+  bindings:
+    - {ref: github-push-revision}
+    - {ref: app-partner-web}
+  template:
+    ref: build-and-deploy

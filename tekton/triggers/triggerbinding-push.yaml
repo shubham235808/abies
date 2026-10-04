@@ -1,0 +1,17 @@
+# Extracts the one thing that actually varies per push: the commit SHA to
+# build. Shaped for GitHub's push webhook payload
+# (https://docs.github.com/webhooks/webhook-events-and-payloads#push) —
+# if the git host is GitLab/Gitea/Bitbucket instead, `$(body.after)` and
+# `$(body.ref)` need adjusting to that host's own payload shape (GitLab's
+# push event uses the same two field names, as it happens; Gitea mirrors
+# GitHub's shape too — Bitbucket's is structured differently).
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: github-push-revision
+spec:
+  params:
+    - name: revision
+      value: $(body.after)
+    - name: git-ref
+      value: $(body.ref)

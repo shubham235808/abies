@@ -1,0 +1,15 @@
+# Receives the git host's webhook POSTs and fans out to the five Triggers
+# in this directory. Creates its own Service (`el-abies` once applied) —
+# see httproute.yaml for exposing that Service externally.
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: abies
+spec:
+  serviceAccountName: abies-triggers-sa
+  triggers:
+    - triggerRef: client-web
+    - triggerRef: partner-web
+    - triggerRef: management-web
+    - triggerRef: platform-api
+    - triggerRef: migrator

@@ -1,0 +1,30 @@
+# Only fires build-migrator when a push to main touched the Prisma schema
+# or migrations — unlike the four app Triggers, this one needs no static
+# app-identity binding (build-migrator.yaml's own Pipeline already hardcodes
+# which app-name to satisfy the shared builder stage with).
+apiVersion: triggers.tekton.dev/v1beta1
+kind: Trigger
+metadata:
+  name: migrator
+spec:
+  serviceAccountName: abies-triggers-sa
+  interceptors:
+    - ref: {name: github}
+      params:
+        - name: secretRef
+          value: {secretName: abies-webhook-secret, secretKey: secretToken}
+        - {name: eventTypes, value: ["push"]}
+    - ref: {name: cel}
+      params:
+        - name: filter
+          value: >-
+            body.ref == 'refs/heads/main' &&
+            body.commits.exists(c,
+              c.added.exists(f, f.startsWith('packages/domain/prisma/')) ||
+              c.modified.exists(f, f.startsWith('packages/domain/prisma/')) ||
+              c.removed.exists(f, f.startsWith('packages/domain/prisma/'))
+            )
+  bindings:
+    - {ref: github-push-revision}
+  template:
+    ref: build-migrator

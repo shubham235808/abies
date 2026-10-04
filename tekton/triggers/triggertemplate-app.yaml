@@ -1,0 +1,38 @@
+# Shared by all four per-app Triggers — instantiates the same
+# build-and-deploy Pipeline the manual pipelineruns/*.yaml examples do,
+# just with `revision`/`app-name`/`overlay-path` filled from the two
+# merged TriggerBindings (github-push-revision + app-<app>) instead of
+# typed in by hand.
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: build-and-deploy
+spec:
+  params:
+    - name: revision
+    - name: app-name
+    - name: overlay-path
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: "build-deploy-$(tt.params.app-name)-"
+      spec:
+        pipelineRef: {name: build-and-deploy}
+        params:
+          - {name: app-name, value: $(tt.params.app-name)}
+          - {name: app-repo-url, value: "TODO-this-repo-clone-url"}
+          - {name: app-revision, value: $(tt.params.revision)}
+          - {name: image-repo, value: "TODO-registry-host/abies"}
+          - {name: gitops-repo-url, value: "TODO-gitops-repo-clone-url"}
+          - {name: gitops-revision, value: main}
+          - {name: overlay-path, value: $(tt.params.overlay-path)}
+        workspaces:
+          - name: source
+            volumeClaimTemplate:
+              spec: {accessModes: ["ReadWriteOnce"], resources: {requests: {storage: 1Gi}}}
+          - name: gitops
+            volumeClaimTemplate:
+              spec: {accessModes: ["ReadWriteOnce"], resources: {requests: {storage: 256Mi}}}
+          - name: git-credentials
+            secret: {secretName: gitops-deploy-key}

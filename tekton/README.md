@@ -24,6 +24,10 @@ setup, first build, verify. The sections below are reference.
   once per deploy regardless of how many apps changed.
 - `pipelineruns/*.yaml` — example manual triggers (`kubectl create -f
   tekton/pipelineruns/client-web.yaml`) for each.
+- `triggers/` — webhook-driven builds (Tekton Triggers): a push to `main`
+  starts the right Pipeline automatically, scoped per app by which paths
+  actually changed. Optional layer on top of everything above — the
+  manual `pipelineruns/` always work without it. See `triggers/README.md`.
 
 ## One-time cluster setup
 
@@ -54,11 +58,6 @@ setup, first build, verify. The sections below are reference.
   `--insecure --skip-tls-verify`, assuming an internal registry without a
   publicly-trusted cert. Remove those two flags once the registry's actual
   TLS setup is confirmed.
-- **Webhook-triggered builds**: these Pipelines are designed to be started
-  manually or by any CI trigger; a push-triggered EventListener (Tekton
-  Triggers) needs an Ingress route exposed for the git host's webhook —
-  deferred until cluster ingress/networking details are shared.
-- **Per-app triggering**: ideally only the app(s) whose paths changed in a
-  push get rebuilt (e.g. a commit touching only `apps/client-web/**`
-  shouldn't trigger `partner-web`'s pipeline). Not wired up yet — every
-  PipelineRun is independent and manually scoped to one app for now.
+- **`triggers/`'s git-host assumption**: written for GitHub's webhook
+  payload shape — needs adjusting if the actual git host is GitLab/Gitea/
+  something else (see `triggers/README.md`'s "Still open").

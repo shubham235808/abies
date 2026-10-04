@@ -1,0 +1,12 @@
+# Static params for platform-api's Trigger — nothing here comes from the
+# webhook payload, it's just the fixed identity of this app, kept as its
+# own TriggerBinding so it merges cleanly with the dynamic
+# github-push-revision binding on the Trigger that references both.
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: app-platform-api
+spec:
+  params:
+    - {name: app-name, value: platform-api}
+    - {name: overlay-path, value: "apps/platform-api/overlays/production"}

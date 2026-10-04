@@ -1,0 +1,12 @@
+# Static params for partner-web's Trigger — nothing here comes from the
+# webhook payload, it's just the fixed identity of this app, kept as its
+# own TriggerBinding so it merges cleanly with the dynamic
+# github-push-revision binding on the Trigger that references both.
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: app-partner-web
+spec:
+  params:
+    - {name: app-name, value: partner-web}
+    - {name: overlay-path, value: "apps/partner-web/overlays/production"}

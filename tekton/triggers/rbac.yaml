@@ -1,0 +1,63 @@
+# ServiceAccount the EventListener runs as, plus the permissions it needs:
+# Tekton Triggers' own pre-installed ClusterRoles (created by the Triggers
+# install itself, not by us) for reading Triggers/EventListeners/
+# TriggerBindings/TriggerTemplates/Interceptors, and a project-specific
+# Role for the one extra thing those ClusterRoles don't cover — actually
+# creating PipelineRuns.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: abies-triggers-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: abies-triggers-pipelinerun-creator
+rules:
+  - apiGroups: ["tekton.dev"]
+    resources: ["pipelineruns"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: abies-triggers-pipelinerun-creator
+subjects:
+  - kind: ServiceAccount
+    name: abies-triggers-sa
+roleRef:
+  kind: Role
+  name: abies-triggers-pipelinerun-creator
+  apiGroup: rbac.authorization.k8s.io
+---
+# These two ClusterRoles are created by the Tekton Triggers install itself
+# (not part of this repo) — if `kubectl get clusterrole
+# tekton-triggers-eventlistener-roles` comes back empty, Triggers isn't
+# fully installed yet regardless of what's in this file.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: abies-triggers-eventlistener-roles
+subjects:
+  - kind: ServiceAccount
+    name: abies-triggers-sa
+roleRef:
+  kind: ClusterRole
+  name: tekton-triggers-eventlistener-roles
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: abies-triggers-eventlistener-clusterroles
+subjects:
+  - kind: ServiceAccount
+    name: abies-triggers-sa
+    # namespace set by `kubectl apply -n <namespace>` at apply time — fill
+    # in explicitly here if applying without -n, ClusterRoleBinding
+    # subjects need a namespace even though the role itself is cluster-wide.
+    namespace: TODO-tekton-namespace
+roleRef:
+  kind: ClusterRole
+  name: tekton-triggers-eventlistener-clusterroles
+  apiGroup: rbac.authorization.k8s.io
