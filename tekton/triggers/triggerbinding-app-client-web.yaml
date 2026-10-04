@@ -9,4 +9,3 @@ metadata:
 spec:
   params:
     - {name: app-name, value: client-web}
-    - {name: overlay-path, value: "apps/client-web/overlays/production"}

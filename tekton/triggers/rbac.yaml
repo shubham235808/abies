@@ -53,10 +53,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: abies-triggers-sa
-    # namespace set by `kubectl apply -n <namespace>` at apply time — fill
-    # in explicitly here if applying without -n, ClusterRoleBinding
-    # subjects need a namespace even though the role itself is cluster-wide.
-    namespace: TODO-tekton-namespace
+    namespace: abies-ci
 roleRef:
   kind: ClusterRole
   name: tekton-triggers-eventlistener-clusterroles

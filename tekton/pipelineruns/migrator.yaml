@@ -1,16 +1,15 @@
+# Manual trigger: `kubectl create -f tekton/pipelineruns/migrator.yaml`.
+# Same ServiceAccount/credentials requirement as the four app PipelineRuns
+# — see client-web.yaml's header comment.
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
   generateName: build-migrator-
 spec:
+  serviceAccountName: abies-ci-sa
   pipelineRef: {name: build-migrator}
   params:
-    - {name: app-repo-url, value: "TODO-this-repo-clone-url"}
-    - {name: app-revision, value: main}
-    - {name: image-repo, value: "TODO-registry-host/abies"}
-    - {name: gitops-repo-url, value: "TODO-gitops-repo-clone-url"}
-    - {name: gitops-revision, value: main}
-    - {name: overlay-path, value: "migration/overlays/production"}
+    - {name: app-repo-url, value: "https://git.abies.in/abies/abies-application.git"}
   workspaces:
     - name: source
       volumeClaimTemplate:
@@ -18,5 +17,3 @@ spec:
     - name: gitops
       volumeClaimTemplate:
         spec: {accessModes: ["ReadWriteOnce"], resources: {requests: {storage: 256Mi}}}
-    - name: git-credentials
-      secret: {secretName: gitops-deploy-key}

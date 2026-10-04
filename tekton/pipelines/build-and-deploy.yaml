@@ -1,7 +1,7 @@
 # CI pipeline for one app: clone this repo at a revision, build+push its
-# image, then bump that app's image tag in the GitOps repo so ArgoCD syncs
-# it. Run once per app (see ../pipelineruns/*.yaml) — a single app's commit
-# shouldn't force a rebuild/redeploy of the other three.
+# image to Harbor, then write its digest into the GitOps repo's abies-dev
+# overlay. Run once per app (see ../pipelineruns/*.yaml) — a single app's
+# commit shouldn't force a rebuild/redeploy of the other three.
 #
 # Depends on the `git-clone` ClusterTask from the Tekton catalog. If it's
 # not already installed on this cluster:
@@ -12,41 +12,37 @@ metadata:
   name: build-and-deploy
 spec:
   description: >-
-    Builds one ABIES app from source and updates its image reference in
-    the GitOps repo for ArgoCD to pick up.
+    Builds one ABIES app from source, pushes it to Harbor, and writes its
+    digest into abies-gitops for ArgoCD to pick up.
   params:
     - name: app-name
       description: One of client-web, partner-web, management-web, platform-api.
     - name: app-repo-url
-      description: This repo's clone URL.
+      description: abies-application's clone URL, e.g. https://git.abies.in/abies/abies-application.git.
     - name: app-revision
       description: Git ref in the app repo to build.
       default: main
     - name: image-repo
-      description: >-
-        Registry + repository path to push to, e.g.
-        registry.internal.abies.in/abies — TODO: fill in once the
-        in-cluster registry's hostname is known.
+      description: Registry + project path to push to — harbor.abies.in/abies per docs/platform/CONTRACT.md §6.
+      default: harbor.abies.in/abies
     - name: gitops-repo-url
-      description: >-
-        TODO: fill in once the separate GitOps repo exists and its clone
-        URL is known.
+      description: abies-gitops's clone URL, e.g. https://git.abies.in/abies/abies-gitops.git.
+      default: https://git.abies.in/abies/abies-gitops.git
     - name: gitops-revision
       default: main
     - name: overlay-path
-      description: Path within the GitOps repo to this app's overlay, e.g. apps/client-web/overlays/production.
+      description: >-
+        Path within the GitOps repo whose kustomization.yaml images:
+        block gets updated — environments/dev for abies-dev (all four
+        components' image references live in this one file now, not a
+        separate overlay per app — docs/platform/CONTRACT.md §20's
+        applications/base + environments/<env> layout).
+      default: environments/dev
   workspaces:
     - name: source
       description: Holds the checked-out app repo.
     - name: gitops
       description: Holds the checked-out GitOps repo.
-    - name: git-credentials
-      description: >-
-        SSH key (as an `ssh-directory` workspace backed by a Secret)
-        authorized to push to the GitOps repo. See
-        https://hub.tekton.dev/tekton/task/git-clone's "ssh-directory"
-        workspace docs — the same credential is reused for both the clone
-        and the later push in update-gitops-image.
   tasks:
     - name: fetch-source
       taskRef: {name: git-clone, kind: ClusterTask}
@@ -56,11 +52,15 @@ spec:
         - {name: url, value: $(params.app-repo-url)}
         - {name: revision, value: $(params.app-revision)}
 
+    # No explicit auth workspace — Tekton's credential-initializer
+    # auto-configures git credentials from the Gitea Secret attached to
+    # this PipelineRun's ServiceAccount, for every step of every Task in
+    # this Pipeline (see tekton/README.md's "Gitea credentials" setup
+    # step), including update-gitops-image's push later.
     - name: fetch-gitops
       taskRef: {name: git-clone, kind: ClusterTask}
       workspaces:
         - {name: output, workspace: gitops}
-        - {name: ssh-directory, workspace: git-credentials}
       params:
         - {name: url, value: $(params.gitops-repo-url)}
         - {name: revision, value: $(params.gitops-revision)}
@@ -81,8 +81,11 @@ spec:
       workspaces:
         - {name: gitops, workspace: gitops}
       params:
-        - {name: app-name, value: $(params.app-name)}
+        # Full image name (registry + path, no tag/digest) — must match
+        # the `images[].name` Kustomize is matching against in
+        # environments/dev/kustomization.yaml exactly.
+        - {name: app-name, value: "$(params.image-repo)/$(params.app-name)"}
         - name: image
-          value: "$(params.image-repo)/$(params.app-name):$(tasks.fetch-source.results.commit)"
+          value: "$(params.image-repo)/$(params.app-name)@$(tasks.build-push.results.digest)"
         - {name: overlay-path, value: $(params.overlay-path)}
         - {name: git-revision, value: $(params.gitops-revision)}

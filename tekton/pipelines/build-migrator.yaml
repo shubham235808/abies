@@ -10,16 +10,20 @@ metadata:
 spec:
   params:
     - name: app-repo-url
+      description: abies-application's clone URL, e.g. https://git.abies.in/abies/abies-application.git.
     - {name: app-revision, default: main}
     - name: image-repo
+      description: Registry + project path — harbor.abies.in/abies per docs/platform/CONTRACT.md §6.
+      default: harbor.abies.in/abies
     - name: gitops-repo-url
+      default: https://git.abies.in/abies/abies-gitops.git
     - {name: gitops-revision, default: main}
     - name: overlay-path
-      description: Path within the GitOps repo to the migration Job's kustomization, e.g. migration/overlays/production.
+      description: Path within the GitOps repo whose kustomization.yaml images block gets updated.
+      default: environments/dev
   workspaces:
     - name: source
     - name: gitops
-    - name: git-credentials
   tasks:
     - name: fetch-source
       taskRef: {name: git-clone, kind: ClusterTask}
@@ -28,11 +32,13 @@ spec:
         - {name: url, value: $(params.app-repo-url)}
         - {name: revision, value: $(params.app-revision)}
 
+    # No explicit auth workspace — see build-and-deploy.yaml's comment on
+    # the same call; credentials come from the ServiceAccount, not a
+    # workspace.
     - name: fetch-gitops
       taskRef: {name: git-clone, kind: ClusterTask}
       workspaces:
         - {name: output, workspace: gitops}
-        - {name: ssh-directory, workspace: git-credentials}
       params:
         - {name: url, value: $(params.gitops-repo-url)}
         - {name: revision, value: $(params.gitops-revision)}
@@ -56,8 +62,8 @@ spec:
       taskRef: {name: update-gitops-image}
       workspaces: [{name: gitops, workspace: gitops}]
       params:
-        - {name: app-name, value: migrator}
+        - {name: app-name, value: "$(params.image-repo)/migrator"}
         - name: image
-          value: "$(params.image-repo)/migrator:$(tasks.fetch-source.results.commit)"
+          value: "$(params.image-repo)/migrator@$(tasks.build-push.results.digest)"
         - {name: overlay-path, value: $(params.overlay-path)}
         - {name: git-revision, value: $(params.gitops-revision)}

@@ -16,7 +16,14 @@ spec:
       description: One of client-web, partner-web, management-web, platform-api — passed as the Dockerfile's APP_NAME build-arg.
       type: string
     - name: image
-      description: Full destination image reference, including tag (e.g. registry.internal/abies/client-web:abc1234).
+      description: >-
+        Full destination image reference, including a tag (the calling
+        Pipeline uses the source commit SHA — see build-and-deploy.yaml).
+        This Task also emits the pushed image's digest as a result; the
+        GitOps repo is updated with that digest, not this tag
+        (docs/platform/CONTRACT.md §6: digest-pinned, not `:latest` or any
+        other mutable tag — the tag here exists for human traceability in
+        Harbor's UI, not as the actual deploy reference).
       type: string
     - name: dockerfile-target
       description: Dockerfile build target to stop at (runner for an app image, migrator for the migration image).
@@ -28,6 +35,9 @@ spec:
     - name: context
       type: string
       default: .
+  results:
+    - name: digest
+      description: The pushed image's sha256 digest (e.g. sha256:abc123...), read by update-gitops-image.yaml.
   workspaces:
     - name: source
       description: Checked-out app repo (see pipelines/build-and-deploy.yaml's fetch-source task).
@@ -41,9 +51,12 @@ spec:
         - --destination=$(params.image)
         - --target=$(params.dockerfile-target)
         - --build-arg=APP_NAME=$(params.app-name)
-        # The cluster's registry is reached over the internal network, not
-        # the public internet — adjust once the actual registry's TLS
-        # setup is known (drop this if it serves a trusted/real cert).
+        - --digest-file=$(results.digest.path)
+        # TODO: Harbor (docs/platform/CONTRACT.md §6) is an enterprise
+        # platform service and likely serves a trusted/internally-trusted
+        # cert — these two flags assume it doesn't. Confirm against the
+        # real registry and drop them if so; kept conservatively on until
+        # that's actually verified, not guessed.
         - --insecure
         - --skip-tls-verify
         - --cache=true

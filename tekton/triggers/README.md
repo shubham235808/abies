@@ -26,40 +26,47 @@ actually serves if these are rejected.
 - `triggerbinding-push.yaml` — extracts the commit SHA to build from the
   webhook payload (shaped for GitHub; adjust for a different git host).
 - `triggerbinding-app-*.yaml` — one tiny static binding per app
-  (app-name, overlay-path), merged with the push binding on each Trigger.
+  (just `app-name`), merged with the push binding on each Trigger.
 - `triggertemplate-app.yaml` / `triggertemplate-migrator.yaml` —
   instantiate `build-and-deploy`/`build-migrator` the same way the manual
-  `pipelineruns/*.yaml` examples do. Same `TODO-*` placeholders apply here
-  too (`app-repo-url`, `image-repo`, `gitops-repo-url`) — fill in both
-  places.
+  `pipelineruns/*.yaml` examples do, using the Pipelines' own real
+  defaults (Gitea/Harbor URLs from `docs/platform/CONTRACT.md`) — nothing
+  left to fill in here, unlike the app repo's own TODOs elsewhere.
 - `trigger-*.yaml` — one `Trigger` per app plus one for the migrator, each
-  gated by a `github` interceptor (signature validation) then a `cel`
-  interceptor (only fires if the push actually touched a path that app
-  depends on — see each file's own comment for exactly which paths).
+  gated by a `github` interceptor (signature validation — see "Still
+  open" on whether this actually works unmodified against Gitea) then a
+  `cel` interceptor (only fires if the push actually touched a path that
+  app depends on — see each file's own comment for exactly which paths).
 - `eventlistener.yaml` — ties all five Triggers to one webhook endpoint.
-- `httproute.yaml` — exposes that endpoint externally via Gateway API, on
-  its own `TODO-webhooks-domain` rather than the public app domain.
+- `httproute.yaml` — exposes that endpoint externally via Gateway API
+  (the real `abies-internal-gateway`), on its own `TODO-webhooks-domain`
+  rather than `dev.abies.in`.
 
-## Setup, once the TODOs are filled in
+## Setup, once the remaining TODOs (webhooks hostname, webhook secret) are filled in
 
 ```sh
-kubectl apply -f tekton/triggers/rbac.yaml
-kubectl apply -f tekton/triggers/secret-webhook.yaml   # after editing in the real secret value
-kubectl apply -f tekton/triggers/triggerbinding-push.yaml -f tekton/triggers/triggerbinding-app-client-web.yaml \
+kubectl apply -n abies-ci -f tekton/triggers/rbac.yaml
+kubectl apply -n abies-ci -f tekton/triggers/secret-webhook.yaml   # after editing in the real secret value
+kubectl apply -n abies-ci -f tekton/triggers/triggerbinding-push.yaml -f tekton/triggers/triggerbinding-app-client-web.yaml \
   -f tekton/triggers/triggerbinding-app-partner-web.yaml -f tekton/triggers/triggerbinding-app-management-web.yaml \
   -f tekton/triggers/triggerbinding-app-platform-api.yaml
-kubectl apply -f tekton/triggers/triggertemplate-app.yaml -f tekton/triggers/triggertemplate-migrator.yaml
-kubectl apply -f tekton/triggers/trigger-client-web.yaml -f tekton/triggers/trigger-partner-web.yaml \
+kubectl apply -n abies-ci -f tekton/triggers/triggertemplate-app.yaml -f tekton/triggers/triggertemplate-migrator.yaml
+kubectl apply -n abies-ci -f tekton/triggers/trigger-client-web.yaml -f tekton/triggers/trigger-partner-web.yaml \
   -f tekton/triggers/trigger-management-web.yaml -f tekton/triggers/trigger-platform-api.yaml \
   -f tekton/triggers/trigger-migrator.yaml
-kubectl apply -f tekton/triggers/eventlistener.yaml
-kubectl apply -f tekton/triggers/httproute.yaml
+kubectl apply -n abies-ci -f tekton/triggers/eventlistener.yaml
+kubectl apply -n abies-ci -f tekton/triggers/httproute.yaml
 ```
 
-Then register the webhook at the git host: Settings → Webhooks → Add
-webhook, payload URL `https://<TODO-webhooks-domain>/`, content type
-`application/json`, secret = the same value put in
-`abies-webhook-secret`, events = just `push`.
+Also requires the `abies-ci-sa` ServiceAccount with the Gitea credentials
+Secret attached (see `../README.md`'s "Gitea credentials" setup step) —
+the PipelineRuns these Triggers create use it the same way the manual
+ones do.
+
+Then register the webhook at Gitea: the repo's Settings → Webhooks → Add
+Webhook → Gitea, target URL `https://<TODO-webhooks-domain>/`, content
+type `application/json`, secret = the same value put in
+`abies-webhook-secret`, trigger on `push` only.
 
 ## Still open
 

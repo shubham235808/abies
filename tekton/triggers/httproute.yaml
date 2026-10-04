@@ -1,19 +1,18 @@
-# Exposes the EventListener's auto-created Service (el-abies, port 8080)
-# so the git host's webhook can reach it. TODO: same placeholders as
-# abies-gitops's per-app HTTPRoutes — the existing Gateway's name/
-# namespace and a real hostname, here a dedicated one for webhooks rather
-# than reusing the public app domain (keeps this off the same hostname
-# real users hit, and makes it trivial to lock down separately — e.g. an
-# allow-list for the git host's known webhook IP ranges — without
-# touching the app routes at all).
+# Exposes the EventListener's auto-created Service (el-abies, port 8080),
+# in whichever namespace it's applied to (abies-ci, same as everything
+# else under tekton/triggers/), so the git host's webhook can reach it.
+# TODO: real hostname for webhooks — a dedicated one rather than reusing
+# dev.abies.in (keeps this off the hostname real users hit, and makes it
+# trivial to lock down separately later, e.g. an IP allow-list for Gitea's
+# known address — without touching the app routes at all).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: abies-webhooks
 spec:
   parentRefs:
-    - name: TODO-gateway-name
-      # namespace: TODO-gateway-namespace
+    - name: abies-internal-gateway
+      namespace: abies-gateway
   hostnames:
     - TODO-webhooks-domain
   rules:

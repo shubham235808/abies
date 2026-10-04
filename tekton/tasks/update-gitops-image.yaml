@@ -16,13 +16,13 @@ spec:
     - name: image
       description: Full image reference including tag, matching what build-push-image just pushed.
     - name: overlay-path
-      description: Path within the gitops workspace to the kustomization.yaml to edit, e.g. apps/client-web/overlays/production.
+      description: Path within the gitops workspace to the kustomization.yaml to edit, e.g. environments/dev.
     - name: git-revision
       description: Branch in the GitOps repo to commit and push to.
       default: main
   workspaces:
     - name: gitops
-      description: Checked-out GitOps repo, writable, with push credentials already configured (see pipelines/build-and-deploy.yaml).
+      description: Checked-out GitOps repo, writable.
   steps:
     - name: set-image
       image: registry.k8s.io/kustomize/kustomize:v5.4.3
@@ -32,6 +32,12 @@ spec:
     - name: commit-and-push
       image: alpine/git:2.45.2
       workingDir: $(workspaces.gitops.path)
+      # No explicit credential wiring here — Tekton's credential-initializer
+      # auto-populates ~/.git-credentials from the Gitea Secret attached to
+      # the PipelineRun's ServiceAccount (see tekton/README.md's "Gitea
+      # credentials" setup step) before ANY step in ANY Task of this
+      # PipelineRun runs, including this one — same mechanism git-clone's
+      # own steps rely on, just not scoped to that one Task.
       script: |
         #!/bin/sh
         set -eu
