@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { CartButton } from '@/components/cart/cart-button';
 import { myCartItemCount } from '@abies/domain/modules/medicines/cart.service';
 import { getCurrentSession } from '@abies/domain/server/current-user';
-import { PORTAL_PATH } from '../../lib/portal-paths';
+import { PORTAL_PATH } from '@abies/design-system/components/auth/portal-paths';
 import { MobileNav } from '@abies/design-system/layouts/mobile-nav';
 import { NavLinks } from './nav-links';
 
