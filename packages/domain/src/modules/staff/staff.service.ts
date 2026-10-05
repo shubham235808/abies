@@ -4,16 +4,17 @@ import { prisma } from '../../lib/db';
 import { ConflictError, NotFoundError } from '../../lib/errors';
 import { normalizeMobile } from '../auth/auth.service';
 import { recordAuditEvent, type AuditContext } from '../../server/audit';
-import type { createStaffAccountSchema } from './staff.schemas';
+import { partnerRoleSchema, staffRoleSchema, type createStaffAccountSchema } from './staff.schemas';
 
 type CreateStaffAccountInput = z.infer<typeof createStaffAccountSchema>;
+type StaffRole = z.infer<typeof staffRoleSchema>;
 
 // None of these four roles self-onboard (auth.service.ts's requestOtp/
 // verifyOtp gate) — an admin provisions the account directly, same as the
 // demo admin/patient rows in prisma/seed.ts, just through a real UI instead
 // of a script. department is derived from role, not chosen separately,
 // since each role maps to exactly one support queue.
-const DEPARTMENT_FOR_ROLE: Record<CreateStaffAccountInput['role'], StaffDepartment> = {
+const DEPARTMENT_FOR_ROLE: Record<StaffRole, StaffDepartment> = {
   CUSTOMER_SUPPORT: 'CUSTOMER_SUPPORT',
   TECH_SUPPORT: 'TECH_SUPPORT',
   SALES: 'SALES',
@@ -25,12 +26,15 @@ export async function createStaffAccount(dto: CreateStaffAccountInput, auditCtx:
   const existing = await prisma.user.findUnique({ where: { mobile } });
   if (existing) throw new ConflictError('A user with this mobile number already exists');
 
+  const isPartnerRole = partnerRoleSchema.safeParse(dto.role).success;
   const user = await prisma.user.create({
-    data: {
-      mobile,
-      role: dto.role,
-      staffProfile: { create: { department: DEPARTMENT_FOR_ROLE[dto.role], title: dto.title } },
-    },
+    data: isPartnerRole
+      ? { mobile, role: dto.role }
+      : {
+          mobile,
+          role: dto.role,
+          staffProfile: { create: { department: DEPARTMENT_FOR_ROLE[dto.role as StaffRole], title: dto.title } },
+        },
     include: { staffProfile: true },
   });
 
@@ -39,7 +43,7 @@ export async function createStaffAccount(dto: CreateStaffAccountInput, auditCtx:
     action: 'CREATED',
     resourceType: 'User',
     resourceId: user.id,
-    metadata: { role: dto.role, department: DEPARTMENT_FOR_ROLE[dto.role] },
+    metadata: isPartnerRole ? { role: dto.role } : { role: dto.role, department: DEPARTMENT_FOR_ROLE[dto.role as StaffRole] },
   });
 
   return user;

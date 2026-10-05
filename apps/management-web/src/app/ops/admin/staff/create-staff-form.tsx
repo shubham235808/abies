@@ -13,6 +13,10 @@ const ROLE_OPTIONS = [
   { value: 'TECH_SUPPORT', label: 'Technical Support' },
   { value: 'SALES', label: 'Sales / Partner Ops' },
   { value: 'CARE_COORDINATOR', label: 'Care Coordinator' },
+  { value: 'DOCTOR', label: 'Doctor / Vaidya (partner)' },
+  { value: 'LAB', label: 'Diagnostic Lab (partner)' },
+  { value: 'PHARMACY', label: 'Pharmacy (partner)' },
+  { value: 'PANCHAKARMA_CENTRE', label: 'Panchakarma Centre (partner)' },
 ];
 
 export function CreateStaffForm() {
