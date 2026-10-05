@@ -11,7 +11,7 @@ const NAV = [
 
 export default function PanchakarmaCentreLayout({ children }: { children: React.ReactNode }) {
   return (
-    <PortalShell loginPath="/partner/login" allowedRoles={['PANCHAKARMA_CENTRE']} portalLabel="Panchakarma Centre" nav={NAV}>
+    <PortalShell loginPath="/partner/login" allowedRoles={['PANCHAKARMA_CENTRE', 'ADMIN']} portalLabel="Panchakarma Centre" nav={NAV}>
       {children}
     </PortalShell>
   );

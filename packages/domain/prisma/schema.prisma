@@ -1162,6 +1162,9 @@ model Medicine {
   // logo) rather than inventing signed-URL machinery for something that
   // was never meant to be private.
   imageUrl             String?
+  // Master (list) price in rupees, set by ops admins. Pharmacies still set their own
+  // selling price on PharmacyInventory.price. Null for products added before this.
+  mrp                  Int?
   active               Boolean             @default(true)
   // ENTERPRISE-7 — additive, for GST classification. hsnCode drives
   // GstRateConfig lookup at POS sale time; category is a lighter-weight

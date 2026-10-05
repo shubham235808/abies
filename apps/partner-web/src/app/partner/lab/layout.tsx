@@ -10,7 +10,7 @@ const NAV = [
 
 export default function LabLayout({ children }: { children: React.ReactNode }) {
   return (
-    <PortalShell loginPath="/partner/login" allowedRoles={['LAB']} portalLabel="Diagnostic Lab" nav={NAV}>
+    <PortalShell loginPath="/partner/login" allowedRoles={['LAB', 'ADMIN']} portalLabel="Diagnostic Lab" nav={NAV}>
       {children}
     </PortalShell>
   );

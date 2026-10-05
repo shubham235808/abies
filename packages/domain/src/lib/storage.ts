@@ -56,6 +56,15 @@ export async function getSignedDownloadUrl(key: string, expiresInSeconds = 300):
   });
 }
 
+// Reads an object's bytes for the few routes that stream a file through the
+// app (e.g. public catalogue images). Callers must restrict the key themselves.
+export async function getObjectBytes(key: string): Promise<{ body: Uint8Array; contentType: string | undefined }> {
+  const env = getEnv();
+  const res = await s3().send(new GetObjectCommand({ Bucket: env.STORAGE_BUCKET, Key: key }));
+  const body = await res.Body!.transformToByteArray();
+  return { body, contentType: res.ContentType };
+}
+
 export async function deleteObject(key: string): Promise<void> {
   const env = getEnv();
   await s3().send(new DeleteObjectCommand({ Bucket: env.STORAGE_BUCKET, Key: key }));

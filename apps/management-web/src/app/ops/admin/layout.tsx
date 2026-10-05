@@ -4,6 +4,7 @@ const NAV = [
   { href: '/ops/admin', label: 'Overview' },
   { href: '/ops/admin/verification', label: 'Verification Centre' },
   { href: '/ops/admin/staff', label: 'Staff' },
+  { href: '/ops/admin/products', label: 'Products' },
   { href: '/ops/admin/refunds', label: 'Refunds' },
   { href: '/ops/admin/audit', label: 'Audit Log' },
   { href: '/ops/admin/configuration', label: 'Configuration' },
