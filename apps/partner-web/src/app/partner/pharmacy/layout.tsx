@@ -12,7 +12,7 @@ const NAV = [
 
 export default function PharmacyLayout({ children }: { children: React.ReactNode }) {
   return (
-    <PortalShell allowedRoles={['PHARMACY']} portalLabel="Pharmacy" nav={NAV}>
+    <PortalShell loginPath="/partner/login" allowedRoles={['PHARMACY']} portalLabel="Pharmacy" nav={NAV}>
       {children}
     </PortalShell>
   );

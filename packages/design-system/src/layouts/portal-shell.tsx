@@ -21,12 +21,15 @@ export interface PortalNavItem {
 export async function PortalShell({
   allowedRoles,
   portalLabel,
+  loginPath = '/login',
   nav,
   requireMfa,
   children,
 }: {
   allowedRoles: UserRole[];
   portalLabel: string;
+  /** Where logged-out or wrong-role visitors go: the portal's own sign-in. */
+  loginPath?: string;
   nav: PortalNavItem[];
   /** Redirect to the MFA step instead of rendering when the session hasn't
    * completed it yet — e.g. the admin portal. Route handlers enforce this
@@ -37,9 +40,9 @@ export async function PortalShell({
   children: React.ReactNode;
 }) {
   const session = await getCurrentSession();
-  if (!session) redirect('/login');
-  if (!allowedRoles.includes(session.user.role)) redirect('/login');
-  if (requireMfa && !session.mfaVerified) redirect('/login/mfa');
+  if (!session) redirect(loginPath);
+  if (!allowedRoles.includes(session.user.role)) redirect(loginPath);
+  if (requireMfa && !session.mfaVerified) redirect(`${loginPath}/mfa`);
 
   return (
     <div className="min-h-screen bg-[#f8f6f9]">

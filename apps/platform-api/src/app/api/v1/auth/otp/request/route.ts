@@ -6,7 +6,7 @@ import { errorResponse } from '@abies/domain/lib/errors';
 export async function POST(req: Request) {
   try {
     const body = requestOtpSchema.parse(await req.json());
-    const result = await requestOtp(body.mobile, body.role);
+    const result = await requestOtp({ mobile: body.mobile, email: body.email }, body.role);
     return NextResponse.json(result);
   } catch (error) {
     return errorResponse(error, req);

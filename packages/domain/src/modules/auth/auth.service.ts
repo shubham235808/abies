@@ -27,18 +27,28 @@ export interface RequestOtpResult {
   devOtp?: string;
 }
 
-export async function requestOtp(rawMobile: string, role: UserRole): Promise<RequestOtpResult> {
+export async function requestOtp(
+  identifier: { mobile?: string; email?: string },
+  role: UserRole,
+): Promise<RequestOtpResult> {
   const env = getEnv();
-  const mobile = normalizeMobile(rawMobile);
 
-  // Looked up for every role now (previously skipped for PATIENT, since
-  // nothing needed it before) — a returning user's own email, when they
-  // have one on file, is how OTP_DELIVERY_CHANNEL=email below knows where
-  // to send the code. A brand-new patient has no User row yet at this
-  // point regardless (they're created on first OTP verify), so email
-  // delivery simply isn't available for that case — not fixable here, see
-  // docs/platform/SECURITY-GAP-ANALYSIS.md §1.
-  const user = await prisma.user.findUnique({ where: { mobile } });
+  // Email login only works for an existing account with that email on file.
+  // The challenge itself stays keyed on the account's mobile, so verifyOtp
+  // doesn't need to know which identifier was used.
+  let user: Awaited<ReturnType<typeof prisma.user.findUnique>> = null;
+  let mobile: string;
+  if (identifier.email) {
+    const email = identifier.email.trim().toLowerCase();
+    user = await prisma.user.findUnique({ where: { email } });
+    if (!user) throw new BadRequestError('No account is registered with this email');
+    mobile = user.mobile;
+  } else {
+    mobile = normalizeMobile(identifier.mobile ?? '');
+    // Looked up for every role (previously skipped for PATIENT). A returning
+    // user's email, when on file, is where a code goes when the channel is email.
+    user = await prisma.user.findUnique({ where: { mobile } });
+  }
 
   if (role !== 'PATIENT') {
     const selfOnboardingAllowed =
@@ -73,7 +83,10 @@ export async function requestOtp(rawMobile: string, role: UserRole): Promise<Req
   // notify() never throws, so a delivery failure here doesn't block the
   // request. Silently does nothing when there's no user yet or no email on
   // file; the dev-bypass remains the only way to get the code in that case.
-  if (env.OTP_DELIVERY_CHANNEL === 'email' && user?.email) {
+  // Signing in by email always delivers to that email; signing in by mobile
+  // follows the configured channel.
+  const deliverByEmail = Boolean(identifier.email) || env.OTP_DELIVERY_CHANNEL === 'email';
+  if (deliverByEmail && user?.email) {
     await notify(user.id, 'EMAIL', 'auth.otp_code', { otp, expiresInSeconds: env.OTP_TTL_SECONDS });
   }
 

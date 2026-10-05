@@ -16,7 +16,7 @@ const NAV = [
 
 export default function DoctorLayout({ children }: { children: React.ReactNode }) {
   return (
-    <PortalShell allowedRoles={['DOCTOR']} portalLabel="Doctor" nav={NAV}>
+    <PortalShell loginPath="/partner/login" allowedRoles={['DOCTOR']} portalLabel="Doctor" nav={NAV}>
       {children}
     </PortalShell>
   );

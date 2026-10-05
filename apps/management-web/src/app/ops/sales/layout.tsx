@@ -7,7 +7,7 @@ const NAV = [
 
 export default function SalesLayout({ children }: { children: React.ReactNode }) {
   return (
-    <PortalShell allowedRoles={['SALES']} portalLabel="Sales / Partner Ops" nav={NAV}>
+    <PortalShell loginPath="/ops/login" allowedRoles={['SALES']} portalLabel="Sales / Partner Ops" nav={NAV}>
       {children}
     </PortalShell>
   );
