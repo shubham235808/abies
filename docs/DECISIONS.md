@@ -44,8 +44,11 @@ changed. Specifically preserved:
 - Mobile OTP normalization (`+91` + 10-digit, `[6-9]` leading digit), HMAC-peppered
   OTP hash, cooldown, max attempts, dev-mode OTP bypass gated on `NODE_ENV`.
 - Role-scoped account provisioning: only `PATIENT` self-registers freely on
-  first OTP verify; other roles require either an admin-provisioned account or
-  (for `DOCTOR`) the `ALLOW_DOCTOR_SELF_ONBOARDING` flag.
+  first OTP verify; every other role is provisioned by an ops admin in the ops
+  portal (`/api/v1/admin/staff`), which covers the staff roles and the partner
+  roles (DOCTOR, LAB, PHARMACY, PANCHAKARMA_CENTRE). The `ALLOW_*_SELF_ONBOARDING`
+  flags default to `false` (updated 2026-10-05: access to partner portals is
+  granted from the ops portal, not self-onboarding).
 - Session model: refresh token stored as SHA-256 hash only, sliding refresh,
   `mfaVerified` flag gates admin access to privileged actions.
 - Admin MFA required by default (`ADMIN_MFA_REQUIRED`), dev-only static code

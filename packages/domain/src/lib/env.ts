@@ -45,10 +45,10 @@ const envSchema = z.object({
   // target and has no real SMS/MFA provider to receive a code with. The
   // real deployment's .env must never set this to true.
   ALLOW_DEV_AUTH_BYPASS_IN_PROD: z.coerce.boolean().default(false),
-  ALLOW_DOCTOR_SELF_ONBOARDING: z.coerce.boolean().default(true),
-  ALLOW_LAB_SELF_ONBOARDING: z.coerce.boolean().default(true),
-  ALLOW_PHARMACY_SELF_ONBOARDING: z.coerce.boolean().default(true),
-  ALLOW_PANCHAKARMA_CENTRE_SELF_ONBOARDING: z.coerce.boolean().default(true),
+  ALLOW_DOCTOR_SELF_ONBOARDING: z.coerce.boolean().default(false),
+  ALLOW_LAB_SELF_ONBOARDING: z.coerce.boolean().default(false),
+  ALLOW_PHARMACY_SELF_ONBOARDING: z.coerce.boolean().default(false),
+  ALLOW_PANCHAKARMA_CENTRE_SELF_ONBOARDING: z.coerce.boolean().default(false),
   APP_BASE_URL: z.string().url(),
   UPLOAD_MAX_BYTES: z.coerce.number().default(10 * 1024 * 1024),
 
