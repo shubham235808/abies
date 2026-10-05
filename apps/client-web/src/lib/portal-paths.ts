@@ -1,1 +1,1 @@
-export { PORTAL_PATH } from '@abies/design-system/lib/portal-paths';
+export { PORTAL_PATH } from '@abies/design-system/components/auth/portal-paths';

@@ -11,7 +11,7 @@ import { Input, Label, FieldError } from '../ui/input';
 import { Alert } from '../ui/alert';
 import { MfaForm } from './mfa-form';
 import { api, ApiError } from '../../api-client';
-import { PORTAL_PATH } from '../../lib/portal-paths';
+import { PORTAL_PATH } from './portal-paths';
 
 export interface LoginRoleOption {
   value: string;
