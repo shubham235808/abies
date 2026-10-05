@@ -8,7 +8,12 @@
     "./cn": "./src/cn.ts",
     "./error-correlation": "./src/error-correlation.ts",
     "./globals.css": "./src/globals.css",
-    "./*": ["./src/*.tsx", "./src/*.ts", "./src/*"]
+    "./components/auth/portal-paths": "./src/components/auth/portal-paths.ts",
+    "./*": [
+      "./src/*.tsx",
+      "./src/*.ts",
+      "./src/*"
+    ]
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
