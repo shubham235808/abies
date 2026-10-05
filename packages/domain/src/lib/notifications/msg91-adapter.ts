@@ -2,9 +2,8 @@ import { getEnv } from '../env';
 import type { NotificationAdapter, NotificationRecipient, SendResult } from './types';
 
 // MSG91 transactional email (https://control.msg91.com/api/v5/email/send).
-// The recipient's email and name come from the request: the email is the one
-// the user signed in with, and the name is the account name when there is one,
-// otherwise the email itself. Template variable names are configured, not
+// The recipient's email is the one the user signed in with. The name is the
+// account's name, falling back to the email when none was given. Template variable names are configured, not
 // hard-coded, because they're whatever the template in the MSG91 dashboard uses.
 
 const ENDPOINT = 'https://control.msg91.com/api/v5/email/send';
@@ -68,7 +67,7 @@ export function createMsg91Adapter(): NotificationAdapter {
           body: JSON.stringify({
             recipients: [
               {
-                to: [{ email: recipient.email, name: recipient.email }],
+                to: [{ email: recipient.email, name: recipient.name?.trim() || recipient.email }],
                 variables,
               },
             ],

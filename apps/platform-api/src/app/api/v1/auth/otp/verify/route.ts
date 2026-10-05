@@ -10,10 +10,13 @@ export async function POST(req: Request) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? undefined;
     const userAgent = req.headers.get('user-agent') ?? undefined;
 
-    const { token, session, mfaRequired } = await verifyOtp(body.requestId, body.otp, body.acceptedTerms, {
-      ip,
-      userAgent,
-    });
+    const { token, session, mfaRequired } = await verifyOtp(
+      body.requestId,
+      body.otp,
+      body.acceptedTerms,
+      { ip, userAgent },
+      body.name,
+    );
 
     const response = NextResponse.json({ user: session.user, mfaRequired });
     response.cookies.set(SESSION_COOKIE_NAME, token, sessionCookieOptions(session.expiresAt));

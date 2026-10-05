@@ -34,7 +34,7 @@ export async function notify(
   const user = await prisma.user.findUnique({ where: { id: userId } });
   const adapter = getAdapter(channel as ExternalChannel);
   const result = adapter
-    ? await adapter.send({ userId, mobile: user?.mobile, email: user?.email }, templateKey, payload)
+    ? await adapter.send({ userId, mobile: user?.mobile, email: user?.email, name: user?.name }, templateKey, payload)
     : unavailableResult(channel as ExternalChannel, providerNameFor(channel));
 
   if (result.ok) {

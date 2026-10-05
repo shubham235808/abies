@@ -29,9 +29,10 @@ export async function createStaffAccount(dto: CreateStaffAccountInput, auditCtx:
   const isPartnerRole = partnerRoleSchema.safeParse(dto.role).success;
   const user = await prisma.user.create({
     data: isPartnerRole
-      ? { mobile, role: dto.role }
+      ? { mobile, name: dto.name, role: dto.role }
       : {
           mobile,
+          name: dto.name,
           role: dto.role,
           staffProfile: { create: { department: DEPARTMENT_FOR_ROLE[dto.role as StaffRole], title: dto.title } },
         },

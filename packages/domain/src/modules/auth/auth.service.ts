@@ -24,6 +24,7 @@ function otpHash(mobile: string, otp: string): string {
 export interface RequestOtpResult {
   requestId: string;
   expiresInSeconds: number;
+  isNewAccount: boolean;
   devOtp?: string;
 }
 
@@ -93,6 +94,8 @@ export async function requestOtp(
   return {
     requestId: challenge.id,
     expiresInSeconds: env.OTP_TTL_SECONDS,
+    // The sign-in form asks for a name when this is true (sign-up).
+    isNewAccount: !user,
     ...(!lockedDown && env.EXPOSE_DEV_OTP ? { devOtp: otp } : {}),
   };
 }
@@ -108,6 +111,7 @@ export async function verifyOtp(
   otp: string,
   acceptedTerms: boolean,
   meta: { ip?: string; userAgent?: string },
+  name?: string,
 ): Promise<VerifyOtpResult> {
   if (!acceptedTerms) throw new BadRequestError('Terms and privacy notice must be accepted');
 
@@ -127,6 +131,10 @@ export async function verifyOtp(
   const env = getEnv();
   let user = await prisma.user.findUnique({ where: { mobile: challenge.mobile } });
   if (!user) {
+    const trimmedName = name?.trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      throw new BadRequestError('Enter your name to create your account');
+    }
     const selfOnboardingAllowed =
       (challenge.role === 'DOCTOR' && env.ALLOW_DOCTOR_SELF_ONBOARDING) ||
       (challenge.role === 'LAB' && env.ALLOW_LAB_SELF_ONBOARDING) ||
@@ -138,9 +146,9 @@ export async function verifyOtp(
     user =
       challenge.role === 'PATIENT'
         ? await prisma.user.create({
-            data: { mobile: challenge.mobile, role: 'PATIENT', patientProfile: { create: {} } },
+            data: { mobile: challenge.mobile, name: trimmedName, role: 'PATIENT', patientProfile: { create: {} } },
           })
-        : await prisma.user.create({ data: { mobile: challenge.mobile, role: challenge.role } });
+        : await prisma.user.create({ data: { mobile: challenge.mobile, name: trimmedName, role: challenge.role } });
   }
   if (user.role !== challenge.role) throw new ForbiddenError('Selected role does not match this account');
 

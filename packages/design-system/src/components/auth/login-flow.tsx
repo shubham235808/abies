@@ -35,7 +35,7 @@ export function LoginFlow({
 }) {
   type Step =
     | { name: 'identifier' }
-    | { name: 'otp'; requestId: string; role: string; devOtp?: string }
+    | { name: 'otp'; requestId: string; role: string; devOtp?: string; isNewAccount: boolean }
     | { name: 'mfa'; role: string };
 
   const [step, setStep] = useState<Step>({ name: 'identifier' });
@@ -62,9 +62,9 @@ export function LoginFlow({
             <IdentifierStepForm
               roles={roles}
               onError={setFormError}
-              onSent={(requestId, role, devOtp) => {
+              onSent={(requestId, role, devOtp, isNewAccount) => {
                 setFormError(null);
-                setStep({ name: 'otp', requestId, role, devOtp });
+                setStep({ name: 'otp', requestId, role, devOtp, isNewAccount });
               }}
             />
           )}
@@ -72,6 +72,7 @@ export function LoginFlow({
             <OtpStepForm
               requestId={step.requestId}
               devOtp={step.devOtp}
+              isNewAccount={step.isNewAccount}
               onError={setFormError}
               onBack={() => setStep({ name: 'identifier' })}
               onVerified={(role, mfaRequired) => {
@@ -97,7 +98,7 @@ function IdentifierStepForm({
   onError,
 }: {
   roles: LoginRoleOption[];
-  onSent: (requestId: string, role: string, devOtp?: string) => void;
+  onSent: (requestId: string, role: string, devOtp: string | undefined, isNewAccount: boolean) => void;
   onError: (message: string) => void;
 }) {
   const schema = z.object({
@@ -122,8 +123,11 @@ function IdentifierStepForm({
       ? { role: data.role, email: identifier }
       : { role: data.role, mobile: identifier };
     try {
-      const result = await api.post<{ requestId: string; devOtp?: string }>('/api/v1/auth/otp/request', body);
-      onSent(result.requestId, data.role, result.devOtp);
+      const result = await api.post<{ requestId: string; devOtp?: string; isNewAccount: boolean }>(
+        '/api/v1/auth/otp/request',
+        body,
+      );
+      onSent(result.requestId, data.role, result.devOtp, result.isNewAccount);
     } catch (err) {
       onError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
     }
@@ -169,12 +173,14 @@ function IdentifierStepForm({
 function OtpStepForm({
   requestId,
   devOtp,
+  isNewAccount,
   onVerified,
   onError,
   onBack,
 }: {
   requestId: string;
   devOtp?: string;
+  isNewAccount: boolean;
   onVerified: (role: string, mfaRequired: boolean) => void;
   onError: (message: string) => void;
   onBack: () => void;
@@ -182,6 +188,10 @@ function OtpStepForm({
   const schema = z.object({
     otp: z.string().min(4, 'Enter the code you received').max(8),
     acceptedTerms: z.literal(true, { message: 'You must accept the Terms and Privacy Notice to continue' }),
+    // Only a new account asks for a name; an existing one signs in without it.
+    name: isNewAccount
+      ? z.string().trim().min(2, 'Enter your full name').max(120)
+      : z.string().trim().max(120).optional(),
   });
   type OtpStep = z.infer<typeof schema>;
 
@@ -209,6 +219,13 @@ function OtpStepForm({
         <Alert tone="info">
           Development mode — your code is <span className="font-mono font-semibold">{devOtp}</span>.
         </Alert>
+      )}
+      {isNewAccount && (
+        <div>
+          <Label htmlFor="name">Your full name</Label>
+          <Input id="name" autoComplete="name" placeholder="As on your ID" {...register('name')} />
+          <FieldError>{errors.name?.message}</FieldError>
+        </div>
       )}
       <div>
         <Label htmlFor="otp">Enter the 6-digit code</Label>

@@ -9,6 +9,7 @@ export const partnerRoleSchema = z.enum(['DOCTOR', 'LAB', 'PHARMACY', 'PANCHAKAR
 export const provisionableRoleSchema = z.enum([...staffRoleSchema.options, ...partnerRoleSchema.options] as const);
 
 export const createStaffAccountSchema = z.object({
+  name: z.string().trim().min(2, 'Enter the person\'s full name').max(120),
   mobile: z.string().min(10).max(15),
   role: provisionableRoleSchema,
   title: z.string().max(120).optional(),

@@ -18,6 +18,8 @@ export const verifyOtpSchema = z.object({
   requestId: z.string().min(1),
   otp: z.string().min(4).max(8),
   acceptedTerms: z.boolean(),
+  // Required by the server only when this sign-in creates the account.
+  name: z.string().trim().max(120).optional(),
 });
 
 export const verifyMfaSchema = z.object({

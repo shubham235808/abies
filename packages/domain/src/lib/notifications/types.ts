@@ -4,6 +4,7 @@ export interface NotificationRecipient {
   userId: string;
   mobile?: string | null;
   email?: string | null;
+  name?: string | null;
 }
 
 export type SendResult = { ok: true; providerRef: string } | { ok: false; error: string };

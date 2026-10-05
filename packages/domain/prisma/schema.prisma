@@ -52,6 +52,8 @@ model User {
   id                         String                      @id @default(cuid())
   mobile                     String                      @unique
   email                      String?                     @unique
+  // Full name, asked for when the account is created (sign-up or admin provisioning).
+  name                       String?
   role                       UserRole                    @default(PATIENT)
   status                     UserStatus                  @default(ACTIVE)
   mfaEnabled                 Boolean                     @default(false)

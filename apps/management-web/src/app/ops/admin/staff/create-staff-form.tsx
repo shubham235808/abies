@@ -22,6 +22,7 @@ const ROLE_OPTIONS = [
 export function CreateStaffForm() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [role, setRole] = useState('CUSTOMER_SUPPORT');
   const [title, setTitle] = useState('');
@@ -33,8 +34,9 @@ export function CreateStaffForm() {
     setBusy(true);
     setError(null);
     try {
-      await api.post('/api/v1/admin/staff', { mobile, role, title: title || undefined });
+      await api.post('/api/v1/admin/staff', { name, mobile, role, title: title || undefined });
       setOpen(false);
+      setName('');
       setMobile('');
       setTitle('');
       router.refresh();
@@ -76,6 +78,10 @@ export function CreateStaffForm() {
         <div>
           <Label htmlFor="title">Title (optional)</Label>
           <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="L1 Support Agent" />
+        </div>
+        <div>
+          <Label htmlFor="name">Full name</Label>
+          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" required minLength={2} />
         </div>
         <div className="sm:col-span-2">
           <Label htmlFor="mobile">Mobile number</Label>
