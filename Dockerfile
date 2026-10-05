@@ -3,7 +3,7 @@
 # built via `docker build --build-arg APP_NAME=<app> .`. Each app's own
 # next.config.mjs sets output: 'standalone', so the trace/copy mechanics
 # below are identical regardless of which app is selected.
-FROM node:22-alpine AS base
+FROM harbor.abies.in/dockerhub/library/node:22-alpine AS base
 WORKDIR /app
 # node:22-alpine ships corepack with pnpm already shimmed; corepack
 # downloads the exact version package.json's "packageManager" field pins

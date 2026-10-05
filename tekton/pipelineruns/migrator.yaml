@@ -6,7 +6,8 @@ kind: PipelineRun
 metadata:
   generateName: build-migrator-
 spec:
-  serviceAccountName: abies-ci-sa
+  taskRunTemplate:
+    serviceAccountName: abies-ci-sa
   pipelineRef: {name: build-migrator}
   params:
     - {name: app-repo-url, value: "https://git.abies.in/abies/abies-application.git"}
@@ -14,6 +15,8 @@ spec:
     - name: source
       volumeClaimTemplate:
         spec: {accessModes: ["ReadWriteOnce"], resources: {requests: {storage: 1Gi}}}
+    - name: ssl-ca
+      configMap: {name: abies-internal-ca}
     - name: gitops
       volumeClaimTemplate:
         spec: {accessModes: ["ReadWriteOnce"], resources: {requests: {storage: 256Mi}}}

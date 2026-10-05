@@ -25,12 +25,18 @@ spec:
       description: Checked-out GitOps repo, writable.
   steps:
     - name: set-image
-      image: registry.k8s.io/kustomize/kustomize:v5.4.3
+      image: harbor.abies.in/k8s/kustomize/kustomize:v5.4.3
+      # Run as the same UID git-clone uses (65532). The workspace is NFS with
+      # root_squash, so a root step can't write files that the clone created.
+      securityContext: {runAsUser: 65532, runAsGroup: 65532}
       workingDir: $(workspaces.gitops.path)/$(params.overlay-path)
       command: ["kustomize"]
       args: ["edit", "set", "image", "$(params.app-name)=$(params.image)"]
     - name: commit-and-push
-      image: alpine/git:2.45.2
+      image: harbor.abies.in/dockerhub/alpine/git:2.45.2
+      # Run as the same UID git-clone uses (65532). The workspace is NFS with
+      # root_squash, so a root step can't write files that the clone created.
+      securityContext: {runAsUser: 65532, runAsGroup: 65532}
       workingDir: $(workspaces.gitops.path)
       # No explicit credential wiring here — Tekton's credential-initializer
       # auto-populates ~/.git-credentials from the Gitea Secret attached to

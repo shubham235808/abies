@@ -19,13 +19,16 @@ spec:
       metadata:
         generateName: "build-deploy-$(tt.params.app-name)-"
       spec:
-        serviceAccountName: abies-ci-sa
+        taskRunTemplate:
+          serviceAccountName: abies-ci-sa
         pipelineRef: {name: build-and-deploy}
         params:
           - {name: app-name, value: $(tt.params.app-name)}
           - {name: app-repo-url, value: "https://git.abies.in/abies/abies-application.git"}
           - {name: app-revision, value: $(tt.params.revision)}
         workspaces:
+          - name: ssl-ca
+            configMap: {name: abies-internal-ca}
           - name: source
             volumeClaimTemplate:
               spec: {accessModes: ["ReadWriteOnce"], resources: {requests: {storage: 1Gi}}}

@@ -14,7 +14,8 @@ kind: PipelineRun
 metadata:
   generateName: build-deploy-management-web-
 spec:
-  serviceAccountName: abies-ci-sa
+  taskRunTemplate:
+    serviceAccountName: abies-ci-sa
   pipelineRef: {name: build-and-deploy}
   params:
     - {name: app-name, value: management-web}
@@ -25,6 +26,8 @@ spec:
         spec:
           accessModes: ["ReadWriteOnce"]
           resources: {requests: {storage: 1Gi}}
+    - name: ssl-ca
+      configMap: {name: abies-internal-ca}
     - name: gitops
       volumeClaimTemplate:
         spec:

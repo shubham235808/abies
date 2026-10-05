@@ -46,6 +46,8 @@ spec:
       description: Holds the checked-out app repo.
     - name: gitops
       description: Holds the checked-out GitOps repo.
+    # CA bundle for git-clone over HTTPS to git.abies.in (internal Root CA).
+    - name: ssl-ca
   tasks:
     - name: fetch-source
       taskRef: {name: git-clone, kind: Task}
@@ -54,6 +56,7 @@ spec:
       params:
         - {name: url, value: $(params.app-repo-url)}
         - {name: revision, value: $(params.app-revision)}
+        - {name: crtFileName, value: abies-internal-root-ca.crt}
 
     # No explicit auth workspace — Tekton's credential-initializer
     # auto-configures git credentials from the Gitea Secret attached to
@@ -64,9 +67,11 @@ spec:
       taskRef: {name: git-clone, kind: Task}
       workspaces:
         - {name: output, workspace: gitops}
+        - {name: ssl-ca-directory, workspace: ssl-ca}
       params:
         - {name: url, value: $(params.gitops-repo-url)}
         - {name: revision, value: $(params.gitops-revision)}
+        - {name: crtFileName, value: abies-internal-root-ca.crt}
 
     - name: build-push
       runAfter: [fetch-source]

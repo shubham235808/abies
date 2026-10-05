@@ -59,7 +59,7 @@ spec:
       description: Checked-out app repo (see pipelines/build-and-deploy.yaml's fetch-source task).
   steps:
     - name: build-and-push
-      image: ghcr.io/osscontainertools/kaniko:latest
+      image: harbor.abies.in/ghcr/osscontainertools/kaniko:latest
       command: ["/kaniko/executor"]
       workingDir: $(workspaces.source.path)
       args:
