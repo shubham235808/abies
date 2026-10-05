@@ -82,6 +82,13 @@ const envSchema = z.object({
   EMAIL_SMTP_USER: z.string().optional(),
   EMAIL_SMTP_PASSWORD: z.string().optional(),
   EMAIL_FROM_ADDRESS: z.string().optional(),
+  // MSG91 transactional email (EMAIL_PROVIDER=msg91). The auth key is a secret;
+  // the template and variable names come from the MSG91 dashboard.
+  EMAIL_MSG91_AUTH_KEY: z.string().optional(),
+  EMAIL_MSG91_DOMAIN: z.string().optional(),
+  EMAIL_MSG91_TEMPLATE_ID: z.string().optional(),
+  EMAIL_MSG91_OTP_VARIABLE: z.string().optional(),
+  EMAIL_MSG91_EXPIRY_VARIABLE: z.string().optional(),
 
   // Which channel requestOtp() (modules/auth/auth.service.ts) actually
   // dispatches the code through, once a user+matching contact method

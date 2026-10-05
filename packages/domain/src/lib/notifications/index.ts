@@ -1,6 +1,7 @@
 import { getEnv, isLockedDownDeployment } from '../env';
 import { createMockAdapter } from './mock-adapter';
 import { createSmtpAdapter } from './smtp-adapter';
+import { createMsg91Adapter } from './msg91-adapter';
 import type { ExternalChannel, NotificationAdapter, SendResult } from './types';
 
 const PROVIDER_ENV_KEY: Record<ExternalChannel, 'SMS_PROVIDER' | 'EMAIL_PROVIDER' | 'WHATSAPP_PROVIDER'> = {
@@ -22,6 +23,10 @@ export function getAdapter(channel: ExternalChannel): NotificationAdapter | null
 
   if (channel === 'EMAIL' && provider === 'smtp') {
     return createSmtpAdapter();
+  }
+
+  if (channel === 'EMAIL' && provider === 'msg91') {
+    return createMsg91Adapter();
   }
 
   if (provider === 'mock') {
