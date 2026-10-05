@@ -31,6 +31,11 @@ enum UserRole {
   TECH_SUPPORT
   SALES
   CARE_COORDINATOR
+  // CRM roles (docs/CRM-IMPLEMENTATION-PLAN.md D1). SALES is the sales agent.
+  CRM_ADMIN
+  SALES_MANAGER
+  MARKETING
+  AUDITOR
 }
 
 enum UserStatus {
@@ -92,8 +97,116 @@ model User {
   refundsRequested           Refund[]                    @relation("RefundRequester")
   refundsApproved            Refund[]                    @relation("RefundApprover")
   hospitalAdmissions         HospitalAdmission[]
+  crmLeadsAssigned           CrmLead[]                   @relation("CrmLeadAssignee")
+  crmLeadsCreated            CrmLead[]                   @relation("CrmLeadCreator")
+  crmActivities              CrmActivity[]               @relation("CrmActivityActor")
+  crmAssignmentsFrom         CrmAssignment[]             @relation("CrmAssignmentFrom")
+  crmAssignmentsTo           CrmAssignment[]             @relation("CrmAssignmentTo")
+  crmAssignmentsActor        CrmAssignment[]             @relation("CrmAssignmentActor")
 
   @@index([role, status])
+}
+
+// ---------------------------------------------------------------------------
+// CRM (Phase 1). Leads are prospects, separate from PartnerLead (partner
+// onboarding). Clinical and financial records are referenced, never copied.
+// Stages are an enum for now; configurable stages come later (D4).
+// ---------------------------------------------------------------------------
+
+enum CrmLeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  FOLLOW_UP
+  CONVERTED
+  LOST
+  DUPLICATE
+  INVALID
+  DO_NOT_CONTACT
+}
+
+model CrmLead {
+  id                String       @id @default(cuid())
+  firstName         String
+  lastName          String?
+  mobile            String?
+  email             String?
+  city              String?
+  state             String?
+  pinCode           String?
+  preferredLanguage String?
+  source            String
+  campaign          String?
+  interestedService String?
+  stage             CrmLeadStage @default(NEW)
+  priority          String       @default("MEDIUM")
+  lastContactedAt   DateTime?
+  nextFollowUpAt    DateTime?
+  convertedAt       DateTime?
+  lostReason        String?
+  assignedToId     String?
+  assignedTo        User?        @relation("CrmLeadAssignee", fields: [assignedToId], references: [id])
+  createdById       String
+  createdBy         User         @relation("CrmLeadCreator", fields: [createdById], references: [id])
+  tags              CrmLeadTag[]
+  activities        CrmActivity[]
+  assignments       CrmAssignment[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([stage, assignedToId])
+  @@index([mobile])
+  @@index([email])
+  @@index([createdAt])
+}
+
+model CrmTag {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  createdAt DateTime     @default(now())
+  leads     CrmLeadTag[]
+}
+
+model CrmLeadTag {
+  leadId String
+  tagId  String
+  lead   CrmLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tag    CrmTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, tagId])
+}
+
+// Notes, calls, messages and stage/assignment events on a lead. Type is a
+// validated string (NOTE, CALL, WHATSAPP, SMS, EMAIL, MEETING, STAGE_CHANGE,
+// ASSIGNMENT, CREATED) so new types don't need a migration.
+model CrmActivity {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      CrmLead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type      String
+  summary   String
+  actorId   String?
+  actor     User?    @relation("CrmActivityActor", fields: [actorId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+model CrmAssignment {
+  id         String   @id @default(cuid())
+  leadId     String
+  lead       CrmLead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  fromUserId String?
+  fromUser   User?    @relation("CrmAssignmentFrom", fields: [fromUserId], references: [id])
+  toUserId   String?
+  toUser     User?    @relation("CrmAssignmentTo", fields: [toUserId], references: [id])
+  actorId    String
+  actor      User     @relation("CrmAssignmentActor", fields: [actorId], references: [id])
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  @@index([leadId, createdAt])
 }
 
 // Non-patient/non-doctor operational roles (LAB, PHARMACY,

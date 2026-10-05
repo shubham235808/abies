@@ -12,6 +12,10 @@ export default function OpsLoginPage() {
         { value: 'SALES', label: 'Sales / Partner Ops' },
         { value: 'CARE_COORDINATOR', label: 'Care Coordinator' },
         { value: 'ADMIN', label: 'Administrator' },
+        { value: 'CRM_ADMIN', label: 'CRM Administrator' },
+        { value: 'SALES_MANAGER', label: 'Sales Manager' },
+        { value: 'MARKETING', label: 'Marketing' },
+        { value: 'AUDITOR', label: 'Auditor' },
       ]}
     />
   );

@@ -17,6 +17,10 @@ const ROLE_OPTIONS = [
   { value: 'LAB', label: 'Diagnostic Lab (partner)' },
   { value: 'PHARMACY', label: 'Pharmacy (partner)' },
   { value: 'PANCHAKARMA_CENTRE', label: 'Panchakarma Centre (partner)' },
+  { value: 'CRM_ADMIN', label: 'CRM Administrator' },
+  { value: 'SALES_MANAGER', label: 'Sales Manager' },
+  { value: 'MARKETING', label: 'Marketing' },
+  { value: 'AUDITOR', label: 'Auditor' },
 ];
 
 export function CreateStaffForm() {

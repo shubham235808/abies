@@ -4,7 +4,7 @@ import { prisma } from '../../lib/db';
 import { ConflictError, NotFoundError } from '../../lib/errors';
 import { normalizeMobile } from '../auth/auth.service';
 import { recordAuditEvent, type AuditContext } from '../../server/audit';
-import { partnerRoleSchema, staffRoleSchema, type createStaffAccountSchema } from './staff.schemas';
+import { crmRoleSchema, partnerRoleSchema, staffRoleSchema, type createStaffAccountSchema } from './staff.schemas';
 
 type CreateStaffAccountInput = z.infer<typeof createStaffAccountSchema>;
 type StaffRole = z.infer<typeof staffRoleSchema>;
@@ -26,7 +26,8 @@ export async function createStaffAccount(dto: CreateStaffAccountInput, auditCtx:
   const existing = await prisma.user.findUnique({ where: { mobile } });
   if (existing) throw new ConflictError('A user with this mobile number already exists');
 
-  const isPartnerRole = partnerRoleSchema.safeParse(dto.role).success;
+  const isPartnerRole =
+    partnerRoleSchema.safeParse(dto.role).success || crmRoleSchema.safeParse(dto.role).success;
   const user = await prisma.user.create({
     data: isPartnerRole
       ? { mobile, name: dto.name, role: dto.role }

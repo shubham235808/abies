@@ -27,6 +27,11 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   TECH_SUPPORT: [],
   SALES: [],
   CARE_COORDINATOR: [],
+  // CRM access is governed by modules/crm/rbac.ts, not this vocabulary.
+  CRM_ADMIN: [],
+  SALES_MANAGER: [],
+  MARKETING: [],
+  AUDITOR: [],
   ADMIN: ['promotion.manage', 'configuration.manage', 'settlement.manage', 'hospital.manage'],
 };
 
