@@ -220,10 +220,11 @@ export async function updateLead(id: string, dto: UpdateLeadInput, actor: CrmAct
   return updated;
 }
 
-export async function changeStage(id: string, stage: string, reason: string | undefined, actor: CrmActor) {
+export async function changeStage(id: string, stage: string, rawReason: string | undefined, actor: CrmActor) {
   writableLead(actor);
   const lead = await loadVisibleLead(actor, id);
   if (lead.stage === stage) return lead;
+  const reason = rawReason?.trim() || undefined;
   if (stage === 'LOST' && !reason) throw new BadRequestError('Give a reason for marking the lead lost');
 
   const updated = await prisma.crmLead.update({

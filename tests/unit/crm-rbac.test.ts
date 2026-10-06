@@ -30,10 +30,11 @@ describe('CRM access rules', () => {
 
   it('gives managers and admins every lead and assignment rights', () => {
     for (const role of ['ADMIN', 'CRM_ADMIN', 'SALES_MANAGER'] as const) {
-      expect(canReadAllLeads(actor(role))).toBe(true);
-      expect(canWriteLeads(actor(role))).toBe(true);
-      expect(canAssignLeads(actor(role))).toBe(true);
-      expect(leadVisibilityWhere(actor(role))).toEqual({});
+      const verified = { ...actor(role), mfaVerified: true };
+      expect(canReadAllLeads(verified)).toBe(true);
+      expect(canWriteLeads(verified)).toBe(true);
+      expect(canAssignLeads(verified)).toBe(true);
+      expect(leadVisibilityWhere(verified)).toEqual({});
     }
   });
 
