@@ -23,12 +23,17 @@ spec:
   workspaces:
     - name: gitops
       description: Checked-out GitOps repo, writable.
+    - name: ssl-ca-directory
+      optional: true
+      description: CA bundle so git push verifies git.abies.in (internal Root CA).
   steps:
     - name: set-image
       image: harbor.abies.in/k8s/kustomize/kustomize:v5.4.3
       # Run as the same UID git-clone uses (65532). The workspace is NFS with
       # root_squash, so a root step can't write files that the clone created.
       securityContext: {runAsUser: 65532, runAsGroup: 65532}
+      env:
+        - {name: HOME, value: /tekton/home}
       workingDir: $(workspaces.gitops.path)/$(params.overlay-path)
       command: ["kustomize"]
       args: ["edit", "set", "image", "$(params.app-name)=$(params.image)"]
@@ -37,6 +42,8 @@ spec:
       # Run as the same UID git-clone uses (65532). The workspace is NFS with
       # root_squash, so a root step can't write files that the clone created.
       securityContext: {runAsUser: 65532, runAsGroup: 65532}
+      env:
+        - {name: HOME, value: /tekton/home}
       workingDir: $(workspaces.gitops.path)
       # No explicit credential wiring here — Tekton's credential-initializer
       # auto-populates ~/.git-credentials from the Gitea Secret attached to
@@ -47,6 +54,10 @@ spec:
       script: |
         #!/bin/sh
         set -eu
+        # The workspace root is owned by nobody (NFS root_squash), so git needs
+        # an explicit safe.directory entry before it will touch the repo.
+        git config --global --add safe.directory "$(pwd)"
+        export GIT_SSL_CAINFO="$(workspaces.ssl-ca-directory.path)/abies-internal-root-ca.crt"
         git config user.email "tekton-ci@abies.in"
         git config user.name "Tekton CI"
         git add "$(params.overlay-path)"
@@ -55,4 +66,11 @@ spec:
           exit 0
         fi
         git commit -m "deploy($(params.app-name)): $(params.image)"
-        git push origin HEAD:$(params.git-revision)
+        # Other pipelines push to the same branch while this one runs. On a
+        # rejected push, rebase onto the latest branch and try again.
+        pushed=0
+        for attempt in 1 2 3 4; do
+          if git push origin HEAD:$(params.git-revision); then pushed=1; break; fi
+          git pull --rebase -q origin $(params.git-revision)
+        done
+        test "$pushed" = 1
