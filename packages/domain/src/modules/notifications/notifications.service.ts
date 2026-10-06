@@ -9,14 +9,22 @@ import { getEnv } from '../../lib/env';
 // then attempts real delivery through the configured adapter. Never throws
 // — a failed SMS shouldn't roll back the appointment/payment action that
 // triggered it; callers that care can inspect the returned row's status.
+const SECRET_KEYS = ['otp', 'password', 'token', 'secret'];
+
+export function redactForStorage(payload: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(payload).filter(([k]) => !SECRET_KEYS.includes(k.toLowerCase())));
+}
+
 export async function notify(
   userId: string,
   channel: NotificationChannel,
   templateKey: string,
   payload: Record<string, unknown>,
 ) {
+  // Secrets never reach the history table: the adapter gets the full payload,
+  // the stored row does not.
   const row = await prisma.notification.create({
-    data: { userId, channel, templateKey, payload: payload as never, status: 'QUEUED' },
+    data: { userId, channel, templateKey, payload: redactForStorage(payload) as never, status: 'QUEUED' },
   });
 
   if (channel === 'IN_APP') {
