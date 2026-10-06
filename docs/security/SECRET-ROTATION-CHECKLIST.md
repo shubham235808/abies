@@ -6,6 +6,18 @@ below is rotated and the new value is stored outside Git.
 Do not paste any value into chat, tickets, or commit messages. Do not commit
 values to any repository.
 
+## Decision on secret storage (owner: product lead)
+
+The owner chose to keep secret values in Git (the GitOps repository) rather
+than moving them out, which overrides the brief's requirement that Git hold
+only references. This is recorded as an accepted risk. Consequences:
+
+- Anyone with read access to the GitOps repository can read every value in
+  the table below. Restrict the repository to the platform team.
+- Production deployment stays BLOCKED until the exposed values are rotated
+  (section below). Rotation fixes the exposure that already happened; it does
+  not change the storage decision.
+
 ## Credentials exposed in plaintext
 
 These values were stored in `applications/common/base/secret.yaml` in the
