@@ -206,12 +206,60 @@ const REFUND_COMPLETED: TemplateDefinition = {
   subjects: { en: 'Your refund has been processed', hi: 'आपकी रिफ़ंड प्रक्रिया पूरी हो गई है' },
 };
 
+// Contact Us. The internal copy goes to the ABIES support mailbox; the
+// acknowledgement goes to the guest who sent the enquiry. Email only: the
+// enquiry is never sent on WhatsApp by the system.
+const CONTACT_ENQUIRY_INTERNAL: TemplateDefinition = {
+  key: 'contact.enquiry.internal',
+  version: 1,
+  defaultPolicy: 'EMAIL_ONLY',
+  category: 'SERVICE',
+  priority: 'NORMAL',
+  requiredVariables: ['referenceId', 'name', 'email', 'mobile', 'queryType', 'subject', 'message', 'submittedAt'],
+  bodies: {
+    EMAIL: {
+      en:
+        'New contact enquiry received on the ABIES website.\n\n' +
+        'Reference ID: {{referenceId}}\n' +
+        'Name: {{name}}\n' +
+        'Email: {{email}}\n' +
+        'Mobile: {{mobile}}\n' +
+        'Query type: {{queryType}}\n' +
+        'Subject: {{subject}}\n' +
+        'Submitted: {{submittedAt}}\n\n' +
+        'Message:\n{{message}}',
+    },
+  },
+  subjects: { en: 'New ABIES Contact Enquiry - {{referenceId}}' },
+};
+
+const CONTACT_ENQUIRY_ACKNOWLEDGEMENT: TemplateDefinition = {
+  key: 'contact.enquiry.acknowledgement',
+  version: 1,
+  defaultPolicy: 'EMAIL_ONLY',
+  category: 'SERVICE',
+  priority: 'NORMAL',
+  requiredVariables: ['name', 'referenceId'],
+  bodies: {
+    EMAIL: {
+      en:
+        'Dear {{name}},\n\n' +
+        'Thank you for contacting ABIES Ayurveda. We have received your enquiry and our team will reply to you.\n\n' +
+        'Your reference number is {{referenceId}}. Please quote it in any follow-up.\n\n' +
+        'ABIES will never ask you for your password or OTP. Do not share them with anyone.',
+    },
+  },
+  subjects: { en: 'We received your ABIES Ayurveda enquiry - {{referenceId}}' },
+};
+
 export const TEMPLATE_CATALOGUE: readonly TemplateDefinition[] = [
   OTP_TEMPLATE,
   APPOINTMENT_CONFIRMED,
   ORDER_SHIPPED,
   PAYMENT_SUCCESS,
   REFUND_COMPLETED,
+  CONTACT_ENQUIRY_INTERNAL,
+  CONTACT_ENQUIRY_ACKNOWLEDGEMENT,
 ];
 
 // Catalogue self-check, run once at load: every placeholder used in a body must

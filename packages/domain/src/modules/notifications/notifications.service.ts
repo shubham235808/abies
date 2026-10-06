@@ -1,4 +1,5 @@
 import type { Notification, NotificationChannel } from '@prisma/client';
+import { z } from 'zod';
 import { prisma } from '../../lib/db';
 import { BadRequestError } from '../../lib/errors';
 import { getAdapter, unavailableResult } from '../../lib/notifications';
@@ -102,7 +103,7 @@ function withoutMark(payload: Record<string, unknown>): Record<string, unknown> 
 // send. Called once per channel and again on every retry (the stored payload
 // is redacted, so the rendered body is never read back from the row).
 async function prepareDelivery(
-  userId: string,
+  userId: string | null,
   channel: NotificationChannel,
   templateKey: string,
   payload: Record<string, unknown>,
@@ -135,10 +136,10 @@ async function prepareDelivery(
   if (!definition) return { ok: false, error: `Unknown notification template "${templateKey}"` };
 
   try {
-    const profile = await prisma.patientProfile.findUnique({
-      where: { userId },
-      select: { preferredLanguage: true },
-    });
+    // A mailbox send has no profile, so it uses the default language.
+    const profile = userId
+      ? await prisma.patientProfile.findUnique({ where: { userId }, select: { preferredLanguage: true } })
+      : null;
     const language = resolveLanguage(profile?.preferredLanguage);
     const templateChannel = channel as TemplateChannel;
     const rendered = resolveAndRender(templateKey, templateChannel, language, raw);
@@ -208,7 +209,8 @@ function givenUp(row: Notification): boolean {
 // outcome, so a row that becomes DEAD during a retry sends email too.
 async function maybeFallback(row: Notification, payload: Record<string, unknown>): Promise<Notification | undefined> {
   const fallback = fallbackOf(row);
-  if (!fallback || !givenUp(row)) return undefined;
+  // Only a user's row can fall back: a mailbox row has no user to message.
+  if (!fallback || !givenUp(row) || !row.userId) return undefined;
   const outcome = await deliverChannel(row.userId, fallback.channel, row.templateKey, payload, {
     idempotencyKey: fallback.idempotencyKey,
     priority: row.priority as Priority,
@@ -226,6 +228,68 @@ export async function notify(
   options: NotifyOptions = {},
 ): Promise<Notification> {
   const outcome = await deliverChannel(userId, channel, templateKey, payload, options);
+  return outcome.row;
+}
+
+// Templates that may go to a mailbox address instead of a user. Each is an
+// ABIES-originated message: the internal enquiry copy to an ABIES mailbox, or
+// the acknowledgement to the guest who sent the enquiry. Nothing else may use
+// the mailbox path, so it cannot be used to message arbitrary addresses.
+export const MAILBOX_TEMPLATE_KEYS = ['contact.enquiry.internal', 'contact.enquiry.acknowledgement'] as const;
+
+const mailboxAddressSchema = z.string().trim().toLowerCase().max(254).email();
+
+// Sends one EMAIL to a mailbox address through the same render, adapter, retry
+// and status path as user sends. There is no user consent check: these are
+// ABIES's own service messages, and the acknowledgement answers a request the
+// guest made. Marketing is never sent this way.
+export async function notifyMailbox(
+  address: string,
+  templateKey: string,
+  payload: Record<string, unknown>,
+  options: NotifyOptions = {},
+): Promise<Notification> {
+  const to = mailboxAddressSchema.parse(address);
+  if (!(MAILBOX_TEMPLATE_KEYS as readonly string[]).includes(templateKey)) {
+    throw new BadRequestError(`Template ${templateKey} cannot be sent to a mailbox`);
+  }
+  if (options.idempotencyKey) {
+    const existing = await prisma.notification.findUnique({ where: { idempotencyKey: options.idempotencyKey } });
+    if (existing) return existing;
+  }
+
+  const storedBase = redactForStorage(withoutMark(payload));
+  const prepared = await prepareDelivery(null, 'EMAIL', templateKey, payload);
+  if (!prepared.ok) {
+    return prisma.notification.create({
+      data: {
+        userId: null,
+        recipientAddress: to,
+        channel: 'EMAIL',
+        templateKey,
+        payload: { ...storedBase, [TEMPLATE_MARK]: { registered: true } } as never,
+        status: 'FAILED',
+        error: prepared.error.slice(0, 300),
+        errorCategory: 'PERMANENT',
+        idempotencyKey: options.idempotencyKey,
+        priority: options.priority ?? 'NORMAL',
+      },
+    });
+  }
+
+  const row = await prisma.notification.create({
+    data: {
+      userId: null,
+      recipientAddress: to,
+      channel: 'EMAIL',
+      templateKey,
+      payload: { ...storedBase, [TEMPLATE_MARK]: prepared.value.mark } as never,
+      status: 'QUEUED',
+      idempotencyKey: options.idempotencyKey,
+      priority: options.priority ?? prepared.value.priority,
+    },
+  });
+  const outcome = await attemptDelivery(row.id, null, 'EMAIL', templateKey, payload, new Date(), prepared.value, to);
   return outcome.row;
 }
 
@@ -340,13 +404,31 @@ async function deliverChannel(
 // if this row has given up, and returns both.
 async function attemptDelivery(
   id: string,
-  userId: string,
+  userId: string | null,
   channel: NotificationChannel,
   templateKey: string,
   payload: Record<string, unknown>,
   now: Date,
   prepared?: PreparedDelivery,
+  recipientAddress: string | null = null,
 ): Promise<ChannelOutcome> {
+  // A row must have a user or a mailbox address to send to. A row with neither
+  // (should never be written) fails permanently rather than sending anywhere.
+  if (userId === null && recipientAddress === null) {
+    const row = await prisma.notification.update({
+      where: { id },
+      data: {
+        status: 'FAILED',
+        attempts: { increment: 1 },
+        error: 'Notification has no recipient',
+        errorCategory: 'PERMANENT',
+        nextAttemptAt: null,
+        processingAt: null,
+      },
+    });
+    return { row };
+  }
+
   if (channel === 'SMS') {
     // Only a historical SMS row can reach here (a retry scheduled before SMS was
     // removed). It fails permanently and is never sent.
@@ -380,7 +462,8 @@ async function attemptDelivery(
     });
     return { row };
   }
-  if (channel === 'EMAIL' || channel === 'WHATSAPP') {
+  // Mailbox sends (userId null) have no consent record and skip this check; see notifyMailbox.
+  if ((channel === 'EMAIL' || channel === 'WHATSAPP') && userId !== null) {
     if (!(await canSend(userId, categoryFor(templateKey), channel))) {
       const row = await prisma.notification.update({
         where: { id },
@@ -396,13 +479,7 @@ async function attemptDelivery(
     }
   }
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  const recipient: NotificationRecipient = {
-    userId,
-    mobile: user?.mobile,
-    email: user?.email,
-    name: user?.name,
-  };
+  const recipient: NotificationRecipient = await recipientFor(userId, recipientAddress);
 
   let result: SendResult;
   const prep: PrepareResult = prepared
@@ -565,12 +642,22 @@ export async function processDueNotifications(now = new Date(), limit = 50) {
       row.templateKey,
       (row.payload ?? {}) as Record<string, unknown>,
       now,
+      undefined,
+      row.recipientAddress,
     );
     if (after.status === 'SENT') sent += 1;
     else if (after.status === 'RETRYING') retried += 1;
     else stopped += 1;
   }
   return { due: due.length, sent, retried, stopped };
+}
+
+// The adapter's view of who receives the message. A user send reads the address
+// from the user record; a mailbox send carries only the mailbox address.
+async function recipientFor(userId: string | null, recipientAddress: string | null): Promise<NotificationRecipient> {
+  if (userId === null) return { userId: null, email: recipientAddress };
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  return { userId, mobile: user?.mobile, email: user?.email, name: user?.name };
 }
 
 function providerNameFor(channel: NotificationChannel): string {

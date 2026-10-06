@@ -716,7 +716,12 @@ enum NotificationStatus {
 
 model Notification {
   id          String              @id @default(cuid())
-  userId      String
+  // Null for mailbox sends (internal ABIES mailboxes and guest enquirers), which
+  // have no user. Those rows carry recipientAddress instead. Exactly one of the
+  // two is set; the service enforces it.
+  userId      String?
+  // The mailbox address for a send that has no user. Null for user sends.
+  recipientAddress String?
   channel     NotificationChannel
   templateKey String
   payload     Json
@@ -726,7 +731,7 @@ model Notification {
   sentAt      DateTime?
   readAt      DateTime?
   createdAt   DateTime            @default(now())
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Delivery state. A caller's key makes a repeated request return the first
   // notification instead of sending again.
   idempotencyKey String?          @unique

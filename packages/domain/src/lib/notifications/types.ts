@@ -1,7 +1,8 @@
 import type { NotificationChannel } from '@prisma/client';
 
 export interface NotificationRecipient {
-  userId: string;
+  // Null for a mailbox send (an internal ABIES mailbox or a guest enquirer).
+  userId: string | null;
   mobile?: string | null;
   email?: string | null;
   name?: string | null;
