@@ -4,12 +4,12 @@ import { getCurrentSession } from '@abies/domain/server/current-user';
 // The CRM menu from docs/CRM-IMPLEMENTATION-PLAN.md. Items marked soon are
 // planned for later phases and aren't linked yet.
 const CRM_NAV: PortalNavItem[] = [
-  { href: '/ops/crm/dashboard', label: 'Dashboard', soon: true },
+  { href: '/ops/crm/dashboard', label: 'Dashboard' },
   { href: '/ops/crm/leads', label: 'Leads' },
   { href: '/ops/crm/customers', label: 'Customers', soon: true },
-  { href: '/ops/crm/opportunities', label: 'Opportunities', soon: true },
-  { href: '/ops/crm/pipeline', label: 'Pipeline', soon: true },
-  { href: '/ops/crm/tasks', label: 'Tasks', soon: true },
+  { href: '/ops/crm/opportunities', label: 'Opportunities' },
+  { href: '/ops/crm/pipeline', label: 'Pipeline' },
+  { href: '/ops/crm/tasks', label: 'Tasks' },
   { href: '/ops/crm/follow-ups', label: 'Follow-ups', soon: true },
   { href: '/ops/crm/communications', label: 'Communications', soon: true },
   { href: '/ops/crm/campaigns', label: 'Campaigns', soon: true },

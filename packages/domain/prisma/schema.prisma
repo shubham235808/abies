@@ -103,6 +103,10 @@ model User {
   crmAssignmentsFrom         CrmAssignment[]             @relation("CrmAssignmentFrom")
   crmAssignmentsTo           CrmAssignment[]             @relation("CrmAssignmentTo")
   crmAssignmentsActor        CrmAssignment[]             @relation("CrmAssignmentActor")
+  crmOpportunitiesOwned      CrmOpportunity[]            @relation("CrmOpportunityOwner")
+  crmOpportunitiesCreated    CrmOpportunity[]            @relation("CrmOpportunityCreator")
+  crmTasksAssigned           CrmTask[]                   @relation("CrmTaskAssignee")
+  crmTasksCreated            CrmTask[]                   @relation("CrmTaskCreator")
 
   @@index([role, status])
 }
@@ -152,6 +156,8 @@ model CrmLead {
   tags              CrmLeadTag[]
   activities        CrmActivity[]
   assignments       CrmAssignment[]
+  opportunities     CrmOpportunity[]
+  tasks             CrmTask[]
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
@@ -2577,3 +2583,74 @@ model Promotion {
 
   @@index([placement, active, startAt, endAt])
 }
+
+// ---------------------------------------------------------------------------
+// CRM Phase 2 — sales. An opportunity is a priced deal with a lead or customer.
+// A task covers calls, meetings and follow-ups (a follow-up is a task with a
+// due time). Values are whole rupees, matching the rest of the platform.
+// ---------------------------------------------------------------------------
+
+enum CrmOpportunityStatus {
+  OPEN
+  WON
+  LOST
+}
+
+model CrmOpportunity {
+  id               String               @id @default(cuid())
+  leadId           String?
+  lead             CrmLead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  title            String
+  service          String?
+  expectedValue    Int
+  probability      Int                  @default(50)
+  expectedCloseAt  DateTime?
+  status           CrmOpportunityStatus @default(OPEN)
+  lostReason       String?
+  wonAt            DateTime?
+  ownerId          String?
+  owner            User?                @relation("CrmOpportunityOwner", fields: [ownerId], references: [id])
+  createdById      String
+  createdBy        User                 @relation("CrmOpportunityCreator", fields: [createdById], references: [id])
+  tasks            CrmTask[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([status, ownerId])
+  @@index([expectedCloseAt])
+}
+
+enum CrmTaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+  CANCELLED
+}
+
+model CrmTask {
+  id             String        @id @default(cuid())
+  title          String
+  description    String?
+  type           String        @default("GENERAL")
+  priority       String        @default("MEDIUM")
+  status         CrmTaskStatus @default(TODO)
+  dueAt          DateTime?
+  completedAt    DateTime?
+  outcome        String?
+  leadId         String?
+  lead           CrmLead?      @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  opportunityId  String?
+  opportunity    CrmOpportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  assignedToId   String?
+  assignedTo     User?         @relation("CrmTaskAssignee", fields: [assignedToId], references: [id])
+  createdById    String
+  createdBy      User          @relation("CrmTaskCreator", fields: [createdById], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([assignedToId, status, dueAt])
+  @@index([leadId])
+  @@index([dueAt])
+}
+

@@ -56,3 +56,17 @@ export function leadVisibilityWhere(actor: CrmActor): Record<string, unknown> {
   if (canReadAllLeads(actor)) return {};
   return { OR: [{ assignedToId: actor.userId }, { createdById: actor.userId }] };
 }
+
+// Opportunities and tasks follow the same scope as leads: agents see what they
+// own or created, managers and read-all roles see everything.
+export function opportunityVisibilityWhere(actor: CrmActor): Record<string, unknown> {
+  requireCrmAccess(actor);
+  if (canReadAllLeads(actor)) return {};
+  return { OR: [{ ownerId: actor.userId }, { createdById: actor.userId }] };
+}
+
+export function taskVisibilityWhere(actor: CrmActor): Record<string, unknown> {
+  requireCrmAccess(actor);
+  if (canReadAllLeads(actor)) return {};
+  return { OR: [{ assignedToId: actor.userId }, { createdById: actor.userId }] };
+}
