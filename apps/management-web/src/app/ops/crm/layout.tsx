@@ -16,6 +16,8 @@ const CRM_NAV: PortalNavItem[] = [
   { href: '/ops/crm/segments', label: 'Segments', soon: true },
   { href: '/ops/crm/reports', label: 'Reports', soon: true },
   { href: '/ops/crm/automation', label: 'Automation' },
+  { href: '/ops/crm/duplicates', label: 'Duplicates' },
+  { href: '/ops/crm/audit', label: 'Audit log' },
   { href: '/ops/crm/settings', label: 'Settings', soon: true },
 ];
 

@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { callDbService, sessionTokenFromCookies } from '@abies/domain/server/db-service';
+import { getCurrentSession } from '@abies/domain/server/current-user';
+
+// Roles that may download the lead export (same as the export route).
+const EXPORT_ROLES: string[] = ['ADMIN', 'CRM_ADMIN', 'AUDITOR'];
 
 type LeadRow = {
   id: string;
@@ -27,6 +31,11 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   );
   if (res.status === 401) redirect('/ops/login');
   if (res.status !== 200) throw new Error('Could not load leads');
+  const session = await getCurrentSession();
+  const canExport = !!session && EXPORT_ROLES.includes(session.user.role);
+  const exportQs = new URLSearchParams();
+  for (const key of ['stage', 'source'] as const) if (params[key]) exportQs.set(key, params[key]!);
+  const exportHref = `/api/v1/crm/export/leads${exportQs.toString() ? `?${exportQs.toString()}` : ''}`;
   const { leads, total, page, pageSize } = res.body;
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -37,9 +46,16 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           <h1 className="text-2xl font-semibold text-brand-neutral-900">Leads</h1>
           <p className="mt-1 text-sm text-brand-neutral-600">{total} lead{total === 1 ? '' : 's'} you can see</p>
         </div>
-        <Link href="/ops/crm/leads/new" className="rounded-control bg-brand-purple-600 px-4 py-2 text-sm font-bold text-white">
-          + New lead
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {canExport && (
+            <a href={exportHref} className="rounded-control border border-brand-neutral-200 px-4 py-2 text-sm font-semibold text-brand-neutral-800">
+              Export CSV
+            </a>
+          )}
+          <Link href="/ops/crm/leads/new" className="rounded-control bg-brand-purple-600 px-4 py-2 text-sm font-bold text-white">
+            + New lead
+          </Link>
+        </div>
       </div>
 
       <form className="mt-4 flex flex-wrap gap-2">
