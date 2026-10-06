@@ -65,12 +65,47 @@ spec:
           echo "No image change for $(params.app-name) — nothing to commit."
           exit 0
         fi
-        git commit -m "deploy($(params.app-name)): $(params.image)"
-        # Other pipelines push to the same branch while this one runs. On a
-        # rejected push, rebase onto the latest branch and try again.
+        app="$(params.app-name)"
+        image="$(params.image)"
+        case "$image" in
+          *@sha256:*) digest="${image#*@}" ;;
+          *) echo "expected a digest-pinned image, got $image"; exit 1 ;;
+        esac
+        overlay="$(params.overlay-path)/kustomization.yaml"
+        # Rewrites only this app's digest entry in the overlay. The other
+        # apps' pins are left as they are on the branch.
+        pin_digest() {
+          awk -v n="$app" -v d="$digest" '
+            /^- digest: / { pending = $0; hold = 1; next }
+            hold == 1 {
+              if ($0 ~ /^  name: /) {
+                split($0, a, " ")
+                if (a[2] == n) { print "- digest: " d; found = 1 } else { print pending }
+                print; hold = 0; next
+              }
+              print pending; hold = 0
+            }
+            { print }
+            END { if (!found) exit 3 }
+          ' "$overlay" > "$overlay.tmp" && mv "$overlay.tmp" "$overlay"
+        }
+        git commit -m "deploy($app): $image"
+        # Other pipelines push to the same branch while this one runs, and
+        # they pin other apps' digests on the same overlay file. Rebasing this
+        # commit onto them conflicts on that file, so on a rejected push we
+        # reset to the fresh branch, pin this app's digest again, and retry.
         pushed=0
         for attempt in 1 2 3 4; do
-          if git push origin HEAD:$(params.git-revision); then pushed=1; break; fi
-          git pull --rebase -q origin $(params.git-revision)
+          if git push origin HEAD:"$(params.git-revision)"; then pushed=1; break; fi
+          echo "Push rejected (attempt $attempt); re-applying $app on fresh $(params.git-revision)"
+          git fetch -q origin "$(params.git-revision)"
+          git reset -q --hard FETCH_HEAD
+          pin_digest || { echo "$app not found in $overlay"; exit 1; }
+          git add "$(params.overlay-path)"
+          if git diff --cached --quiet; then
+            echo "$app is already pinned to $digest on $(params.git-revision)."
+            pushed=1; break
+          fi
+          git commit -q -m "deploy($app): $image"
         done
         test "$pushed" = 1
