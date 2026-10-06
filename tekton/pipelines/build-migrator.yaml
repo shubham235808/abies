@@ -67,7 +67,9 @@ spec:
     - name: update-gitops
       runAfter: [build-push, fetch-gitops]
       taskRef: {name: update-gitops-image}
-      workspaces: [{name: gitops, workspace: gitops}]
+      workspaces:
+        - {name: gitops, workspace: gitops}
+        - {name: ssl-ca-directory, workspace: ssl-ca}
       params:
         - {name: app-name, value: "$(params.image-repo)/migrator"}
         - name: image

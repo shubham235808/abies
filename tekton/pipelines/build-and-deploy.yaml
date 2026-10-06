@@ -53,6 +53,7 @@ spec:
       taskRef: {name: git-clone, kind: Task}
       workspaces:
         - {name: output, workspace: source}
+        - {name: ssl-ca-directory, workspace: ssl-ca}
       params:
         - {name: url, value: $(params.app-repo-url)}
         - {name: revision, value: $(params.app-revision)}
@@ -88,6 +89,7 @@ spec:
       taskRef: {name: update-gitops-image}
       workspaces:
         - {name: gitops, workspace: gitops}
+        - {name: ssl-ca-directory, workspace: ssl-ca}
       params:
         # Full image name (registry + path, no tag/digest) — must match
         # the `images[].name` Kustomize is matching against in

@@ -62,6 +62,10 @@ spec:
       image: harbor.abies.in/ghcr/osscontainertools/kaniko:latest
       command: ["/kaniko/executor"]
       workingDir: $(workspaces.source.path)
+      # Diagnostic: Go's HTTP/2 client resets mid-layer (stream ID 9 INTERNAL_ERROR)
+      # against harbor.abies.in; fall back to HTTP/1.1 for this step only.
+      env:
+        - {name: GODEBUG, value: http2client=0}
       args:
         - --dockerfile=$(params.dockerfile)
         - --context=$(workspaces.source.path)/$(params.context)
@@ -69,7 +73,7 @@ spec:
         - --target=$(params.dockerfile-target)
         - --build-arg=APP_NAME=$(params.app-name)
         - --digest-file=$(results.digest.path)
-        - --cache=true
+        - --cache=false
       volumeMounts:
         - {name: registry-auth, mountPath: /kaniko/.docker, readOnly: true}
         - {name: harbor-ca, mountPath: /kaniko/ssl/certs/abies-internal-root-ca.crt, subPath: abies-internal-root-ca.crt, readOnly: true}
