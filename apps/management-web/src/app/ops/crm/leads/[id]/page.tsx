@@ -1,9 +1,11 @@
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { callDbService, sessionTokenFromCookies } from '@abies/domain/server/db-service';
 import { LeadActions } from './lead-actions';
 
 type LeadDetail = {
   id: string;
+  customerUserId: string | null;
   firstName: string;
   lastName: string | null;
   mobile: string | null;
@@ -76,6 +78,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             canWrite={viewer.canWrite}
             canAssign={viewer.canAssign}
           />
+          {lead.customerUserId && (
+            <Link
+              href={`/ops/crm/customers/${encodeURIComponent(lead.customerUserId)}`}
+              className="mt-4 inline-block text-sm font-medium text-brand-purple-700 hover:underline"
+            >
+              View customer summary
+            </Link>
+          )}
         </section>
 
         <section className="rounded-control border border-brand-neutral-100 bg-white p-5">

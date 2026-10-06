@@ -194,7 +194,15 @@ export async function getLead(id: string, actor: CrmActor) {
     },
   });
   if (!lead) throw new NotFoundError('Lead not found');
-  return lead;
+  // The patient account this lead matches, if any, so the page can link to Customer 360.
+  const customer = await prisma.user.findFirst({
+    where: {
+      role: 'PATIENT',
+      OR: [...(lead.mobile ? [{ mobile: lead.mobile }] : []), ...(lead.email ? [{ email: lead.email }] : [])],
+    },
+    select: { id: true },
+  });
+  return { ...lead, customerUserId: customer?.id ?? null };
 }
 
 export async function updateLead(id: string, dto: UpdateLeadInput, actor: CrmActor) {
