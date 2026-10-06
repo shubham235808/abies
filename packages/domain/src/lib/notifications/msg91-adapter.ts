@@ -37,14 +37,14 @@ function requireConfig(): {
 export function createMsg91Adapter(): NotificationAdapter {
   return {
     async send(recipient: NotificationRecipient, templateKey: string, payload: Record<string, unknown>): Promise<SendResult> {
-      if (!recipient.email) return { ok: false, error: 'Recipient has no email on file' };
-      if (templateKey !== 'auth.otp_code') return { ok: false, error: `No MSG91 template mapped for ${templateKey}` };
+      if (!recipient.email) return { ok: false, error: 'Recipient has no email on file', retryable: false };
+      if (templateKey !== 'auth.otp_code') return { ok: false, error: `No MSG91 template mapped for ${templateKey}`, retryable: false };
 
       let cfg: ReturnType<typeof requireConfig>;
       try {
         cfg = requireConfig();
       } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : 'MSG91 config error' };
+        return { ok: false, error: err instanceof Error ? err.message : 'MSG91 config error', retryable: false };
       }
 
       // company_name is a fixed variable in the abies_otp template.
@@ -79,11 +79,15 @@ export function createMsg91Adapter(): NotificationAdapter {
         });
         const body = (await res.json().catch(() => ({}))) as { status?: string; message?: string; data?: unknown };
         if (!res.ok || body.status === 'error') {
-          return { ok: false, error: body.message ?? `MSG91 responded ${res.status}` };
+          // 429 and 5xx are provider-side and may succeed later; other 4xx are
+          // permanent (bad template, bad destination, bad key).
+          const retryable = res.status === 429 || res.status >= 500;
+          return { ok: false, error: body.message ?? `MSG91 responded ${res.status}`, retryable };
         }
         return { ok: true, providerRef: String((body as { request_id?: string }).request_id ?? 'msg91') };
       } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : 'MSG91 send failed' };
+        // Timeouts and network failures are temporary.
+        return { ok: false, error: err instanceof Error ? err.message : 'MSG91 send failed', retryable: true };
       } finally {
         clearTimeout(timer);
       }

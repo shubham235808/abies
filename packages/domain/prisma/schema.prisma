@@ -700,8 +700,11 @@ enum NotificationChannel {
 
 enum NotificationStatus {
   QUEUED
+  PROCESSING
   SENT
+  RETRYING
   FAILED
+  DEAD
   READ
 }
 
@@ -718,8 +721,17 @@ model Notification {
   readAt      DateTime?
   createdAt   DateTime            @default(now())
   user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Delivery state. A caller's key makes a repeated request return the first
+  // notification instead of sending again.
+  idempotencyKey String?          @unique
+  priority       String           @default("NORMAL")
+  attempts       Int              @default(0)
+  nextAttemptAt  DateTime?
+  errorCategory  String?
+  processingAt   DateTime?
 
   @@index([userId, createdAt])
+  @@index([status, nextAttemptAt])
 }
 
 // ---------------------------------------------------------------------------
