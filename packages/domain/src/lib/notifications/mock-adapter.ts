@@ -11,7 +11,8 @@ export function createMockAdapter(channel: string): NotificationAdapter {
   return {
     async send(recipient: NotificationRecipient, templateKey: string, payload: Record<string, unknown>): Promise<SendResult> {
       const to = recipient.mobile ?? recipient.email ?? recipient.userId;
-      logger.info('notifications', `mock ${channel} to=${to} template=${templateKey}`, { payload });
+      // Key names only: values may be secrets (an OTP) and must never reach logs.
+      logger.info('notifications', `mock ${channel} to=${to} template=${templateKey}`, { payloadKeys: Object.keys(payload) });
       return { ok: true, providerRef: `mock:${channel}:${Date.now()}` };
     },
   };

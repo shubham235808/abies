@@ -108,6 +108,8 @@ model User {
   crmTasksAssigned           CrmTask[]                   @relation("CrmTaskAssignee")
   crmTasksCreated            CrmTask[]                   @relation("CrmTaskCreator")
   crmAutomationRulesCreated  CrmAutomationRule[]         @relation("CrmAutomationRuleCreator")
+  notificationPreferences    NotificationPreference[]
+  notificationConsentEvents  NotificationConsentEvent[]
 
   @@index([role, status])
 }
@@ -705,6 +707,7 @@ enum NotificationStatus {
   RETRYING
   FAILED
   DEAD
+  SUPPRESSED
   READ
 }
 
@@ -2700,5 +2703,58 @@ model CrmAutomationExecution {
 
   @@unique([ruleId, leadId])
   @@index([leadId])
+}
+
+// ---------------------------------------------------------------------------
+// Communication consent (docs/CRM-IMPLEMENTATION-PLAN.md D7). Categories are
+// kept apart: SECURITY (OTP, account safety) and TRANSACTIONAL (bookings, orders,
+// payments) are not switched off by marketing choices. MARKETING needs an
+// explicit opt-in per channel. A row per (user, category, channel) holds the
+// current choice; every change is also written to NotificationConsentEvent.
+// ---------------------------------------------------------------------------
+
+enum NotificationCategory {
+  SECURITY
+  TRANSACTIONAL
+  SERVICE
+  MARKETING
+}
+
+enum NotificationPrefChannel {
+  SMS
+  EMAIL
+  WHATSAPP
+  IN_APP
+  PUSH
+}
+
+model NotificationPreference {
+  id            String                  @id @default(cuid())
+  userId        String
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category      NotificationCategory
+  channel       NotificationPrefChannel
+  enabled       Boolean
+  source        String
+  policyVersion String?
+  updatedAt     DateTime                @updatedAt
+
+  @@unique([userId, category, channel])
+}
+
+model NotificationConsentEvent {
+  id            String                  @id @default(cuid())
+  userId        String
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category      NotificationCategory
+  channel       NotificationPrefChannel
+  action        String
+  source        String
+  policyVersion String?
+  ip            String?
+  userAgent     String?
+  createdAt     DateTime                @default(now())
+
+  @@index([userId, createdAt])
 }
 
