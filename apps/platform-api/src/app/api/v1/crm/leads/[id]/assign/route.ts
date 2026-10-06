@@ -1,17 +1,27 @@
 import { NextResponse } from 'next/server';
-import { errorResponse } from '@abies/domain/lib/errors';
-import { applyRotatedCookie, requireSession } from '@abies/domain/server/rbac';
-import { crmActorFromContext } from '@abies/domain/modules/crm/actor';
-import { assignLeadSchema } from '@abies/domain/modules/crm/leads.schemas';
-import { assignLead } from '@abies/domain/modules/crm/leads.service';
+import { errorResponse, UnauthorizedError } from '@abies/domain/lib/errors';
+import { callDbService, sessionTokenFromCookies } from '@abies/domain/server/db-service';
+
+// Proxy to the database service (docs/DB-SERVICE-PLAN.md). The browser's
+// session token is forwarded; the database service checks it. This app no
+// longer touches CRM tables directly.
+async function forward(req: Request, dbPath: string, method: string, withBody: boolean) {
+  const token = await sessionTokenFromCookies();
+  if (!token) throw new UnauthorizedError();
+  const body = withBody ? await req.json() : undefined;
+  const res = await callDbService(dbPath, {
+    method,
+    body,
+    sessionToken: token,
+    requestId: req.headers.get('x-request-id') ?? undefined,
+  });
+  return NextResponse.json(res.body, { status: res.status });
+}
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const ctx = await requireSession(req);
     const { id } = await params;
-    const dto = assignLeadSchema.parse(await req.json());
-    const lead = await assignLead(id, dto.assignedToId, dto.reason, crmActorFromContext(ctx));
-    return applyRotatedCookie(NextResponse.json({ lead }), ctx);
+    return await forward(req, `/db/v1/crm/leads/${id}/assign`, 'POST', true);
   } catch (error) {
     return errorResponse(error, req);
   }

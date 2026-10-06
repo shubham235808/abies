@@ -1,16 +1,33 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getCurrentSession } from '@abies/domain/server/current-user';
-import { crmActorFromSession } from '@abies/domain/modules/crm/actor';
-import { listLeads } from '@abies/domain/modules/crm/leads.service';
-import { listLeadsSchema } from '@abies/domain/modules/crm/leads.schemas';
+import { callDbService, sessionTokenFromCookies } from '@abies/domain/server/db-service';
+
+type LeadRow = {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  mobile: string | null;
+  email: string | null;
+  source: string;
+  stage: string;
+  assignedTo: { name: string | null; mobile: string } | null;
+  createdAt: string;
+};
 
 export default async function LeadsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const session = await getCurrentSession();
-  if (!session) redirect('/ops/login');
+  const token = await sessionTokenFromCookies();
+  if (!token) redirect('/ops/login');
   const params = await searchParams;
-  const query = listLeadsSchema.parse({ q: params.q, stage: params.stage, source: params.source, page: params.page });
-  const { leads, total, page, pageSize } = await listLeads(query, crmActorFromSession(session));
+  const qs = new URLSearchParams();
+  for (const key of ['q', 'stage', 'source', 'page'] as const) if (params[key]) qs.set(key, params[key]!);
+  // Leads come from the database service, which applies the caller's scope.
+  const res = await callDbService<{ leads: LeadRow[]; total: number; page: number; pageSize: number }>(
+    `/db/v1/crm/leads?${qs.toString()}`,
+    { sessionToken: token },
+  );
+  if (res.status === 401) redirect('/ops/login');
+  if (res.status !== 200) throw new Error('Could not load leads');
+  const { leads, total, page, pageSize } = res.body;
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -74,7 +91,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                 <td className="px-4 py-2.5 text-brand-neutral-600">{l.source.replaceAll('_', ' ')}</td>
                 <td className="px-4 py-2.5">{l.stage.replaceAll('_', ' ')}</td>
                 <td className="px-4 py-2.5 text-brand-neutral-600">{l.assignedTo?.name ?? l.assignedTo?.mobile ?? 'Unassigned'}</td>
-                <td className="px-4 py-2.5 text-brand-neutral-600">{l.createdAt.toLocaleDateString('en-IN')}</td>
+                <td className="px-4 py-2.5 text-brand-neutral-600">{new Date(l.createdAt).toLocaleDateString('en-IN')}</td>
               </tr>
             ))}
           </tbody>

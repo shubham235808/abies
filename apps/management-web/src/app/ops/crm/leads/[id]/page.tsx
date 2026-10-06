@@ -1,24 +1,42 @@
 import { notFound, redirect } from 'next/navigation';
-import { getCurrentSession } from '@abies/domain/server/current-user';
-import { crmActorFromSession } from '@abies/domain/modules/crm/actor';
-import { canAssignLeads, canWriteLeads } from '@abies/domain/modules/crm/rbac';
-import { getLead } from '@abies/domain/modules/crm/leads.service';
-import { NotFoundError } from '@abies/domain/lib/errors';
+import { callDbService, sessionTokenFromCookies } from '@abies/domain/server/db-service';
 import { LeadActions } from './lead-actions';
 
+type LeadDetail = {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  mobile: string | null;
+  email: string | null;
+  city: string | null;
+  state: string | null;
+  pinCode: string | null;
+  preferredLanguage: string | null;
+  source: string;
+  campaign: string | null;
+  interestedService: string | null;
+  stage: string;
+  priority: string;
+  assignedToId: string | null;
+  assignedTo: { name: string | null; mobile: string } | null;
+  lastContactedAt: string | null;
+  tags: { tag: { name: string } }[];
+  activities: { id: string; type: string; summary: string; createdAt: string; actor: { name: string | null } | null }[];
+};
+
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await getCurrentSession();
-  if (!session) redirect('/ops/login');
-  const actor = crmActorFromSession(session);
+  const token = await sessionTokenFromCookies();
+  if (!token) redirect('/ops/login');
   const { id } = await params;
 
-  let lead;
-  try {
-    lead = await getLead(id, actor);
-  } catch (err) {
-    if (err instanceof NotFoundError) notFound();
-    throw err;
-  }
+  const res = await callDbService<{ lead: LeadDetail; viewer: { canWrite: boolean; canAssign: boolean } }>(
+    `/db/v1/crm/leads/${id}`,
+    { sessionToken: token },
+  );
+  if (res.status === 401) redirect('/ops/login');
+  if (res.status === 404) notFound();
+  if (res.status !== 200) throw new Error('Could not load this lead');
+  const { lead, viewer } = res.body;
 
   const name = `${lead.firstName} ${lead.lastName ?? ''}`.trim();
   return (
@@ -49,14 +67,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             <dt className="text-brand-neutral-500">Tags</dt>
             <dd>{lead.tags.map((t) => t.tag.name).join(', ') || '—'}</dd>
             <dt className="text-brand-neutral-500">Last contacted</dt>
-            <dd>{lead.lastContactedAt ? lead.lastContactedAt.toLocaleString('en-IN') : '—'}</dd>
+            <dd>{lead.lastContactedAt ? new Date(lead.lastContactedAt).toLocaleString('en-IN') : '—'}</dd>
           </dl>
           <LeadActions
             leadId={lead.id}
             stage={lead.stage}
             assignedToId={lead.assignedToId}
-            canWrite={canWriteLeads(actor)}
-            canAssign={canAssignLeads(actor)}
+            canWrite={viewer.canWrite}
+            canAssign={viewer.canAssign}
           />
         </section>
 
@@ -67,7 +85,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             {lead.activities.map((a) => (
               <li key={a.id} className="border-l-2 border-brand-purple-200 pl-3">
                 <div className="text-xs text-brand-neutral-500">
-                  {a.createdAt.toLocaleString('en-IN')} · {a.type.replaceAll('_', ' ')}
+                  {new Date(a.createdAt).toLocaleString('en-IN')} · {a.type.replaceAll('_', ' ')}
                   {a.actor?.name ? ` · ${a.actor.name}` : ''}
                 </div>
                 <div className="text-brand-neutral-800">{a.summary}</div>
