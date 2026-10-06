@@ -2,19 +2,17 @@ import { getEnv, isLockedDownDeployment } from '../env';
 import { createMockAdapter } from './mock-adapter';
 import { createSmtpAdapter } from './smtp-adapter';
 import { createMsg91Adapter } from './msg91-adapter';
-import { createMsg91SmsAdapter } from './msg91-sms';
 import { createMsg91WhatsappAdapter } from './msg91-whatsapp';
 import type { ExternalChannel, NotificationAdapter, SendResult } from './types';
 
-const PROVIDER_ENV_KEY: Record<ExternalChannel, 'SMS_PROVIDER' | 'EMAIL_PROVIDER' | 'WHATSAPP_PROVIDER'> = {
-  SMS: 'SMS_PROVIDER',
+const PROVIDER_ENV_KEY: Record<ExternalChannel, 'EMAIL_PROVIDER' | 'WHATSAPP_PROVIDER'> = {
   EMAIL: 'EMAIL_PROVIDER',
   WHATSAPP: 'WHATSAPP_PROVIDER',
 };
 
-// No real SMS/WhatsApp provider is wired up yet (tracked in
+// No real WhatsApp provider is wired up yet (tracked in
 // docs/platform/SECURITY-GAP-ANALYSIS.md §1) — 'mock' is still the only
-// value for those two. EMAIL additionally supports 'smtp', a real adapter
+// value for it. EMAIL additionally supports 'smtp', a real adapter
 // (docs/platform/IMPLEMENTATION-PLAN.md Stage 1 item 5, abies-dev only for
 // now) — it isn't subject to the lockdown check below, that rule exists
 // specifically to stop a *placeholder* from pretending to deliver, not to
@@ -31,13 +29,9 @@ export function getAdapter(channel: ExternalChannel): NotificationAdapter | null
     return createMsg91Adapter();
   }
 
-  // Production SMS and WhatsApp. An incomplete configuration still returns the
+  // Production WhatsApp. An incomplete configuration still returns the
   // MSG91 adapter, which fails permanently with BLOCKED_EXTERNAL_CONFIGURATION
   // and names the missing keys. It never falls back to mock.
-  if (channel === 'SMS' && provider === 'msg91') {
-    return createMsg91SmsAdapter();
-  }
-
   if (channel === 'WHATSAPP' && provider === 'msg91') {
     return createMsg91WhatsappAdapter();
   }

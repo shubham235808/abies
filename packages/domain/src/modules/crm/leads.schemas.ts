@@ -35,7 +35,7 @@ export const LEAD_STAGES = [
 
 export const LEAD_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH'] as const;
 
-export const ACTIVITY_TYPES = ['NOTE', 'CALL', 'WHATSAPP', 'SMS', 'EMAIL', 'MEETING'] as const;
+export const ACTIVITY_TYPES = ['NOTE', 'CALL', 'WHATSAPP', 'EMAIL', 'MEETING'] as const;
 
 const optionalText = (max: number) => z.string().trim().max(max).optional().transform((v) => (v ? v : undefined));
 

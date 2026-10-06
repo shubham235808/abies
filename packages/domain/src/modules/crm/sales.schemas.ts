@@ -4,7 +4,7 @@ const text = (max: number) => z.string().trim().max(max).optional().transform((v
 
 export const OPPORTUNITY_STATUSES = ['OPEN', 'WON', 'LOST'] as const;
 export const TASK_STATUSES = ['TODO', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED', 'CANCELLED'] as const;
-export const TASK_TYPES = ['CALL', 'WHATSAPP', 'SMS', 'EMAIL', 'MEETING', 'FOLLOW_UP', 'GENERAL'] as const;
+export const TASK_TYPES = ['CALL', 'WHATSAPP', 'EMAIL', 'MEETING', 'FOLLOW_UP', 'GENERAL'] as const;
 export const TASK_VIEWS = ['all', 'today', 'overdue', 'upcoming', 'completed'] as const;
 
 export const createOpportunitySchema = z.object({

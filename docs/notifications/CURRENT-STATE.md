@@ -63,7 +63,7 @@ Totals: 37 literal-channel call sites in `apps/` and `packages/` (36 IN_APP, 1 E
 ## Env and secrets
 
 - `packages/domain/src/lib/env.ts` L69-99: `SMS_PROVIDER`, `EMAIL_PROVIDER`, `WHATSAPP_PROVIDER` (default mock); `SMS_API_KEY`, `EMAIL_API_KEY`, `WHATSAPP_API_KEY` (**defined but unused outside env.ts**); `EMAIL_SMTP_HOST/PORT/USER/PASSWORD`, `EMAIL_FROM_ADDRESS`; `EMAIL_MSG91_AUTH_KEY/DOMAIN/TEMPLATE_ID/OTP_VARIABLE/EXPIRY_VARIABLE`; `OTP_DELIVERY_CHANNEL` (sms|email, default sms); `OTP_PEPPER`.
-- gitops `applications/common/base/configmap.yaml`: providers `mock`, `OTP_DELIVERY_CHANNEL=sms`.
+- gitops `applications/common/base/configmap.yaml`: providers `mock`, `OTP_DELIVERY_CHANNEL=email (SMS is no longer a channel)`.
 - gitops `environments/dev/configmap-patch.yaml`: `EMAIL_PROVIDER=msg91`, `OTP_DELIVERY_CHANNEL=email`, `EMAIL_MSG91_DOMAIN/TEMPLATE_ID/OTP_VARIABLE`, `EMAIL_FROM_ADDRESS`. `prod` and `uat` overlays set no provider keys.
 - gitops `applications/common/base/secret.yaml` key names: `OTP_PEPPER`, `SESSION_SECRET`, `SMS_API_KEY` (empty), `WHATSAPP_API_KEY` (empty), `EMAIL_SMTP_HOST/USER/PASSWORD`, `EMAIL_MSG91_AUTH_KEY`, plus DB, Redis, storage and Razorpay keys.
 - **Security:** `secret.yaml` holds plaintext values (including OTP_PEPPER, the SMTP password and the MSG91 auth key) in git. Values are deliberately not reproduced here. Treat them as exposed and rotate.

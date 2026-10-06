@@ -5,6 +5,8 @@ import { PRIORITIES } from './delivery.rules';
 // resolution. Only structure is checked here. Whether a templateKey is
 // registered is decided by the template catalogue, not by this schema, so an
 // unregistered key still goes out (raw, flagged) rather than being rejected.
+// SMS stays in the enum only because the Prisma enum keeps it (historical rows).
+// notify() rejects SMS with a FAILED row; it is never sent.
 export const notifyChannelSchema = z.enum(['SMS', 'EMAIL', 'WHATSAPP', 'IN_APP', 'PUSH']);
 
 export const notifyRequestSchema = z.object({

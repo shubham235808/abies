@@ -70,8 +70,8 @@ export function senderFor(templateKey: string, env: NodeJS.ProcessEnv = process.
   return { role, address: readSenderAddress(role, env) };
 }
 
-// Provider template IDs (DLT registrations for SMS, MSG91 template IDs for
-// email, approved WhatsApp template names). Keyed by template key and channel,
+// Provider template IDs (MSG91 template IDs for email, approved WhatsApp
+// template names). Keyed by template key and channel,
 // and empty until each provider template is approved. A missing entry means
 // the adapter sends the rendered body without a provider template ID.
 const PROVIDER_TEMPLATE_IDS: Partial<Record<string, Partial<Record<TemplateChannel, string>>>> = {};

@@ -21,7 +21,7 @@ import type {
 
 // Terminal stages: a closed lead doesn't block a new enquiry from the same person.
 const CLOSED_STAGES = ['LOST', 'INVALID', 'DUPLICATE'] as const;
-const CONTACT_ACTIVITY_TYPES = ['CALL', 'WHATSAPP', 'SMS', 'EMAIL', 'MEETING'];
+const CONTACT_ACTIVITY_TYPES = ['CALL', 'WHATSAPP', 'EMAIL', 'MEETING'];
 
 function auditCtx(actor: CrmActor) {
   return { userId: actor.userId, sessionId: actor.sessionId, ip: actor.ip, userAgent: actor.userAgent };

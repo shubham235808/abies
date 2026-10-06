@@ -2,7 +2,9 @@
 
 export const CATEGORIES = ['SECURITY', 'TRANSACTIONAL', 'SERVICE', 'MARKETING'] as const;
 export type Category = (typeof CATEGORIES)[number];
-export const PREF_CHANNELS = ['SMS', 'EMAIL', 'WHATSAPP', 'IN_APP', 'PUSH'] as const;
+// Consent is per channel: a WhatsApp choice never implies email, or the reverse.
+// ABIES has no SMS channel.
+export const PREF_CHANNELS = ['EMAIL', 'WHATSAPP', 'IN_APP', 'PUSH'] as const;
 export type PrefChannel = (typeof PREF_CHANNELS)[number];
 
 // Security messages (OTP, account safety) can't be switched off.

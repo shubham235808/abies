@@ -15,4 +15,6 @@ export interface NotificationAdapter {
   send(recipient: NotificationRecipient, templateKey: string, payload: Record<string, unknown>): Promise<SendResult>;
 }
 
-export type ExternalChannel = Extract<NotificationChannel, 'SMS' | 'EMAIL' | 'WHATSAPP'>;
+// ABIES sends external messages on WhatsApp and Email only. SMS is not a
+// supported channel (see notify() in modules/notifications/notifications.service.ts).
+export type ExternalChannel = Extract<NotificationChannel, 'EMAIL' | 'WHATSAPP'>;

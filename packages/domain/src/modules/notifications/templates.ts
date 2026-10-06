@@ -5,7 +5,8 @@
 // Provider template IDs (DLT registrations, MSG91 template IDs) live in
 // senders.ts, so nothing here knows about a provider.
 
-export const TEMPLATE_CHANNELS = ['SMS', 'EMAIL', 'WHATSAPP', 'IN_APP'] as const;
+// ABIES has no SMS channel. WhatsApp and Email are the external channels.
+export const TEMPLATE_CHANNELS = ['EMAIL', 'WHATSAPP', 'IN_APP'] as const;
 export type TemplateChannel = (typeof TEMPLATE_CHANNELS)[number];
 
 export const TEMPLATE_LANGUAGES = ['en', 'hi'] as const;
@@ -17,6 +18,30 @@ export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number];
 export const TEMPLATE_PRIORITIES = ['CRITICAL', 'HIGH', 'NORMAL', 'LOW'] as const;
 export type TemplatePriority = (typeof TEMPLATE_PRIORITIES)[number];
 
+// How a notification reaches the customer. The routing policy decides which
+// channels get a row (see dispatch() in notifications.service.ts).
+//   WHATSAPP_ONLY       WhatsApp only. A WhatsApp failure never sends email.
+//   EMAIL_ONLY          Email only. WhatsApp is never called.
+//   WHATSAPP_AND_EMAIL  Both, each with its own status and retries.
+//   WHATSAPP_THEN_EMAIL WhatsApp first; email only once the WhatsApp row ends
+//                       FAILED (permanent) or DEAD. Never while it is RETRYING.
+export const ROUTING_POLICIES = [
+  'WHATSAPP_ONLY',
+  'EMAIL_ONLY',
+  'WHATSAPP_AND_EMAIL',
+  'WHATSAPP_THEN_EMAIL',
+] as const;
+export type RoutingPolicy = (typeof ROUTING_POLICIES)[number];
+
+// Used for a template key that is not in the catalogue.
+export const DEFAULT_ROUTING_POLICY: RoutingPolicy = 'WHATSAPP_THEN_EMAIL';
+
+// Family (the part before the first dot) defaults for keys that are not in the
+// catalogue. A registered template declares its own defaultPolicy and wins.
+const FAMILY_ROUTING_POLICY: Partial<Record<string, RoutingPolicy>> = {
+  support: 'WHATSAPP_AND_EMAIL',
+};
+
 const FALLBACK_LANGUAGE: TemplateLanguage = 'en';
 
 export interface TemplateDefinition {
@@ -25,6 +50,8 @@ export interface TemplateDefinition {
   category: TemplateCategory;
   priority: TemplatePriority;
   requiredVariables: readonly string[];
+  // Default routing policy for this template (see ROUTING_POLICIES).
+  defaultPolicy: RoutingPolicy;
   // Per channel, per language. A language missing here falls back to 'en'.
   // A channel missing entirely is a catalogue gap and fails loudly.
   bodies: Partial<Record<TemplateChannel, Partial<Record<TemplateLanguage, string>>>>;
@@ -62,14 +89,11 @@ function placeholdersIn(text: string): string[] {
 const OTP_TEMPLATE: TemplateDefinition = {
   key: 'auth.otp_code',
   version: 1,
+  defaultPolicy: 'EMAIL_ONLY',
   category: 'SECURITY',
   priority: 'CRITICAL',
   requiredVariables: ['otp'],
   bodies: {
-    SMS: {
-      en: 'Your ABIES verification code is {{otp}}. Do not share this code with anyone.',
-      hi: 'आपका ABIES सत्यापन कोड {{otp}} है। यह कोड किसी के साथ साझा न करें।',
-    },
     EMAIL: {
       en: 'Your ABIES verification code is {{otp}}. Do not share this code with anyone. If you did not request it, you can ignore this email.',
       hi: 'आपका ABIES सत्यापन कोड {{otp}} है। यह कोड किसी के साथ साझा न करें। यदि आपने इसका अनुरोध नहीं किया, तो इस ईमेल को अनदेखा करें।',
@@ -89,14 +113,11 @@ const OTP_TEMPLATE: TemplateDefinition = {
 const APPOINTMENT_CONFIRMED: TemplateDefinition = {
   key: 'appointment.confirmed',
   version: 1,
+  defaultPolicy: 'WHATSAPP_AND_EMAIL',
   category: 'SERVICE',
   priority: 'HIGH',
   requiredVariables: ['appointmentId'],
   bodies: {
-    SMS: {
-      en: 'Your ABIES appointment ({{appointmentId}}) is confirmed.',
-      hi: 'आपकी ABIES अपॉइंटमेंट ({{appointmentId}}) की पुष्टि हो गई है।',
-    },
     EMAIL: {
       en: 'Your ABIES appointment (reference {{appointmentId}}) is confirmed. You can view the details in your account.',
       hi: 'आपकी ABIES अपॉइंटमेंट (संदर्भ {{appointmentId}}) की पुष्टि हो गई है। विवरण आप अपने खाते में देख सकते हैं।',
@@ -116,14 +137,11 @@ const APPOINTMENT_CONFIRMED: TemplateDefinition = {
 const ORDER_SHIPPED: TemplateDefinition = {
   key: 'order.shipped',
   version: 1,
+  defaultPolicy: 'WHATSAPP_AND_EMAIL',
   category: 'TRANSACTIONAL',
   priority: 'NORMAL',
   requiredVariables: ['orderId'],
   bodies: {
-    SMS: {
-      en: 'Your ABIES order {{orderId}} has been shipped.',
-      hi: 'आपका ABIES ऑर्डर {{orderId}} भेज दिया गया है।',
-    },
     EMAIL: {
       en: 'Your ABIES order {{orderId}} has been shipped and is on its way.',
       hi: 'आपका ABIES ऑर्डर {{orderId}} भेज दिया गया है और रास्ते में है।',
@@ -143,14 +161,11 @@ const ORDER_SHIPPED: TemplateDefinition = {
 const PAYMENT_SUCCESS: TemplateDefinition = {
   key: 'payment.success',
   version: 1,
+  defaultPolicy: 'WHATSAPP_AND_EMAIL',
   category: 'TRANSACTIONAL',
   priority: 'HIGH',
   requiredVariables: ['paymentId', 'amount'],
   bodies: {
-    SMS: {
-      en: 'Payment of Rs {{amount}} received (ref {{paymentId}}). Thank you.',
-      hi: 'Rs {{amount}} का भुगतान प्राप्त हुआ (संदर्भ {{paymentId}})। धन्यवाद।',
-    },
     EMAIL: {
       en: 'We received your payment of Rs {{amount}} (reference {{paymentId}}). Thank you.',
       hi: 'हमें Rs {{amount}} का आपका भुगतान प्राप्त हुआ है (संदर्भ {{paymentId}})। धन्यवाद।',
@@ -170,14 +185,11 @@ const PAYMENT_SUCCESS: TemplateDefinition = {
 const REFUND_COMPLETED: TemplateDefinition = {
   key: 'refund.completed',
   version: 1,
+  defaultPolicy: 'WHATSAPP_AND_EMAIL',
   category: 'TRANSACTIONAL',
   priority: 'HIGH',
   requiredVariables: ['refundId', 'amount'],
   bodies: {
-    SMS: {
-      en: 'Refund of Rs {{amount}} has been processed (ref {{refundId}}).',
-      hi: 'Rs {{amount}} की रिफ़ंड प्रक्रिया पूरी हो गई है (संदर्भ {{refundId}})।',
-    },
     EMAIL: {
       en: 'Your refund of Rs {{amount}} has been processed (reference {{refundId}}).',
       hi: 'आपकी Rs {{amount}} की रिफ़ंड प्रक्रिया पूरी हो गई है (संदर्भ {{refundId}})।',
@@ -241,6 +253,14 @@ const BY_KEY = new Map(TEMPLATE_CATALOGUE.map((t) => [t.key, t] as const));
 
 export function isRegisteredTemplate(key: string): boolean {
   return BY_KEY.has(key);
+}
+
+// The routing policy a template key sends with by default.
+export function defaultPolicyFor(key: string): RoutingPolicy {
+  const registered = BY_KEY.get(key);
+  if (registered) return registered.defaultPolicy;
+  const family = key.split('.')[0] ?? '';
+  return FAMILY_ROUTING_POLICY[family] ?? DEFAULT_ROUTING_POLICY;
 }
 
 // Maps a free-text language preference (PatientProfile.preferredLanguage is

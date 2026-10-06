@@ -18,7 +18,7 @@ export interface NotificationTemplateRow {
   active: boolean;
 }
 
-const CHANNELS = ['IN_APP', 'SMS', 'EMAIL', 'WHATSAPP', 'PUSH'];
+const CHANNELS = ['IN_APP', 'EMAIL', 'WHATSAPP', 'PUSH'];
 
 const COLUMNS: DataTableColumn<NotificationTemplateRow>[] = [
   { key: 'templateKey', label: 'Template key', render: (r) => r.templateKey },

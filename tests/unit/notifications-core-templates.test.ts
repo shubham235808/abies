@@ -27,33 +27,45 @@ describe('template catalogue', () => {
     }
   });
 
+  it('has no SMS body on any template (ABIES has no SMS channel)', () => {
+    for (const t of TEMPLATE_CATALOGUE) {
+      expect(Object.keys(t.bodies)).not.toContain('SMS');
+    }
+  });
+
+  it('refuses to resolve an SMS body', () => {
+    expect(() => resolveTemplate('order.shipped', 'SMS' as never, 'en')).toThrow(
+      expect.objectContaining({ code: 'CHANNEL_NOT_SUPPORTED' }),
+    );
+  });
+
   it('marks OTP as a critical security template', () => {
-    expect(resolveTemplate('auth.otp_code', 'SMS', 'en')).toMatchObject({ category: 'SECURITY', priority: 'CRITICAL' });
+    expect(resolveTemplate('auth.otp_code', 'WHATSAPP', 'en')).toMatchObject({ category: 'SECURITY', priority: 'CRITICAL' });
   });
 });
 
 describe('resolveTemplate', () => {
   it('returns the requested language when it exists', () => {
-    const t = resolveTemplate('order.shipped', 'SMS', 'hi');
+    const t = resolveTemplate('order.shipped', 'WHATSAPP', 'hi');
     expect(t.language).toBe('hi');
     expect(t.body).toContain('{{orderId}}');
   });
 
   it('falls back to en when the requested language is unsupported', () => {
-    const t = resolveTemplate('order.shipped', 'SMS', 'fr');
+    const t = resolveTemplate('order.shipped', 'WHATSAPP', 'fr');
     expect(t.language).toBe('en');
     expect(t.body).toBe('Your ABIES order {{orderId}} has been shipped.');
   });
 
   it('carries the subject for EMAIL only', () => {
     expect(resolveTemplate('order.shipped', 'EMAIL', 'en').subject).toBe('Your ABIES order has shipped');
-    expect(resolveTemplate('order.shipped', 'SMS', 'en').subject).toBeUndefined();
+    expect(resolveTemplate('order.shipped', 'WHATSAPP', 'en').subject).toBeUndefined();
   });
 
   it('throws UNKNOWN_TEMPLATE for an unknown key', () => {
-    expect(() => resolveTemplate('not.registered', 'SMS', 'en')).toThrow(TemplateError);
+    expect(() => resolveTemplate('not.registered', 'WHATSAPP', 'en')).toThrow(TemplateError);
     try {
-      resolveTemplate('not.registered', 'SMS', 'en');
+      resolveTemplate('not.registered', 'WHATSAPP', 'en');
     } catch (err) {
       expect((err as TemplateError).code).toBe('UNKNOWN_TEMPLATE');
     }
@@ -87,24 +99,24 @@ describe('resolveLanguage', () => {
 
 describe('renderTemplate', () => {
   it('fills placeholders for the channel and language', () => {
-    const out = resolveAndRender('payment.success', 'SMS', 'en', { paymentId: 'pay_1', amount: 500 });
+    const out = resolveAndRender('payment.success', 'WHATSAPP', 'en', { paymentId: 'pay_1', amount: 500 });
     expect(out.body).toBe('Payment of Rs 500 received (ref pay_1). Thank you.');
     expect(out.language).toBe('en');
-    expect(out.channel).toBe('SMS');
+    expect(out.channel).toBe('WHATSAPP');
     expect(out.version).toBe(1);
   });
 
   it('renders the Hindi body when asked for hi', () => {
-    const out = resolveAndRender('auth.otp_code', 'SMS', 'hi', { otp: '123456' });
+    const out = resolveAndRender('auth.otp_code', 'WHATSAPP', 'hi', { otp: '123456' });
     expect(out.body).toContain('123456');
     expect(out.language).toBe('hi');
   });
 
   it('rejects a missing required variable with a typed error', () => {
-    const t = resolveTemplate('refund.completed', 'SMS', 'en');
+    const t = resolveTemplate('refund.completed', 'WHATSAPP', 'en');
     let caught: unknown;
     try {
-      renderTemplate(t, 'SMS', 'en', { refundId: 'rf_1' });
+      renderTemplate(t, 'WHATSAPP', 'en', { refundId: 'rf_1' });
     } catch (err) {
       caught = err;
     }
@@ -124,13 +136,13 @@ describe('renderTemplate', () => {
   });
 
   it('rejects null as missing', () => {
-    expect(() => resolveAndRender('order.shipped', 'SMS', 'en', { orderId: null })).toThrow(
+    expect(() => resolveAndRender('order.shipped', 'WHATSAPP', 'en', { orderId: null })).toThrow(
       expect.objectContaining({ code: 'MISSING_VARIABLE' }),
     );
   });
 
   it('rejects a non-primitive variable value', () => {
-    expect(() => resolveAndRender('order.shipped', 'SMS', 'en', { orderId: { id: 1 } })).toThrow(
+    expect(() => resolveAndRender('order.shipped', 'WHATSAPP', 'en', { orderId: { id: 1 } })).toThrow(
       expect.objectContaining({ code: 'EMPTY_VARIABLE' }),
     );
   });

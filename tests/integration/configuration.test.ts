@@ -22,6 +22,7 @@ import {
   updateGstRate,
 } from '@abies/domain/modules/configuration/configuration.service';
 import { listAuditEvents, listDistinctEventTypes } from '@abies/domain/modules/audit/audit.service';
+import { notificationTemplateSchema } from '@abies/domain/modules/configuration/configuration.schemas';
 
 const createdCategoryIds: string[] = [];
 const createdLocationIds: string[] = [];
@@ -135,7 +136,8 @@ describe('notification templates', () => {
     );
     createdTemplateIds.push(created.id);
 
-    await expect(createNotificationTemplate({ templateKey, channel: 'SMS', body: 'x' }, {})).rejects.toThrow(ConflictError);
+    await expect(createNotificationTemplate({ templateKey, channel: 'EMAIL', body: 'x' }, {})).rejects.toThrow(ConflictError);
+    expect(notificationTemplateSchema.safeParse({ templateKey, channel: 'SMS', body: 'x' }).success).toBe(false);
 
     await removeNotificationTemplate(created.id, {});
     createdTemplateIds.splice(createdTemplateIds.indexOf(created.id), 1);

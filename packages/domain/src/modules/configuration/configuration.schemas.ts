@@ -43,7 +43,7 @@ export const updateCourierProviderSchema = z.object({
 
 export const notificationTemplateSchema = z.object({
   templateKey: z.string().min(1).max(80),
-  channel: z.enum(['SMS', 'EMAIL', 'WHATSAPP', 'IN_APP', 'PUSH']),
+  channel: z.enum(['EMAIL', 'WHATSAPP', 'IN_APP', 'PUSH']),
   subject: z.string().max(200).optional(),
   body: z.string().min(1).max(2000),
 });

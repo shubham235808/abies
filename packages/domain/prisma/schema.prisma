@@ -188,7 +188,8 @@ model CrmLeadTag {
 
 // Notes, calls, messages and stage/assignment events on a lead. Type is a
 // validated string (NOTE, CALL, WHATSAPP, SMS, EMAIL, MEETING, STAGE_CHANGE,
-// ASSIGNMENT, CREATED) so new types don't need a migration.
+// ASSIGNMENT, CREATED) so new types don't need a migration. SMS is deprecated:
+// the API no longer accepts it for new activities; historical rows keep it.
 model CrmActivity {
   id        String   @id @default(cuid())
   leadId    String
@@ -693,6 +694,8 @@ model Payment {
 }
 
 enum NotificationChannel {
+  // DEPRECATED: ABIES has no SMS channel. Code never sends or stores a new SMS row;
+  // notify() records a FAILED row instead. Historical rows keep this value.
   SMS
   EMAIL
   WHATSAPP
@@ -2721,6 +2724,8 @@ enum NotificationCategory {
 }
 
 enum NotificationPrefChannel {
+  // DEPRECATED: ABIES has no SMS channel. Consent for SMS is never read or written.
+  // Historical rows keep this value.
   SMS
   EMAIL
   WHATSAPP

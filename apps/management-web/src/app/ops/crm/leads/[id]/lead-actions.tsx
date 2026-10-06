@@ -9,7 +9,7 @@ import { Input, Label, Select } from '@abies/design-system/components/ui/input';
 const STAGES = [
   'NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'FOLLOW_UP', 'CONVERTED', 'LOST', 'DUPLICATE', 'INVALID', 'DO_NOT_CONTACT',
 ];
-const ACTIVITY_TYPES = ['NOTE', 'CALL', 'WHATSAPP', 'SMS', 'EMAIL', 'MEETING'];
+const ACTIVITY_TYPES = ['NOTE', 'CALL', 'WHATSAPP', 'EMAIL', 'MEETING'];
 
 type Assignee = { id: string; name: string | null; mobile: string; role: string };
 

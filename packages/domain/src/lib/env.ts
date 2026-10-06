@@ -60,14 +60,13 @@ const envSchema = z.object({
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
 
-  // Notification adapters, one provider name per channel. 'mock' is
+  // Notification adapters, one provider name per channel. ABIES has no SMS
+  // channel: customers are reached on WhatsApp and Email only. 'mock' is
   // hard-disabled in production (no channel silently pretends to deliver
   // without a real provider wired up) — same rule as OTP_DEV_CODE above.
   // 'smtp' (EMAIL_PROVIDER only, docs/platform/SECURITY-GAP-ANALYSIS.md §1)
   // is a real adapter and is allowed to run anywhere, including locked-down
   // deployments.
-  SMS_PROVIDER: z.string().default('mock'),
-  SMS_API_KEY: z.string().optional(),
   EMAIL_PROVIDER: z.string().default('mock'),
   EMAIL_API_KEY: z.string().optional(),
   WHATSAPP_PROVIDER: z.string().default('mock'),
@@ -90,13 +89,10 @@ const envSchema = z.object({
   EMAIL_MSG91_OTP_VARIABLE: z.string().optional(),
   EMAIL_MSG91_EXPIRY_VARIABLE: z.string().optional(),
 
-  // Which channel requestOtp() (modules/auth/auth.service.ts) actually
-  // dispatches the code through, once a user+matching contact method
-  // exists. 'sms' is still a no-op today (no real SMS provider — see
-  // docs/platform/SECURITY-GAP-ANALYSIS.md §1); 'email' is real via the
-  // smtp adapter above, intended for abies-dev while a real SMS decision
-  // for abies-prod is still pending.
-  OTP_DELIVERY_CHANNEL: z.enum(['sms', 'email']).default('sms'),
+  // Which channel requestOtp() (modules/auth/auth.service.ts) dispatches the
+  // code through, once a user+matching contact method exists. ABIES does not
+  // use SMS, so email is the only value and the default.
+  OTP_DELIVERY_CHANNEL: z.enum(['email']).default('email'),
 });
 
 export type Env = z.infer<typeof envSchema>;

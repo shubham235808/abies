@@ -75,6 +75,6 @@ describe('sender mapping by template key family', () => {
 
 describe('provider template IDs', () => {
   it('returns undefined until a provider template is approved', () => {
-    expect(providerTemplateIdFor('auth.otp_code', 'SMS')).toBeUndefined();
+    expect(providerTemplateIdFor('auth.otp_code', 'WHATSAPP')).toBeUndefined();
   });
 });
