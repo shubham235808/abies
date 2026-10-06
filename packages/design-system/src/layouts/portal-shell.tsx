@@ -10,6 +10,8 @@ import { PortalSidebarNav } from './portal-sidebar-nav';
 export interface PortalNavItem {
   href: string;
   label: string;
+  /** Planned but not built yet: shown greyed out, not linked. */
+  soon?: boolean;
 }
 
 // Shared shell for every authenticated portal (docs/TARGET-ARCHITECTURE.md:

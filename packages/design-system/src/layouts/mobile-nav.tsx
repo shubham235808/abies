@@ -30,7 +30,14 @@ export function MobileNav({ nav }: { nav: PortalNavItem[] }) {
         <nav className="space-y-1 border-t border-brand-neutral-100 px-4 pb-3 pt-2">
           {nav.map((item) => {
             const active = pathname === item.href;
+            if (item.soon) {
             return (
+              <span key={item.href} className="block rounded-control px-3 py-2 text-sm font-bold text-brand-neutral-400">
+                {item.label} <span className="text-[10px] uppercase">· Soon</span>
+              </span>
+            );
+          }
+          return (
               <Link
                 key={item.href}
                 href={item.href}
