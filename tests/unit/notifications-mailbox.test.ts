@@ -122,6 +122,7 @@ const ENQUIRY = {
   queryType: 'GENERAL',
   subject: 'Booking question',
   message: 'Can I book a Saturday slot?',
+  preferredContact: 'EMAIL',
   submittedAt: '06 Oct 2026, 13:00 IST',
 };
 const ACK = { name: 'Asha', referenceId: 'ENQ-2026-000001' };

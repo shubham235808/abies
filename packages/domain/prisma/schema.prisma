@@ -110,6 +110,7 @@ model User {
   crmAutomationRulesCreated  CrmAutomationRule[]         @relation("CrmAutomationRuleCreator")
   notificationPreferences    NotificationPreference[]
   notificationConsentEvents  NotificationConsentEvent[]
+  contactEnquiriesLinked     ContactEnquiry[]           @relation("ContactEnquiryLinkedUser")
 
   @@index([role, status])
 }
@@ -2768,3 +2769,60 @@ model NotificationConsentEvent {
   @@index([userId, createdAt])
 }
 
+
+// ---------------------------------------------------------------------------
+// Contact Us enquiries (customer-facing brief, section 5-6). A guest can send
+// one without an account; the enquiry is stored before any email is attempted,
+// so a mail failure never loses it. Each email keeps its own Notification row,
+// so its delivery status is tracked separately. referenceId comes from the
+// ContactEnquiry_ref_seq Postgres sequence (added in the migration), so
+// concurrent submissions never share a number.
+// ---------------------------------------------------------------------------
+
+enum ContactQueryType {
+  GENERAL
+  APPOINTMENT
+  PANCHAKARMA
+  DIAGNOSTICS
+  ORDERS
+  PAYMENT
+  ACCOUNT
+  TECHNICAL
+  OTHER
+}
+
+enum ContactPreferredMethod {
+  EMAIL
+  WHATSAPP
+  PHONE
+}
+
+enum ContactEnquiryStatus {
+  NEW
+}
+
+model ContactEnquiry {
+  id                            String                  @id @default(cuid())
+  referenceId                   String                  @unique
+  name                          String
+  email                         String
+  mobile                        String
+  queryType                     ContactQueryType
+  subject                       String
+  message                       String
+  preferredContact              ContactPreferredMethod?
+  // The guest acknowledged that ABIES may reply about this enquiry. Required to submit.
+  consentAcknowledged           Boolean
+  status                        ContactEnquiryStatus    @default(NEW)
+  // Set only if the enquirer is signed in when they send it.
+  linkedUserId                  String?
+  // Notification rows for the two emails. Each is retried and reported on its own.
+  internalNotificationId        String?
+  acknowledgementNotificationId String?
+  createdAt                     DateTime                @default(now())
+  updatedAt                     DateTime                @updatedAt
+  linkedUser                    User?                   @relation("ContactEnquiryLinkedUser", fields: [linkedUserId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([createdAt])
+}

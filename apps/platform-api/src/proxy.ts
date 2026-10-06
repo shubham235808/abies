@@ -33,6 +33,12 @@ const RATE_LIMIT_RULES: RateLimitRule[] = [
     windowSeconds: (env) => env.RATE_LIMIT_TICKET_CREATE_WINDOW_SECONDS,
   },
   {
+    prefix: '/api/v1/contact',
+    method: 'POST',
+    limit: (env) => env.RATE_LIMIT_CONTACT_MAX,
+    windowSeconds: (env) => env.RATE_LIMIT_CONTACT_WINDOW_SECONDS,
+  },
+  {
     prefix: '/api/v1/payments/webhook',
     limit: (env) => env.RATE_LIMIT_WEBHOOK_MAX,
     windowSeconds: (env) => env.RATE_LIMIT_WEBHOOK_WINDOW_SECONDS,

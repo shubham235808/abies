@@ -30,6 +30,14 @@ const envSchema = z.object({
   RATE_LIMIT_TICKET_CREATE_WINDOW_SECONDS: z.coerce.number().default(600),
   RATE_LIMIT_WEBHOOK_MAX: z.coerce.number().default(120),
   RATE_LIMIT_WEBHOOK_WINDOW_SECONDS: z.coerce.number().default(60),
+  RATE_LIMIT_CONTACT_MAX: z.coerce.number().default(5),
+  RATE_LIMIT_CONTACT_WINDOW_SECONDS: z.coerce.number().default(600),
+
+  // Public contact details (modules/contact/organization.ts). The clinic,
+  // doctor and address are fixed in code; these three can change per environment.
+  ABIES_CONTACT_MOBILE: z.string().min(6).default('8867220977'),
+  ABIES_CONTACT_WHATSAPP: z.string().regex(/^\d{10,15}$/, 'digits only, with country code').default('919315175041'),
+  ABIES_CONTACT_SUPPORT_EMAIL: z.string().email().default('support@abies.in'),
   SESSION_TTL_DAYS: z.coerce.number().default(7),
   ADMIN_MFA_REQUIRED: z.coerce.boolean().default(true),
   OTP_DEV_CODE: z.string().optional(),

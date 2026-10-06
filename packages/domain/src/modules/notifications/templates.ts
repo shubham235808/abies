@@ -215,7 +215,7 @@ const CONTACT_ENQUIRY_INTERNAL: TemplateDefinition = {
   defaultPolicy: 'EMAIL_ONLY',
   category: 'SERVICE',
   priority: 'NORMAL',
-  requiredVariables: ['referenceId', 'name', 'email', 'mobile', 'queryType', 'subject', 'message', 'submittedAt'],
+  requiredVariables: ['referenceId', 'name', 'email', 'mobile', 'queryType', 'subject', 'message', 'preferredContact', 'submittedAt'],
   bodies: {
     EMAIL: {
       en:
@@ -226,6 +226,7 @@ const CONTACT_ENQUIRY_INTERNAL: TemplateDefinition = {
         'Mobile: {{mobile}}\n' +
         'Query type: {{queryType}}\n' +
         'Subject: {{subject}}\n' +
+        'Preferred contact: {{preferredContact}}\n' +
         'Submitted: {{submittedAt}}\n\n' +
         'Message:\n{{message}}',
     },
