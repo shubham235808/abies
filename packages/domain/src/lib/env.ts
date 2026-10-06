@@ -72,15 +72,21 @@ const envSchema = z.object({
   WHATSAPP_PROVIDER: z.string().default('mock'),
   WHATSAPP_API_KEY: z.string().optional(),
 
-  // SMTP connection for EMAIL_PROVIDER=smtp. All optional in the schema
-  // (only actually needed at that point) — same convention as Razorpay's
-  // keys above: blank means "not configured," surfaced honestly by the
-  // adapter's own send() failing, not validated eagerly here.
+  // SMTP connection for EMAIL_PROVIDER=mailer91 (or the generic smtp). All
+  // optional in the schema: validateEmailConfig() in lib/notifications/
+  // email-config.ts names the missing keys, and the adapter fails permanently
+  // with BLOCKED_EXTERNAL_CONFIGURATION rather than sending. EMAIL_SMTP_PASSWORD
+  // is a secret and must never be logged or echoed in an error.
+  // EMAIL_SMTP_HOST defaults to the Mailer91 preset when EMAIL_PROVIDER=mailer91.
   EMAIL_SMTP_HOST: z.string().optional(),
   EMAIL_SMTP_PORT: z.coerce.number().default(587),
-  EMAIL_SMTP_USER: z.string().optional(),
+  SMTP_USERNAME: z.string().optional(),
+  EMAIL_SMTP_USER: z.string().optional(), // legacy alias for SMTP_USERNAME (provider=smtp)
   EMAIL_SMTP_PASSWORD: z.string().optional(),
   EMAIL_FROM_ADDRESS: z.string().optional(),
+  // JSON map of sender role -> PENDING | VERIFIED | DISABLED. Unset means every
+  // role is PENDING, so nothing sends until an operator verifies a sender.
+  EMAIL_SENDER_STATES: z.string().optional(),
   // MSG91 transactional email (EMAIL_PROVIDER=msg91). The auth key is a secret;
   // the template and variable names come from the MSG91 dashboard.
   EMAIL_MSG91_AUTH_KEY: z.string().optional(),

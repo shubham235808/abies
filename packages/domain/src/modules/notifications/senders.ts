@@ -79,3 +79,30 @@ const PROVIDER_TEMPLATE_IDS: Partial<Record<string, Partial<Record<TemplateChann
 export function providerTemplateIdFor(templateKey: string, channel: TemplateChannel): string | undefined {
   return PROVIDER_TEMPLATE_IDS[templateKey]?.[channel];
 }
+
+// Reply-To mapping for email, keyed by template key family (the part before
+// the first dot). Reply-To is never a sender role: a customer reply goes to
+// the team that owns the topic, while From stays the sender identity above.
+// Plural and singular spellings are both listed because the sender role
+// names are plural and the template keys are singular.
+const REPLY_TO_BY_FAMILY: Record<string, string> = {
+  auth: 'support@abies.in',
+  notifications: 'support@abies.in',
+  appointment: 'care@abies.in',
+  appointments: 'care@abies.in',
+  order: 'orders@abies.in',
+  orders: 'orders@abies.in',
+  payment: 'accounts@abies.in',
+  refund: 'accounts@abies.in',
+  billing: 'accounts@abies.in',
+  partner: 'partners@abies.in',
+  partners: 'partners@abies.in',
+};
+
+// Families not listed here (including unregistered keys) reply to support.
+export const DEFAULT_REPLY_TO = 'support@abies.in';
+
+export function replyToFor(templateKey: string): string {
+  const family = templateKey.split('.')[0] ?? '';
+  return REPLY_TO_BY_FAMILY[family] ?? DEFAULT_REPLY_TO;
+}

@@ -21,7 +21,10 @@ export function getAdapter(channel: ExternalChannel): NotificationAdapter | null
   const env = getEnv();
   const provider = env[PROVIDER_ENV_KEY[channel]];
 
-  if (channel === 'EMAIL' && provider === 'smtp') {
+  // Mailer91 SMTP (EMAIL_PROVIDER=mailer91) and the generic smtp provider share
+  // one hardened adapter. An incomplete configuration still returns it: it
+  // fails permanently with BLOCKED_EXTERNAL_CONFIGURATION and names the keys.
+  if (channel === 'EMAIL' && (provider === 'mailer91' || provider === 'smtp')) {
     return createSmtpAdapter();
   }
 
