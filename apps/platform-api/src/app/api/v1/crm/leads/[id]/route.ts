@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
-import { errorResponse, UnauthorizedError } from '@abies/domain/lib/errors';
+import { errorResponse, ForbiddenError, UnauthorizedError } from '@abies/domain/lib/errors';
 import { callDbService, sessionTokenFromCookies } from '@abies/domain/server/db-service';
 
 // Proxy to the database service (docs/DB-SERVICE-PLAN.md). The browser's
 // session token is forwarded; the database service checks it. This app no
 // longer touches CRM tables directly.
 async function forward(req: Request, dbPath: string, method: string, withBody: boolean) {
+  // Writes carry the session cookie, so only the app's own origin may send them.
+  if (method !== 'GET') {
+    const expected = new URL(process.env.APP_BASE_URL ?? 'https://dev.abies.in').origin;
+    if (req.headers.get('origin') !== expected) throw new ForbiddenError('Cross-site request blocked');
+  }
   const token = await sessionTokenFromCookies();
   if (!token) throw new UnauthorizedError();
   const body = withBody ? await req.json() : undefined;
@@ -21,7 +26,7 @@ async function forward(req: Request, dbPath: string, method: string, withBody: b
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    return await forward(req, `/db/v1/crm/leads/${id}`, 'GET', false);
+    return await forward(req, `/db/v1/crm/leads/${encodeURIComponent(id)}`, 'GET', false);
   } catch (error) {
     return errorResponse(error, req);
   }
@@ -30,7 +35,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    return await forward(req, `/db/v1/crm/leads/${id}`, 'PATCH', true);
+    return await forward(req, `/db/v1/crm/leads/${encodeURIComponent(id)}`, 'PATCH', true);
   } catch (error) {
     return errorResponse(error, req);
   }

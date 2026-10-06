@@ -30,7 +30,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
 
   const res = await callDbService<{ lead: LeadDetail; viewer: { canWrite: boolean; canAssign: boolean } }>(
-    `/db/v1/crm/leads/${id}`,
+    `/db/v1/crm/leads/${encodeURIComponent(id)}`,
     { sessionToken: token },
   );
   if (res.status === 401) redirect('/ops/login');

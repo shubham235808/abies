@@ -5,6 +5,8 @@ import {
   canAssignLeads,
   canWriteLeads,
   CRM_ACCESS_ROLES,
+  CRM_OWNER_ROLES,
+  canReadAllLeads,
   leadVisibilityWhere,
   requireCrmAccess,
   type CrmActor,
@@ -48,7 +50,7 @@ async function resolveTags(names: string[] | undefined) {
 
 async function assertAssignee(assignedToId: string) {
   const user = await prisma.user.findUnique({ where: { id: assignedToId } });
-  if (!user || user.status !== 'ACTIVE' || !CRM_ACCESS_ROLES.includes(user.role)) {
+  if (!user || user.status !== 'ACTIVE' || !CRM_OWNER_ROLES.includes(user.role)) {
     throw new BadRequestError('Assign to an active CRM user');
   }
   return user;
@@ -78,7 +80,15 @@ export async function createLead(dto: CreateLeadInput, actor: CrmActor) {
     where: { OR: orClauses, stage: { notIn: [...CLOSED_STAGES] } },
     select: { id: true },
   });
-  if (existing) throw new ConflictError('A lead with this mobile or email already exists');
+  if (existing) {
+    // Users who can't see every lead get the same generic message whether or not
+    // the match is theirs, so the response doesn't say which lead it is.
+    throw new ConflictError(
+      canReadAllLeads(actor)
+        ? 'A lead with this mobile or email already exists'
+        : 'This contact may already be on file. Ask your manager before adding it.',
+    );
+  }
 
   const tags = await resolveTags(dto.tags);
   const lead = await prisma.crmLead.create({

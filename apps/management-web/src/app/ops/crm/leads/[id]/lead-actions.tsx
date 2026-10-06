@@ -51,7 +51,7 @@ export function LeadActions({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/v1/crm/leads/${leadId}${path}`, {
+      const res = await fetch(`/api/v1/crm/leads/${encodeURIComponent(leadId)}${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

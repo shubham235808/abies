@@ -42,6 +42,7 @@ export default async function CrmLayout({ children }: { children: React.ReactNod
   return (
     <PortalShell
       loginPath="/ops/login"
+      requireMfa={session?.user.role === 'ADMIN'}
       allowedRoles={['ADMIN', 'CRM_ADMIN', 'SALES_MANAGER', 'SALES', 'MARKETING', 'AUDITOR']}
       portalLabel="CRM"
       nav={nav}

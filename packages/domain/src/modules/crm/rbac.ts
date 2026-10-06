@@ -19,13 +19,22 @@ export const CRM_ASSIGN_ROLES: UserRole[] = ['ADMIN', 'CRM_ADMIN', 'SALES_MANAGE
 export interface CrmActor {
   userId: string;
   role: UserRole;
+  mfaVerified?: boolean;
   sessionId?: string;
   ip?: string;
   userAgent?: string;
 }
 
+// Who may own a lead. Read-only roles (marketing, auditor) can't work leads, so
+// they can't be assigned them.
+export const CRM_OWNER_ROLES: UserRole[] = ['ADMIN', 'CRM_ADMIN', 'SALES_MANAGER', 'SALES'];
+
 export function requireCrmAccess(actor: CrmActor): void {
   if (!CRM_ACCESS_ROLES.includes(actor.role)) throw new ForbiddenError('CRM access is not enabled for this role');
+  // An admin session that hasn't completed MFA gets no customer data.
+  if (actor.role === 'ADMIN' && actor.mfaVerified !== true) {
+    throw new ForbiddenError('MFA verification required');
+  }
 }
 
 export function canReadAllLeads(actor: CrmActor): boolean {
