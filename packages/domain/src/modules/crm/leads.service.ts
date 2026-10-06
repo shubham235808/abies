@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/db';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../lib/errors';
 import { recordAuditEvent } from '../../server/audit';
+import { runLeadCreatedRules } from './automation.service';
 import {
   canAssignLeads,
   canWriteLeads,
@@ -125,6 +126,9 @@ export async function createLead(dto: CreateLeadInput, actor: CrmActor) {
         : {}),
     },
   });
+
+  // Automation runs after the lead is saved. A rule failure must not fail the create.
+  await runLeadCreatedRules(lead.id, actor.userId).catch(() => undefined);
 
   await recordAuditEvent(auditCtx(actor), {
     eventType: 'CRM_LEAD',

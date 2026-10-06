@@ -107,6 +107,7 @@ model User {
   crmOpportunitiesCreated    CrmOpportunity[]            @relation("CrmOpportunityCreator")
   crmTasksAssigned           CrmTask[]                   @relation("CrmTaskAssignee")
   crmTasksCreated            CrmTask[]                   @relation("CrmTaskCreator")
+  crmAutomationRulesCreated  CrmAutomationRule[]         @relation("CrmAutomationRuleCreator")
 
   @@index([role, status])
 }
@@ -2652,5 +2653,40 @@ model CrmTask {
   @@index([assignedToId, status, dueAt])
   @@index([leadId])
   @@index([dueAt])
+}
+
+// ---------------------------------------------------------------------------
+// CRM Phase 6 — automation. Rules are declarative: a trigger, a fixed set of
+// conditions and one action from a fixed list. There is no code execution.
+// Each rule runs at most once per lead (CrmAutomationExecution is unique on
+// ruleId + leadId), so re-running a trigger never repeats an action.
+// ---------------------------------------------------------------------------
+
+model CrmAutomationRule {
+  id           String                    @id @default(cuid())
+  name         String
+  enabled      Boolean                   @default(true)
+  trigger      String
+  conditions   Json
+  action       String
+  actionConfig Json
+  createdById  String
+  createdBy    User                      @relation("CrmAutomationRuleCreator", fields: [createdById], references: [id])
+  executions   CrmAutomationExecution[]
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+}
+
+model CrmAutomationExecution {
+  id        String            @id @default(cuid())
+  ruleId    String
+  rule      CrmAutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  leadId    String
+  status    String
+  detail    String?
+  createdAt DateTime          @default(now())
+
+  @@unique([ruleId, leadId])
+  @@index([leadId])
 }
 
