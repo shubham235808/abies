@@ -1,4 +1,5 @@
 import { getEnv } from '../env';
+import { replyToFor } from '../../modules/notifications/senders';
 import type { NotificationAdapter, NotificationRecipient, SendResult } from './types';
 
 // MSG91 transactional email (https://control.msg91.com/api/v5/email/send).
@@ -7,6 +8,13 @@ import type { NotificationAdapter, NotificationRecipient, SendResult } from './t
 // hard-coded, because they're whatever the template in the MSG91 dashboard uses.
 
 const ENDPOINT = 'https://control.msg91.com/api/v5/email/send';
+
+// The From address is the sender chosen for this template. Falls back to the
+// no-reply address on the configured domain when no sender was resolved.
+function fromAddressFor(payload: Record<string, unknown>, domain: string): string {
+  const sender = payload.sender as { address?: string } | undefined;
+  return sender?.address ?? `no-reply@${domain}`;
+}
 
 function requireConfig(): {
   authKey: string;
@@ -71,7 +79,10 @@ export function createMsg91Adapter(): NotificationAdapter {
                 variables,
               },
             ],
-            from: { email: `no-reply@${cfg.domain}` },
+            // Sender chosen by the template's family; Reply-To follows the family
+            // mapping. Both come from configuration, not from this adapter.
+            from: { name: 'ABIES', email: fromAddressFor(payload, cfg.domain) },
+            reply_to: [{ email: replyToFor(templateKey) }],
             domain: cfg.domain,
             template_id: cfg.templateId,
           }),
