@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => {
   type Row = Record<string, any>;
   const state = { rows: [] as Row[], seq: 0 };
+  const env: Record<string, unknown> = { EMAIL_PROVIDER: 'mock', WHATSAPP_PROVIDER: 'mock', WHATSAPP_ENABLED: true, NODE_ENV: 'test' };
 
   const toTime = (v: unknown) => (v instanceof Date ? v.getTime() : v);
   const matches = (row: Row, where: Record<string, any> = {}) =>
@@ -95,13 +96,13 @@ const h = vi.hoisted(() => {
     return consent.value.get(`${category}:${channel}`) ?? category !== 'MARKETING';
   });
 
-  return { state, prismaMock, adapters, consent, canSend };
+  return { state, prismaMock, adapters, consent, canSend, env };
 });
 
 vi.mock('../../packages/domain/src/lib/db', () => ({ prisma: h.prismaMock }));
 
 vi.mock('../../packages/domain/src/lib/env', () => ({
-  getEnv: () => ({ EMAIL_PROVIDER: 'mock', WHATSAPP_PROVIDER: 'mock', NODE_ENV: 'test' }),
+  getEnv: () => h.env,
   isLockedDownDeployment: () => false,
 }));
 
@@ -150,6 +151,9 @@ beforeEach(() => {
   h.adapters.WHATSAPP.send.mockReset().mockResolvedValue(OK);
   h.adapters.EMAIL.send.mockReset().mockResolvedValue(OK);
 });
+
+// WhatsApp is switched off by default until its templates are approved. These
+// tests cover the routing once it is enabled; the switch is tested separately.
 
 describe('default routing policies', () => {
   it('uses the policy each template declares', () => {
@@ -381,5 +385,18 @@ describe('dispatch input checks', () => {
     const result = await dispatch(USER, 'auth.otp_code', OTP, { policy: 'WHATSAPP_ONLY' });
     expect(result.rows.map((r) => r.channel)).toEqual(['WHATSAPP']);
     expect(h.adapters.EMAIL.send).not.toHaveBeenCalled();
+  });
+});
+
+describe('WhatsApp switch', () => {
+  it('a WhatsApp message is suppressed while WhatsApp is disabled, and never shown as sent', async () => {
+    h.env.WHATSAPP_ENABLED = false;
+    try {
+      const { notify } = await import('../../packages/domain/src/modules/notifications/notifications.service');
+      const out = await notify('u1', 'WHATSAPP', 'appointment.confirmed', { appointmentId: 'a1' });
+      expect(out).toMatchObject({ status: "SUPPRESSED", errorCategory: "CHANNEL_DISABLED" });
+    } finally {
+      h.env.WHATSAPP_ENABLED = true;
+    }
   });
 });

@@ -367,6 +367,19 @@ async function attemptDelivery(
   // External messages need the recipient's consent for their category, per
   // channel: a WhatsApp choice never implies email, or the reverse. A send
   // without consent is suppressed, never delivered. Security messages always go.
+  if (channel === 'WHATSAPP' && !getEnv().WHATSAPP_ENABLED) {
+    const row = await prisma.notification.update({
+      where: { id },
+      data: {
+        status: 'SUPPRESSED',
+        errorCategory: 'CHANNEL_DISABLED',
+        error: 'WhatsApp is not enabled yet (templates pending approval)',
+        nextAttemptAt: null,
+        processingAt: null,
+      },
+    });
+    return { row };
+  }
   if (channel === 'EMAIL' || channel === 'WHATSAPP') {
     if (!(await canSend(userId, categoryFor(templateKey), channel))) {
       const row = await prisma.notification.update({

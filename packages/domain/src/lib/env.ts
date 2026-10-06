@@ -70,6 +70,12 @@ const envSchema = z.object({
   EMAIL_PROVIDER: z.string().default('mock'),
   EMAIL_API_KEY: z.string().optional(),
   WHATSAPP_PROVIDER: z.string().default('mock'),
+  // WhatsApp stays off until its templates are approved. While off, WhatsApp
+  // messages are recorded as suppressed (never shown as sent).
+  WHATSAPP_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   WHATSAPP_API_KEY: z.string().optional(),
 
   // SMTP connection for EMAIL_PROVIDER=mailer91 (or the generic smtp). All
