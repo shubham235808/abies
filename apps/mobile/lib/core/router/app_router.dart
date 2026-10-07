@@ -10,6 +10,13 @@ import '../../features/auth/presentation/sign_in_screen.dart';
 import '../../features/doctors/presentation/doctor_detail_screen.dart';
 import '../../features/doctors/presentation/doctor_search_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
+import '../../features/panchakarma/domain/panchakarma_therapy.dart';
+import '../../features/panchakarma/presentation/panchakarma_booking_detail_screen.dart';
+import '../../features/panchakarma/presentation/panchakarma_booking_list_screen.dart';
+import '../../features/panchakarma/presentation/panchakarma_booking_screen.dart';
+import '../../features/panchakarma/presentation/panchakarma_centres_screen.dart';
+import '../../features/panchakarma/presentation/panchakarma_search_screen.dart';
+import '../../features/panchakarma/presentation/panchakarma_therapy_detail_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 
 /// Navigation (docs/mobile/MOBILE-ARCHITECTURE.md §4). `/sign-in` and
@@ -20,8 +27,17 @@ import '../../features/profile/presentation/profile_screen.dart';
 /// in-app navigation and as a web-style link — and resolves the slug
 /// against the real backend itself before showing anything
 /// (`DoctorDetailScreen`, docs/mobile/API-GAP-ANALYSIS.md §7). The other
-/// `/product/:id`, `/appointment/:id`, `/diagnostics/:id`, `/panchakarma/:id`
-/// deep-link routes remain Phase 1 placeholders — Phases 5-7's own screens.
+/// `/product/:id`, `/appointment/:id`, `/diagnostics/:id` deep-link routes
+/// remain Phase 1 placeholders — Phases 6-7's own screens.
+///
+/// Phase 5's `/panchakarma*` routes are real, but `/panchakarma/therapy/:id`
+/// and `/panchakarma/book` are **not** cold-deep-linkable the way
+/// `/doctor/:slug` is — there is no `GET /public/panchakarma/[id]` to
+/// resolve an id against (a real, reported gap; see
+/// `PanchakarmaTherapyDetailScreen`'s doc comment). Both routes carry their
+/// data via `extra` from in-app navigation; opened without it, they show an
+/// honest "start from search" state rather than attempting a network call
+/// that doesn't exist.
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _AuthRefreshNotifier(ref);
   ref.onDispose(refreshNotifier.dispose);
@@ -73,10 +89,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(path: '/appointments', builder: (context, state) => const AppointmentListScreen()),
+      GoRoute(path: '/panchakarma', builder: (context, state) => const PanchakarmaSearchScreen()),
+      GoRoute(path: '/panchakarma/centres', builder: (context, state) => const PanchakarmaCentresScreen()),
+      GoRoute(
+        path: '/panchakarma/therapy/:id',
+        builder: (context, state) => PanchakarmaTherapyDetailScreen(therapy: state.extra as PanchakarmaTherapy?),
+      ),
+      GoRoute(
+        path: '/panchakarma/book',
+        builder: (context, state) => PanchakarmaBookingScreen(therapy: state.extra as PanchakarmaTherapy?),
+      ),
+      GoRoute(path: '/panchakarma/bookings', builder: (context, state) => const PanchakarmaBookingListScreen()),
+      GoRoute(
+        path: '/panchakarma/bookings/:id',
+        builder: (context, state) => PanchakarmaBookingDetailScreen(bookingId: state.pathParameters['id']!),
+      ),
       GoRoute(path: '/product/:id', builder: (context, state) => _PlaceholderScreen(title: 'Product ${state.pathParameters['id']}')),
       GoRoute(path: '/appointment/:id', builder: (context, state) => _PlaceholderScreen(title: 'Appointment ${state.pathParameters['id']}')),
       GoRoute(path: '/diagnostics/:id', builder: (context, state) => _PlaceholderScreen(title: 'Diagnostics ${state.pathParameters['id']}')),
-      GoRoute(path: '/panchakarma/:id', builder: (context, state) => _PlaceholderScreen(title: 'Panchakarma ${state.pathParameters['id']}')),
     ],
   );
 });

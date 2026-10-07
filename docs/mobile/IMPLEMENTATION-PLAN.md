@@ -116,13 +116,65 @@ Phase 3, plus 37 new), a real debug APK built. A full pay→confirm flow against
 real double-booking race against that gateway, are explicitly carried into Phase 8 once real Razorpay
 keys exist somewhere this app can be tested against end to end — not deferred by oversight.
 
-## Phase 5 — Panchakarma
+## Phase 5 — Panchakarma — **implemented and verified**, 2026-10-07
 
-Consumes: `GET /api/v1/public/panchakarma`, `/public/panchakarma-centres`, `/public/panchakarma/facets`,
-`POST /api/v1/panchakarma-bookings`, `/verify-payment`, `GET /api/v1/panchakarma-bookings/mine`,
-`POST /api/v1/panchakarma-bookings/[id]/cancel`.
+Consumes: `GET /api/v1/public/panchakarma`, `/public/panchakarma/facets`, `/public/panchakarma-centres`,
+`POST /api/v1/panchakarma-bookings`, `/verify-payment`, `POST /api/v1/panchakarma-bookings/[id]/cancel`,
+`GET /api/v1/panchakarma-bookings/[id]`, `/panchakarma-bookings/mine`.
 
-Exit: facility→therapy→booking→payment→history flow tested end to end against the real backend.
+**What's actually done now**: the real search screen (`publicTherapySearchSchema`'s actual filter set —
+`q`/`city`/`limit`/`offset`, confirmed by reading `catalogue.schemas.ts`; smaller than doctors', not
+assumed equal to it), the real facets (`{cities}` only), a separate centre-centric browse screen for
+`/public/panchakarma-centres` (confirmed, by reading both routes, to be a genuinely different path and
+shape than `/public/panchakarma`), session-count-based booking (`bookTherapySchema` has no slot/time
+concept — confirmed by reading `bookings.schemas.ts`), the service-unavailable-for-payment state, cancel,
+and a booking list + detail screen (sessions, therapist names once assigned, payment) — all against the
+real dev backend's route/service code (read directly, not guessed), and all unit-tested against fakes
+(`apps/mobile/test/unit/panchakarma_models_test.dart`, `panchakarma_booking_flow_controller_test.dart`,
+`panchakarma_bookings_controller_test.dart`).
+
+**A real backend gap found and reported, not worked around**: there is no `GET /public/panchakarma/[id]`
+and no `GET /public/panchakarma-centres/[id]` — confirmed by reading every file under
+`apps/platform-api/src/app/api/v1/public/panchakarma*`; only the two list/search routes above exist,
+unlike doctors' `/public/doctors/[slug]`. This means:
+  - The therapy detail and booking screens cannot resolve a bare id the way `DoctorDetailScreen` does —
+    they read the therapy from `GoRouter`'s navigation `extra` (the exact object the search screen
+    already fetched from the real API) instead. A cold deep link to `/panchakarma/therapy/:id` with no
+    `extra` behind it shows an honest "start from search" state rather than attempting a network call
+    that doesn't exist — a real, permanent limitation of this phase's deep-linking versus Phase 4's,
+    not a bug.
+  - The centre list (`PanchakarmaCentresScreen`) is browse-only, with nothing to tap into. It would have
+    been possible to *fake* a per-centre detail by re-filtering `/public/panchakarma`'s results down to
+    one centre's id client-side, but that was deliberately not built — it would only look like a real
+    per-centre contract while actually depending on an unrelated endpoint's `q`/`city` filters, and
+    could silently drift or miss results. The honest fix is a backend `/public/panchakarma-centres/[id]`
+    route, analogous to doctors' `/[slug]`, flagged here for backend follow-up, not built around.
+
+**Booking re-fetch discipline, adapted from Phase 4's own rule** (brief §7): since there's no slot/time
+step for Panchakarma and therefore nothing like `/appointments/slots` to re-fetch from,
+`PanchakarmaBookingFlowController.confirmBooking` instead re-runs the real `/public/panchakarma` search
+(scoped by the therapy's own name and centre city) immediately before calling `/panchakarma-bookings`,
+and refuses to book if that fresh search no longer contains the exact centre+therapy pair — the
+navigation `extra` object is never trusted as still accurate at the moment of booking, unit-tested in
+`panchakarma_booking_flow_controller_test.dart`.
+
+**What's deferred to Phase 8, and why this isn't a Phase 5 gap**: `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`
+are blank in this environment's `.env` (confirmed by reading `packages/domain/src/lib/payments/
+razorpay.ts`'s `isConfigured()` and `bookings.service.ts`'s `bookTherapy()`, which checks it *first*,
+before even looking up the centre/therapy, and throws a 503 `ServiceUnavailableError` before creating
+anything when blank — the identical gate `holdSlot()` uses in Phase 4), so a full
+search→book→**pay**→confirm flow cannot be exercised end to end in this environment regardless of
+mobile-side work. This phase implements the full booking-creation success-path plumbing
+(`PanchakarmaBookingCreationResult`, `/verify-payment`) and tests it against a fake API, but never calls
+a real payment SDK — identical deferral to Phase 4.
+
+Exit: search/detail/booking/cancel/history flows implemented and unit-tested against the real
+route/service contracts; the service-unavailable payment state handled as a normal, displayable outcome,
+not a crash; the missing single-therapy/single-centre detail routes found, reported, and designed
+around honestly (navigation `extra`, not a fabricated endpoint); `flutter analyze` clean, `flutter test`
+green (92/92 — the original 72 through Phase 4, plus 20 new), a real debug APK built. A full pay→confirm
+flow against a live gateway is explicitly carried into Phase 8, same as Phase 4 — not deferred by
+oversight.
 
 ## Phase 6 — Diagnostics
 

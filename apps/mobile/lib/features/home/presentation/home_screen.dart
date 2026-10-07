@@ -366,6 +366,10 @@ class _PanchakarmaBookingTile extends StatelessWidget {
         leading: const Icon(Icons.spa_outlined),
         title: Text(booking.therapyName ?? 'Panchakarma booking'),
         subtitle: Text('${booking.centreName ?? ''} · ${booking.sessionCount} sessions · ${_statusLabel(booking.status)}'),
+        // Full cancel/session detail lives on the real "my Panchakarma
+        // bookings" list (Phase 5) — this card is still just a dashboard
+        // preview, same rule as Phase 4's `_AppointmentTile`.
+        onTap: () => context.push('/panchakarma/bookings'),
       ),
     );
   }
@@ -401,14 +405,23 @@ class _PanchakarmaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _PreviewCard(
-      leadingIcon: Icons.spa_outlined,
-      title: therapy.name,
-      subtitle: therapy.centreName ?? '',
-      trailing: [
-        Text('${therapy.durationMinutes} min'),
-        Text('₹${therapy.price}'),
-      ],
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      // Phase 3's preview card has no centre id, so it can't jump straight
+      // to a specific therapy detail (there's no public single-therapy
+      // route to resolve one by id anyway — see `PanchakarmaTherapy`'s doc
+      // comment); the real Panchakarma search screen is the honest
+      // destination, same "tile → list" shape as `_AppointmentTile`.
+      onTap: () => context.push('/panchakarma'),
+      child: _PreviewCard(
+        leadingIcon: Icons.spa_outlined,
+        title: therapy.name,
+        subtitle: therapy.centreName ?? '',
+        trailing: [
+          Text('${therapy.durationMinutes} min'),
+          Text('₹${therapy.price}'),
+        ],
+      ),
     );
   }
 }
