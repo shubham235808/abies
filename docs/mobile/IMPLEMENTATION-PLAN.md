@@ -33,10 +33,14 @@ Consumes: `POST /api/v1/auth/otp/request`, `POST /api/v1/auth/otp/verify`, `GET 
 `POST /api/v1/auth/logout`, `GET/PATCH /api/v1/patients/me`, `GET/POST /api/v1/patients/me/family`,
 `GET /api/v1/consent/me`, `POST /api/v1/consent/[artifactId]/accept`.
 
-**Blocked on a product decision** (API-GAP-ANALYSIS.md 3): what a phone-only sign-up does when there's
-no email on file to deliver the OTP to. Implementation can start with "email required at sign-up" as the
-interim behavior and swap it once that decision lands — but Phase 2 is not *complete* until the real
-answer is implemented, not the interim one.
+**Decision made** (API-GAP-ANALYSIS.md 3, 2026-10-07): prioritize WhatsApp OTP delivery. The backend side
+of this already landed — `requestOtp()` attempts a WhatsApp send for every mobile-identifier request,
+additive to the existing email send, gated behind `WHATSAPP_ENABLED` and the MSG91 template map exactly
+like any other WhatsApp message. Phase 2's mobile sign-up screen can be built against this now; it will
+start actually delivering by WhatsApp the moment a person flips the switch after template approval, with
+no further mobile-side change. Until then, mobile sign-up for an account with no email on file has no
+live delivery path in dev/prod (only the dev-mode OTP bypass) — build and test the UI now, but don't
+call Phase 2 fully done for that case until WhatsApp is switched on.
 
 Exit: registration, login, logout, session persistence across app restart, profile edit, family-member
 CRUD, consent accept/withdraw all exercised by integration tests against a real dev-environment backend

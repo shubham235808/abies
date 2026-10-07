@@ -49,11 +49,33 @@ number — the natural mobile sign-up, and the brief's own expectation ("OTP ver
 `EXPOSE_DEV_OTP`) is explicitly not available outside non-production deployments.
 
 This is a product/business decision, not an engineering one — it determines what "sign up" even means on
-mobile at launch. Options: (a) mobile sign-up requires an email too, at least until WhatsApp OTP ships;
-(b) prioritize WhatsApp OTP delivery (`auth.otp_code` is already a registered WhatsApp template body) as
-soon as the WhatsApp templates are approved, ahead of other WhatsApp use cases; (c) reintroduce SMS OTP
-specifically (reopening a decision this platform already made against SMS generally). This needs a real
-answer before Phase 2 can be called done, not an engineering workaround.
+mobile at launch.
+
+**Decision (2026-10-07): prioritize WhatsApp OTP delivery**, ahead of other WhatsApp use cases. The
+engineering side of this is now built and tested, gated entirely behind the existing `WHATSAPP_ENABLED`
+switch and the MSG91 WhatsApp template map — it sends nothing until both are turned on, which stays a
+separate, human, sandbox-verified step (`packages/domain/src/lib/notifications/msg91-whatsapp.ts`'s own
+"VERIFY BEFORE ACTIVATION" note, unchanged by this work):
+
+- `notifyMailbox()` (`packages/domain/src/modules/notifications/notifications.service.ts`) now takes a
+  `channel` (`EMAIL` or `WHATSAPP`) and can address a raw mobile number with no `User` row required —
+  the same no-user-yet case Contact Us already needed, reused here for a sign-up that doesn't exist as
+  an account yet.
+- `requestOtp()` (`packages/domain/src/modules/auth/auth.service.ts`) now also calls
+  `notifyMailbox(mobile, 'WHATSAPP', 'auth.otp_code', ...)` for every mobile-identifier request —
+  additive, never replacing the existing email send, and it costs nothing today since
+  `WHATSAPP_ENABLED=false` makes `attemptDelivery()` record it `SUPPRESSED`/`CHANNEL_DISABLED` without a
+  provider call. The moment WhatsApp is switched on with an approved `auth.otp_code` template, phone-only
+  sign-up starts working with no further code change.
+- Tests: `tests/unit/notifications-mailbox.test.ts` (WhatsApp-channel mailbox sends, the disabled-switch
+  suppression path, address validation) and `tests/unit/auth-otp-whatsapp.test.ts` (the new branch in
+  `requestOtp()`).
+
+What's still a **human, not engineering, action**: getting the `auth.otp_code` WhatsApp template actually
+approved by MSG91/WhatsApp, verifying a real sandbox send against MSG91's current API documentation
+(the adapter's own standing warning), and then flipping `WHATSAPP_ENABLED` and
+`WHATSAPP_MSG91_TEMPLATE_MAP`. Phase 2 (auth) cannot be called fully done for a phone-only sign-up until
+that happens — the code is ready, the activation isn't.
 
 ## 4. No push notification channel at all — Blocker for Phase 9, not earlier
 

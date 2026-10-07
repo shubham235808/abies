@@ -139,7 +139,7 @@ describe('notifyMailbox', () => {
   it('sends the internal enquiry copy to the mailbox with no user attached', async () => {
     h.adapters.EMAIL.send.mockResolvedValue(OK);
 
-    const row = await notifyMailbox(SUPPORT, 'contact.enquiry.internal', ENQUIRY);
+    const row = await notifyMailbox(SUPPORT, 'EMAIL', 'contact.enquiry.internal', ENQUIRY);
 
     expect(row.status).toBe('SENT');
     expect(row.userId).toBeNull();
@@ -154,7 +154,7 @@ describe('notifyMailbox', () => {
   it('never consults user consent, since there is no user', async () => {
     h.adapters.EMAIL.send.mockResolvedValue(OK);
 
-    await notifyMailbox('asha@example.test', 'contact.enquiry.acknowledgement', ACK);
+    await notifyMailbox('asha@example.test', 'EMAIL', 'contact.enquiry.acknowledgement', ACK);
 
     expect(h.canSend).not.toHaveBeenCalled();
     expect(h.adapters.EMAIL.send).toHaveBeenCalledTimes(1);
@@ -163,7 +163,7 @@ describe('notifyMailbox', () => {
   it('sends the guest acknowledgement with the reference number in the subject', async () => {
     h.adapters.EMAIL.send.mockResolvedValue(OK);
 
-    const row = await notifyMailbox('asha@example.test', 'contact.enquiry.acknowledgement', ACK);
+    const row = await notifyMailbox('asha@example.test', 'EMAIL', 'contact.enquiry.acknowledgement', ACK);
 
     expect(row.status).toBe('SENT');
     const [, , payload] = h.adapters.EMAIL.send.mock.calls[0]!;
@@ -172,7 +172,7 @@ describe('notifyMailbox', () => {
 
   it('refuses a template that is not on the mailbox allowlist', async () => {
     await expect(
-      notifyMailbox(SUPPORT, 'appointment.confirmed', { appointmentId: 'apt_1' }),
+      notifyMailbox(SUPPORT, 'EMAIL', 'appointment.confirmed', { appointmentId: 'apt_1' }),
     ).rejects.toBeInstanceOf(BadRequestError);
     expect(h.state.rows).toHaveLength(0);
     expect(h.adapters.EMAIL.send).not.toHaveBeenCalled();
@@ -180,9 +180,9 @@ describe('notifyMailbox', () => {
 
   it('refuses a header-injected or malformed address before writing anything', async () => {
     await expect(
-      notifyMailbox('asha@example.test\r\nBcc: victim@example.test', 'contact.enquiry.acknowledgement', ACK),
+      notifyMailbox('asha@example.test\r\nBcc: victim@example.test', 'EMAIL', 'contact.enquiry.acknowledgement', ACK),
     ).rejects.toThrow();
-    await expect(notifyMailbox('not-an-address', 'contact.enquiry.acknowledgement', ACK)).rejects.toThrow();
+    await expect(notifyMailbox('not-an-address', 'EMAIL', 'contact.enquiry.acknowledgement', ACK)).rejects.toThrow();
     expect(h.state.rows).toHaveLength(0);
     expect(h.adapters.EMAIL.send).not.toHaveBeenCalled();
   });
@@ -190,7 +190,7 @@ describe('notifyMailbox', () => {
   it('keeps the enquiry row when the email fails permanently', async () => {
     h.adapters.EMAIL.send.mockResolvedValue(PERMANENT);
 
-    const row = await notifyMailbox(SUPPORT, 'contact.enquiry.internal', ENQUIRY);
+    const row = await notifyMailbox(SUPPORT, 'EMAIL', 'contact.enquiry.internal', ENQUIRY);
 
     expect(row.status).toBe('FAILED');
     expect(row.errorCategory).toBe('PERMANENT');
@@ -200,7 +200,7 @@ describe('notifyMailbox', () => {
   it('retries a temporary failure to the same mailbox address', async () => {
     h.adapters.EMAIL.send.mockResolvedValueOnce(TEMPORARY).mockResolvedValueOnce(OK);
 
-    const row = await notifyMailbox(SUPPORT, 'contact.enquiry.internal', ENQUIRY, { idempotencyKey: 'contact:ENQ-1:internal' });
+    const row = await notifyMailbox(SUPPORT, 'EMAIL', 'contact.enquiry.internal', ENQUIRY, { idempotencyKey: 'contact:ENQ-1:internal' });
     expect(row.status).toBe('RETRYING');
 
     const result = await processDueNotifications(new Date(Date.now() + 24 * 60 * 60_000));
@@ -215,10 +215,50 @@ describe('notifyMailbox', () => {
   it('returns the first row for a repeated idempotency key instead of sending again', async () => {
     h.adapters.EMAIL.send.mockResolvedValue(OK);
 
-    const first = await notifyMailbox(SUPPORT, 'contact.enquiry.internal', ENQUIRY, { idempotencyKey: 'contact:ENQ-2:internal' });
-    const again = await notifyMailbox(SUPPORT, 'contact.enquiry.internal', ENQUIRY, { idempotencyKey: 'contact:ENQ-2:internal' });
+    const first = await notifyMailbox(SUPPORT, 'EMAIL', 'contact.enquiry.internal', ENQUIRY, { idempotencyKey: 'contact:ENQ-2:internal' });
+    const again = await notifyMailbox(SUPPORT, 'EMAIL', 'contact.enquiry.internal', ENQUIRY, { idempotencyKey: 'contact:ENQ-2:internal' });
 
     expect(again.id).toBe(first.id);
     expect(h.adapters.EMAIL.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends auth.otp_code to a raw mobile number on WHATSAPP, with no user attached', async () => {
+    h.env.WHATSAPP_ENABLED = true;
+    h.adapters.WHATSAPP.send.mockResolvedValue(OK);
+
+    const row = await notifyMailbox('+919876543210', 'WHATSAPP', 'auth.otp_code', { otp: '482913', expiresInSeconds: 300 });
+
+    expect(row.status).toBe('SENT');
+    expect(row.userId).toBeNull();
+    expect(row.recipientAddress).toBe('+919876543210');
+    const [recipient] = h.adapters.WHATSAPP.send.mock.calls[0]!;
+    expect(recipient).toEqual({ userId: null, mobile: '+919876543210' });
+  });
+
+  it('suppresses a WhatsApp mailbox send without a provider call while WhatsApp is disabled', async () => {
+    h.env.WHATSAPP_ENABLED = false;
+
+    const row = await notifyMailbox('+919876543210', 'WHATSAPP', 'auth.otp_code', { otp: '482913', expiresInSeconds: 300 });
+
+    expect(row.status).toBe('SUPPRESSED');
+    expect(row.errorCategory).toBe('CHANNEL_DISABLED');
+    expect(h.adapters.WHATSAPP.send).not.toHaveBeenCalled();
+  });
+
+  it('rejects a WHATSAPP-channel address that is not a mobile number', async () => {
+    await expect(
+      notifyMailbox('not-a-mobile-number', 'WHATSAPP', 'auth.otp_code', { otp: '482913', expiresInSeconds: 300 }),
+    ).rejects.toThrow();
+    expect(h.state.rows).toHaveLength(0);
+  });
+
+  it('fails permanently, rather than throwing, for an EMAIL-only template sent on WHATSAPP', async () => {
+    h.env.WHATSAPP_ENABLED = true;
+
+    const row = await notifyMailbox('+919876543210', 'WHATSAPP', 'contact.enquiry.internal', ENQUIRY);
+
+    expect(row.status).toBe('FAILED');
+    expect(row.errorCategory).toBe('PERMANENT');
+    expect(h.adapters.WHATSAPP.send).not.toHaveBeenCalled();
   });
 });

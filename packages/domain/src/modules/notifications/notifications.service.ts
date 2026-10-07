@@ -231,25 +231,37 @@ export async function notify(
   return outcome.row;
 }
 
-// Templates that may go to a mailbox address instead of a user. Each is an
-// ABIES-originated message: the internal enquiry copy to an ABIES mailbox, or
-// the acknowledgement to the guest who sent the enquiry. Nothing else may use
-// the mailbox path, so it cannot be used to message arbitrary addresses.
-export const MAILBOX_TEMPLATE_KEYS = ['contact.enquiry.internal', 'contact.enquiry.acknowledgement'] as const;
+// Templates that may go to a raw address instead of a user. Each is an
+// ABIES-originated message: the internal enquiry copy to an ABIES mailbox, the
+// acknowledgement to the guest who sent it, or an OTP to a mobile number that
+// has no User row yet (a brand-new sign-up). Nothing else may use this path,
+// so it cannot be used to message arbitrary addresses.
+export const MAILBOX_TEMPLATE_KEYS = ['contact.enquiry.internal', 'contact.enquiry.acknowledgement', 'auth.otp_code'] as const;
 
-const mailboxAddressSchema = z.string().trim().toLowerCase().max(254).email();
+type MailboxChannel = 'EMAIL' | 'WHATSAPP';
 
-// Sends one EMAIL to a mailbox address through the same render, adapter, retry
-// and status path as user sends. There is no user consent check: these are
-// ABIES's own service messages, and the acknowledgement answers a request the
-// guest made. Marketing is never sent this way.
+const mailboxAddressSchema: Record<MailboxChannel, z.ZodType<string>> = {
+  EMAIL: z.string().trim().toLowerCase().max(254).email(),
+  // Mobile numbers reaching here are already normalizeMobile()'d ("+91XXXXXXXXXX")
+  // by the caller (auth.service.ts) — this only guards against something unrelated
+  // being passed through the WhatsApp path by mistake.
+  WHATSAPP: z.string().trim().max(20).regex(/^\+?\d{10,15}$/, 'not a mobile number'),
+};
+
+// Sends one message to a raw address (no User row) through the same render,
+// adapter, retry and status path as a user send. There is no consent check:
+// these are ABIES's own service messages — the enquiry copy, the guest's own
+// acknowledgement, or a security code the recipient just asked for. Marketing
+// is never sent this way, and the channel/template pair must be on the
+// allowlist above.
 export async function notifyMailbox(
   address: string,
+  channel: MailboxChannel,
   templateKey: string,
   payload: Record<string, unknown>,
   options: NotifyOptions = {},
 ): Promise<Notification> {
-  const to = mailboxAddressSchema.parse(address);
+  const to = mailboxAddressSchema[channel].parse(address);
   if (!(MAILBOX_TEMPLATE_KEYS as readonly string[]).includes(templateKey)) {
     throw new BadRequestError(`Template ${templateKey} cannot be sent to a mailbox`);
   }
@@ -259,13 +271,13 @@ export async function notifyMailbox(
   }
 
   const storedBase = redactForStorage(withoutMark(payload));
-  const prepared = await prepareDelivery(null, 'EMAIL', templateKey, payload);
+  const prepared = await prepareDelivery(null, channel, templateKey, payload);
   if (!prepared.ok) {
     return prisma.notification.create({
       data: {
         userId: null,
         recipientAddress: to,
-        channel: 'EMAIL',
+        channel,
         templateKey,
         payload: { ...storedBase, [TEMPLATE_MARK]: { registered: true } } as never,
         status: 'FAILED',
@@ -281,7 +293,7 @@ export async function notifyMailbox(
     data: {
       userId: null,
       recipientAddress: to,
-      channel: 'EMAIL',
+      channel,
       templateKey,
       payload: { ...storedBase, [TEMPLATE_MARK]: prepared.value.mark } as never,
       status: 'QUEUED',
@@ -289,7 +301,7 @@ export async function notifyMailbox(
       priority: options.priority ?? prepared.value.priority,
     },
   });
-  const outcome = await attemptDelivery(row.id, null, 'EMAIL', templateKey, payload, new Date(), prepared.value, to);
+  const outcome = await attemptDelivery(row.id, null, channel, templateKey, payload, new Date(), prepared.value, to);
   return outcome.row;
 }
 
@@ -479,7 +491,7 @@ async function attemptDelivery(
     }
   }
 
-  const recipient: NotificationRecipient = await recipientFor(userId, recipientAddress);
+  const recipient: NotificationRecipient = await recipientFor(userId, channel, recipientAddress);
 
   let result: SendResult;
   const prep: PrepareResult = prepared
@@ -654,8 +666,18 @@ export async function processDueNotifications(now = new Date(), limit = 50) {
 
 // The adapter's view of who receives the message. A user send reads the address
 // from the user record; a mailbox send carries only the mailbox address.
-async function recipientFor(userId: string | null, recipientAddress: string | null): Promise<NotificationRecipient> {
-  if (userId === null) return { userId: null, email: recipientAddress };
+async function recipientFor(
+  userId: string | null,
+  channel: NotificationChannel,
+  recipientAddress: string | null,
+): Promise<NotificationRecipient> {
+  if (userId === null) {
+    // A mailbox send: the address is a mobile number for WhatsApp, an email address
+    // for everything else (see notifyMailbox's channel-keyed validation above).
+    return channel === 'WHATSAPP'
+      ? { userId: null, mobile: recipientAddress }
+      : { userId: null, email: recipientAddress };
+  }
   const user = await prisma.user.findUnique({ where: { id: userId } });
   return { userId, mobile: user?.mobile, email: user?.email, name: user?.name };
 }

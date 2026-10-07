@@ -26,7 +26,7 @@ const h = vi.hoisted(() => {
       }),
     },
   };
-  const notifyMailbox = vi.fn(async (address: string, templateKey: string) => {
+  const notifyMailbox = vi.fn(async (address: string, _channel: string, templateKey: string) => {
     calls.push(`mail:${templateKey}`);
     return { id: `notif-${templateKey}`, recipientAddress: address };
   });
@@ -129,13 +129,15 @@ describe('submitContactEnquiry', () => {
   it('sends the internal copy to the support mailbox and the acknowledgement to the guest', async () => {
     await submitContactEnquiry(contactSchema.parse(VALID), {});
 
-    const internal = h.notifyMailbox.mock.calls.find((c) => c[1] === 'contact.enquiry.internal')!;
-    const ack = h.notifyMailbox.mock.calls.find((c) => c[1] === 'contact.enquiry.acknowledgement')!;
+    const internal = h.notifyMailbox.mock.calls.find((c) => c[2] === 'contact.enquiry.internal')!;
+    const ack = h.notifyMailbox.mock.calls.find((c) => c[2] === 'contact.enquiry.acknowledgement')!;
     expect(internal[0]).toBe('support@abies.in');
-    expect(internal[3]).toEqual({ idempotencyKey: 'contact:ENQ-2026-000042:internal' });
+    expect(internal[1]).toBe('EMAIL');
+    expect(internal[4]).toEqual({ idempotencyKey: 'contact:ENQ-2026-000042:internal' });
     expect(ack[0]).toBe('asha@example.test');
-    expect(ack[2]).toEqual({ name: 'Asha Rao', referenceId: 'ENQ-2026-000042' });
-    expect(ack[3]).toEqual({ idempotencyKey: 'contact:ENQ-2026-000042:ack' });
+    expect(ack[1]).toBe('EMAIL');
+    expect(ack[3]).toEqual({ name: 'Asha Rao', referenceId: 'ENQ-2026-000042' });
+    expect(ack[4]).toEqual({ idempotencyKey: 'contact:ENQ-2026-000042:ack' });
   });
 
   it('returns the reference and keeps the enquiry when an email cannot be queued', async () => {

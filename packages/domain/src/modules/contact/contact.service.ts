@@ -81,6 +81,7 @@ export async function submitContactEnquiry(input: ContactInput, ctx: AuditContex
   const internal = await enqueueEmail(referenceId, 'internal', () =>
     notifyMailbox(
       org.supportEmail,
+      'EMAIL',
       'contact.enquiry.internal',
       {
         referenceId,
@@ -100,6 +101,7 @@ export async function submitContactEnquiry(input: ContactInput, ctx: AuditContex
   const acknowledgement = await enqueueEmail(referenceId, 'acknowledgement', () =>
     notifyMailbox(
       input.email,
+      'EMAIL',
       'contact.enquiry.acknowledgement',
       { name: input.name, referenceId },
       { idempotencyKey: `contact:${referenceId}:ack` },

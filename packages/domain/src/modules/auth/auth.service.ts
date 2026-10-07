@@ -3,7 +3,8 @@ import type { UserRole } from '@prisma/client';
 import { prisma } from '../../lib/db';
 import { getEnv, isLockedDownDeployment } from '../../lib/env';
 import { BadRequestError, ForbiddenError, UnauthorizedError } from '../../lib/errors';
-import { notify } from '../notifications/notifications.service';
+import { notify, notifyMailbox } from '../notifications/notifications.service';
+import { logger } from '../../lib/logger';
 import { recordAuditEvent } from '../../server/audit';
 import { createSession, markMfaVerified, revokeSession, type SessionInfo } from '../../server/session';
 
@@ -89,6 +90,24 @@ export async function requestOtp(
   const deliverByEmail = Boolean(identifier.email) || env.OTP_DELIVERY_CHANNEL === 'email';
   if (deliverByEmail && user?.email) {
     await notify(user.id, 'EMAIL', 'auth.otp_code', { otp, expiresInSeconds: env.OTP_TTL_SECONDS });
+  }
+
+  // A mobile-identifier request also gets a WhatsApp attempt, so a phone-only
+  // sign-up (no email on file, and before this account even exists) still has
+  // a delivery path — the mobile app's primary sign-up case has no other one
+  // (docs/mobile/API-GAP-ANALYSIS.md §3). Goes through notifyMailbox() because
+  // a brand-new sign-up has no User row yet to attach a Notification to. This
+  // is additive: it never replaces the email send above. It costs nothing when
+  // WhatsApp is disabled (the current state) — attemptDelivery's existing
+  // WHATSAPP_ENABLED check records it as SUPPRESSED without a provider call —
+  // and starts working the moment WhatsApp is switched on with an approved
+  // auth.otp_code template, with no further code change.
+  if (!identifier.email) {
+    await notifyMailbox(mobile, 'WHATSAPP', 'auth.otp_code', { otp, expiresInSeconds: env.OTP_TTL_SECONDS }, {
+      idempotencyKey: `otp:${challenge.id}:whatsapp`,
+    }).catch((err) => {
+      logger.error('auth', 'could not queue WhatsApp OTP', err, { requestId: challenge.id });
+    });
   }
 
   return {
