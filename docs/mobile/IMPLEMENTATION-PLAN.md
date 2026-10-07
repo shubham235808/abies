@@ -176,16 +176,86 @@ green (92/92 — the original 72 through Phase 4, plus 20 new), a real debug APK
 flow against a live gateway is explicitly carried into Phase 8, same as Phase 4 — not deferred by
 oversight.
 
-## Phase 6 — Diagnostics
+## Phase 6 — Diagnostics — **implemented and verified**, 2026-10-07
 
-Consumes: `GET /api/v1/public/diagnostics`, `/packages`, `/facets`, `POST /api/v1/diagnostic-orders`,
-`/verify-payment`, `GET /api/v1/diagnostic-orders/mine`, `/[id]/report-download`,
-`POST /api/v1/diagnostic-orders/[id]/cancel`.
+Consumes: `GET /api/v1/public/diagnostics`, `/packages`, `/facets`,
+`GET /api/v1/diagnostic-recommendations/mine`, `POST /api/v1/diagnostic-orders`, `/verify-payment`,
+`POST /api/v1/diagnostic-orders/[id]/cancel`, `GET /api/v1/diagnostic-orders/[id]`,
+`GET /api/v1/diagnostic-orders/mine`, `GET /api/v1/reports/mine`, `GET /api/v1/reports/[id]/download`.
 
-Report download reuses the same authorized-download pattern as prescriptions (SECURITY-DESIGN.md 8).
+**What's actually done now**: the real search screen — two tabs, tests (`GET /api/v1/public/
+diagnostics`) and packages (`GET /api/v1/public/diagnostics/packages`), genuinely different endpoints/
+shapes, not one list with a type filter — plus the real facets (`{cities}` only); test/package detail
+screens with a working "start from search" fallback for a cold deep link (no detail-by-id route exists
+— see below); a booking flow (collection mode → schedule → book → payment-or-unavailable) whose
+`DiagnosticBookingTarget` type makes `testIds`/`packageId` mutual exclusion a compile-time property,
+not just a runtime check, so package booking and multi-test booking are built as genuinely different
+flows (the tests search tab has an explicit multi-select mode); a full "my diagnostic orders" list +
+detail screen with cancel and report view/download; and a recommendations screen with "book from this
+recommendation" — all against the real dev backend's route/service code (read directly, not guessed),
+and all unit-tested against fakes (`apps/mobile/test/unit/diagnostic_models_test.dart`,
+`diagnostic_booking_flow_controller_test.dart`, `diagnostic_orders_controller_test.dart`,
+`diagnostic_recommendations_controller_test.dart`, `diagnostic_report_controller_test.dart`).
 
-Exit: booking→payment→status→report-download flow tested; report download verified to fail for a
-non-owning account (authorization test, not just a happy-path test).
+**The already-known detail-route gap, found again here, same shape as Phase 5**: no
+`/public/diagnostics/[id]` and no `/public/diagnostics/packages/[id]` exist (confirmed by reading every
+route under `apps/platform-api/src/app/api/v1/public/diagnostics*`). Resolved exactly like Panchakarma's
+therapy detail: the test/package detail and booking screens carry their data via `GoRouter`'s
+navigation `extra`, never re-fetched by id; opened cold they show an honest "start from search" state.
+
+**Two further real gaps found by this phase, beyond the already-known one — found by reading the
+brief's own named routes, not assumed from their descriptions**:
+
+- `GET /api/v1/diagnostic-orders/[id]/report-download` — the route this phase's brief named for report
+  download — is **doctor-only** (`requireRole(ctx, 'DOCTOR')`, calling `getReportDownloadUrlForDoctor()`,
+  which requires the caller to be the doctor on the order's own recommendation). A patient gets a 403.
+  The real patient-facing path, confirmed by also reading `docs/mobile/SECURITY-DESIGN.md §8` (which
+  names it directly), is the generic patient document library: `GET /api/v1/reports/mine` +
+  `GET /api/v1/reports/[id]/download` — a 5-minute signed URL returned as `{url}` JSON, **not** a
+  302 redirect the way Phase 4's doctor photo route is (confirmed by reading `reports.service.ts`'s
+  `downloadUrl()` and the route's own comment, not assumed from that precedent). Matching a diagnostic
+  order to its generic report row takes an extra step, since `DiagnosticReport` (lab-side) and `Report`
+  (patient-library) are separate tables with separate ids, linked only by
+  `Report.sourceEntityType == 'DiagnosticOrder'` / `sourceEntityId == order.id` — confirmed by reading
+  `orders.service.ts`'s `releaseReport()`. This app calls only the real route; it never calls
+  `/diagnostic-orders/[id]/report-download` at all.
+- `POST /api/v1/diagnostic-recommendations/[id]/cancel` — described in this phase's brief as something
+  "the patient can act on (book from, or cancel)" — is **doctor-only** too: `requireRole(ctx, 'DOCTOR')`,
+  and `cancelRecommendation()` itself checks doctor ownership with no patient branch at all. The
+  recommendations screen therefore only offers "book from this recommendation"; it never builds a
+  cancel action that would just 403 for a patient.
+
+Both are documented as real gaps in `apps/mobile/lib/features/diagnostics/PHASE.md`, not worked
+around or silently skipped.
+
+**Report access respects SECURITY-DESIGN.md §8**: "View" (fetches a fresh signed URL, hands it to the
+system browser/viewer via `url_launcher`, never an in-app WebView) and "Download" (fetches a fresh
+signed URL, saves bytes to this app's own private sandbox directory via `path_provider`, never shared/
+public storage) are two separate, explicit actions — neither automatic, neither sharing the file
+anywhere without its own further explicit tap this phase doesn't build.
+
+**Payment, read from the real code before building anything** (`bookOrder()` in `packages/domain/src/
+modules/diagnostics/orders.service.ts`, `isConfigured()` in `packages/domain/src/lib/payments/
+razorpay.ts`): `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` are blank in this environment's `.env`, checked
+*first* in `bookOrder()`, before the lab/test/package are even looked up — so every real booking
+attempt here throws a 503 before any order/payment row is created. This phase's
+`DiagnosticBookingFlowController` treats that as its own calm, expected `serviceUnavailable` state,
+exactly mirroring Phase 4/5. The full success path and `/verify-payment` are implemented and
+unit-tested against a fake API, but not reachable in this environment and have no real Razorpay
+Flutter SDK call behind them — deferred to Phase 8, same as every prior phase.
+
+Exit: search(tests+packages)→detail→booking(testIds-XOR-packageId enforced by type, collection-mode/
+address validated client-side)→service-unavailable-for-payment→order-list/detail→cancel→report-
+view/download, and recommendation→booking, all implemented and unit-tested against the real route/
+service contracts; the service-unavailable payment state handled as a normal, displayable outcome, not
+a crash; the missing single-item detail routes and the two doctor-only routes found, reported, and
+designed around honestly (navigation `extra`, and never building a UI path that would just 403);
+`flutter analyze` clean, `flutter test` green (132/132 — the original 92 through Phase 5, plus 40 new),
+a real debug APK built. A full pay→confirm flow against a live gateway, and report-download
+authorization against a live account boundary, are explicitly carried into Phase 8/10 — not deferred by
+oversight (report-download's authorization is already enforced server-side by `requireRole`/the
+patient-ownership check in `downloadUrl()`, confirmed by reading the real code; this phase did not
+additionally stand up a second account in this environment to exercise that boundary end-to-end).
 
 ## Phase 7 — Pharmacy and prescriptions
 

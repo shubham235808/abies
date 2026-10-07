@@ -7,6 +7,16 @@ import '../../features/appointments/presentation/booking_screen.dart';
 import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/auth/presentation/otp_screen.dart';
 import '../../features/auth/presentation/sign_in_screen.dart';
+import '../../features/diagnostics/domain/diagnostic_booking_args.dart';
+import '../../features/diagnostics/domain/diagnostic_package_summary.dart';
+import '../../features/diagnostics/domain/diagnostic_test_summary.dart';
+import '../../features/diagnostics/presentation/diagnostic_booking_screen.dart';
+import '../../features/diagnostics/presentation/diagnostic_order_detail_screen.dart';
+import '../../features/diagnostics/presentation/diagnostic_order_list_screen.dart';
+import '../../features/diagnostics/presentation/diagnostic_package_detail_screen.dart';
+import '../../features/diagnostics/presentation/diagnostic_recommendations_screen.dart';
+import '../../features/diagnostics/presentation/diagnostic_test_detail_screen.dart';
+import '../../features/diagnostics/presentation/diagnostics_search_screen.dart';
 import '../../features/doctors/presentation/doctor_detail_screen.dart';
 import '../../features/doctors/presentation/doctor_search_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
@@ -27,8 +37,15 @@ import '../../features/profile/presentation/profile_screen.dart';
 /// in-app navigation and as a web-style link — and resolves the slug
 /// against the real backend itself before showing anything
 /// (`DoctorDetailScreen`, docs/mobile/API-GAP-ANALYSIS.md §7). The other
-/// `/product/:id`, `/appointment/:id`, `/diagnostics/:id` deep-link routes
-/// remain Phase 1 placeholders — Phases 6-7's own screens.
+/// `/product/:id`, `/appointment/:id` deep-link routes remain Phase 1
+/// placeholders — Phase 7's own screens.
+///
+/// Phase 6's `/diagnostics*` routes are real (replacing the Phase 1
+/// `/diagnostics/:id` placeholder entirely), but — same gap as Panchakarma
+/// below — `/diagnostics/test/:id`, `/diagnostics/package/:id` and
+/// `/diagnostics/book` are **not** cold-deep-linkable: there is no
+/// `GET /public/diagnostics/[id]` either. See `DiagnosticTestSummary`'s doc
+/// comment and `lib/features/diagnostics/PHASE.md`.
 ///
 /// Phase 5's `/panchakarma*` routes are real, but `/panchakarma/therapy/:id`
 /// and `/panchakarma/book` are **not** cold-deep-linkable the way
@@ -104,9 +121,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/panchakarma/bookings/:id',
         builder: (context, state) => PanchakarmaBookingDetailScreen(bookingId: state.pathParameters['id']!),
       ),
+      GoRoute(path: '/diagnostics', builder: (context, state) => const DiagnosticsSearchScreen()),
+      GoRoute(
+        path: '/diagnostics/test/:id',
+        builder: (context, state) => DiagnosticTestDetailScreen(test: state.extra as DiagnosticTestSummary?),
+      ),
+      GoRoute(
+        path: '/diagnostics/package/:id',
+        builder: (context, state) => DiagnosticPackageDetailScreen(package: state.extra as DiagnosticPackageSummary?),
+      ),
+      GoRoute(
+        path: '/diagnostics/book',
+        builder: (context, state) => DiagnosticBookingScreen(args: state.extra as DiagnosticBookingArgs?),
+      ),
+      GoRoute(path: '/diagnostics/orders', builder: (context, state) => const DiagnosticOrderListScreen()),
+      GoRoute(
+        path: '/diagnostics/orders/:id',
+        builder: (context, state) => DiagnosticOrderDetailScreen(orderId: state.pathParameters['id']!),
+      ),
+      GoRoute(path: '/diagnostics/recommendations', builder: (context, state) => const DiagnosticRecommendationsScreen()),
       GoRoute(path: '/product/:id', builder: (context, state) => _PlaceholderScreen(title: 'Product ${state.pathParameters['id']}')),
       GoRoute(path: '/appointment/:id', builder: (context, state) => _PlaceholderScreen(title: 'Appointment ${state.pathParameters['id']}')),
-      GoRoute(path: '/diagnostics/:id', builder: (context, state) => _PlaceholderScreen(title: 'Diagnostics ${state.pathParameters['id']}')),
     ],
   );
 });

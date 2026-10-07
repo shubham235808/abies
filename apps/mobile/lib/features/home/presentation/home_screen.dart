@@ -348,6 +348,11 @@ class _DiagnosticOrderTile extends StatelessWidget {
         leading: const Icon(Icons.biotech_outlined),
         title: Text(order.labName ?? 'Diagnostic booking'),
         subtitle: Text('${order.itemCount} test${order.itemCount == 1 ? '' : 's'} · ${_statusLabel(order.status)}'),
+        // Full cancel/report detail lives on the real "my diagnostic
+        // orders" list (Phase 6) — this card is still just a dashboard
+        // preview, same rule as Phase 4/5's `_AppointmentTile`/
+        // `_PanchakarmaBookingTile`.
+        onTap: () => context.push('/diagnostics/orders'),
       ),
     );
   }
@@ -433,14 +438,24 @@ class _DiagnosticCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _PreviewCard(
-      leadingIcon: Icons.biotech_outlined,
-      title: test.name,
-      subtitle: test.labName ?? '',
-      trailing: [
-        Text('${test.turnaroundHours}h report'),
-        Text('₹${test.price}'),
-      ],
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      // Phase 3's preview card has no lab id and is a narrower shape than
+      // the real search result anyway, so it can't jump straight to a
+      // specific test detail (there's no public single-test route to
+      // resolve one by id either — see `DiagnosticTestSummary`'s doc
+      // comment); the real diagnostics search screen is the honest
+      // destination, same "tile → list" shape as `_PanchakarmaCard`.
+      onTap: () => context.push('/diagnostics'),
+      child: _PreviewCard(
+        leadingIcon: Icons.biotech_outlined,
+        title: test.name,
+        subtitle: test.labName ?? '',
+        trailing: [
+          Text('${test.turnaroundHours}h report'),
+          Text('₹${test.price}'),
+        ],
+      ),
     );
   }
 }

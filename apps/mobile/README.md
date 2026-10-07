@@ -7,19 +7,21 @@ business logic. Read `docs/mobile/MOBILE-ARCHITECTURE.md` before changing anythi
 ## Status — honest, as of 2026-10-07
 
 Phase 1 (foundation), Phase 2 (auth + patient profile), Phase 3 (home dashboard), Phase 4 (doctor
-discovery and appointments) and Phase 5 (Panchakarma discovery and bookings) of `docs/mobile/
-IMPLEMENTATION-PLAN.md`, **now actually verified**, not just written. Flutter 3.47.6 (stable), a Temurin
-JDK 21 and the Android SDK (platform 35/36, build-tools) are installed and this ran for real:
+discovery and appointments), Phase 5 (Panchakarma discovery and bookings) and Phase 6 (diagnostics
+discovery, booking, orders, reports, recommendations) of `docs/mobile/IMPLEMENTATION-PLAN.md`, **now
+actually verified**, not just written. Flutter 3.47.6 (stable), a Temurin JDK 21 and the Android SDK
+(platform 35/36, build-tools) are installed and this ran for real:
 
-- `flutter pub get` — resolved all dependencies from this `pubspec.yaml` with no changes needed.
+- `flutter pub get` — resolved all dependencies from this `pubspec.yaml` (Phase 6 added `path_provider`
+  and `url_launcher`, both resolved with no conflicts).
 - `flutter analyze` — clean.
-- `flutter test` — **all 92 unit tests pass** (the original 72 through Phase 4, plus 20 added for Phase
-  5), for real, under the actual Flutter test runner.
+- `flutter test` — **all 132 unit tests pass** (the original 92 through Phase 5, plus 40 added for
+  Phase 6), for real, under the actual Flutter test runner.
 - `android/` was generated for real by `flutter create --org in.abies --project-name abies_mobile
   --platforms=android`, then merged in without touching the hand-written `lib/`, `pubspec.yaml`, or
   `analysis_options.yaml` (which gained a generated `exclude: - android/**` line).
 - `flutter build apk --debug --dart-define=ABIES_ENV=dev -t lib/main_dev.dart` — **built a real, valid
-  APK** (`build/app/outputs/flutter-apk/app-debug.apk`, ~184MB unoptimized debug build with Phase 5's
+  APK** (`build/app/outputs/flutter-apk/app-debug.apk`, ~184MB unoptimized debug build with Phase 6's
   code added).
 
 **What's still not verified**: this APK has not been installed or run on a device or emulator — the
@@ -141,6 +143,74 @@ only `city`/`limit`:
   card's thinner model has no centre id to jump straight to a specific therapy with, and there's no
   detail-by-id route to resolve one against regardless, so the real search screen is the honest
   destination) — the same minimal, justified pattern Phase 4 used for doctor cards.
+
+## What Phase 6 added
+
+Real diagnostics discovery (individual tests and packages), booking, order management, report access,
+and doctor-recommendation handling (`lib/features/diagnostics/`), against routes Phase 3's home
+preview already hinted at using only `city`/`limit`:
+
+- **Search** (`diagnostics_search_screen.dart`): two tabs, since `GET /api/v1/public/diagnostics`
+  (tests) and `GET /api/v1/public/diagnostics/packages` are genuinely different endpoints/result
+  shapes, not one list with a type filter — both share `publicTestSearchSchema`'s filter set
+  (`q`/`city`/`limit`/`offset`) and `GET /api/v1/public/diagnostics/facets` (`{cities}` only). The
+  tests tab also has an explicit multi-select mode (checkbox selection + a "Book N tests" action,
+  disabled if the selection spans more than one lab) — package booking and multi-test booking are
+  built as genuinely different flows, never one form with both fields open (see below).
+- **testIds XOR packageId, enforced at the type level**: `DiagnosticBookingTarget` is constructed as
+  either `.forTests([...])` or `.forPackage(...)` — there is no way to build one with both set,
+  mirroring `bookOrderSchema`'s own mutual-exclusion `.refine()` in code, not just a runtime check.
+- **A real gap, found and reported rather than worked around (the already-known shape)**: no
+  `/public/diagnostics/[id]` and no `/public/diagnostics/packages/[id]` exist (confirmed by reading
+  every route under `.../api/v1/public/diagnostics*`), the same gap Phase 5 found for Panchakarma. The
+  test/package detail and booking screens read their data from `GoRouter`'s navigation `extra` instead
+  of re-fetching by id; opened cold they show an honest "start from search" state. See
+  `lib/features/diagnostics/PHASE.md`.
+- **Two further real gaps, found by actually reading the named routes, not assumed from the task
+  brief's description of them**:
+  - `GET /api/v1/diagnostic-orders/[id]/report-download` is **doctor-only**
+    (`requireRole(ctx, 'DOCTOR')`) — not a patient-facing route at all. The real patient path, also
+    named directly in `docs/mobile/SECURITY-DESIGN.md §8`, is the generic document library:
+    `GET /api/v1/reports/mine` + `GET /api/v1/reports/[id]/download` (a 5-minute signed URL returned
+    as `{url}` JSON, not a redirect). This app uses only the real route.
+  - `POST /api/v1/diagnostic-recommendations/[id]/cancel` is **doctor-only** too
+    (`cancelRecommendation()` checks doctor ownership, no patient branch exists). The
+    recommendations screen therefore only ever offers "book from this recommendation", never a cancel
+    action that would just 403.
+- **Booking** (`diagnostic_booking_flow_controller.dart`): collection mode (HOME, only offered when the
+  lab supports it — `DiagnosticLab.homeCollectionSupported` — and address required then; or LAB_VISIT)
+  → scheduled date/time → book → payment-or-unavailable. Adapting Phase 4/5's own rule to the contract
+  that actually exists here (no single-item detail route), `confirmBooking` never trusts the
+  navigation `extra` object as still accurate — it re-runs the real search by name for every
+  test/package in the target immediately before booking, and refuses to proceed if any of them is
+  missing from that fresh search. Client-side validation (a future date/time; a non-empty HOME
+  address) runs before any network call at all.
+- **Payment, read directly from the real code before building anything** (`bookOrder()` in
+  `packages/domain/src/modules/diagnostics/orders.service.ts`): `RAZORPAY_KEY_ID`/
+  `RAZORPAY_KEY_SECRET` are blank in this environment's `.env`, and `isConfigured()` is checked
+  *first*, before the lab/test/package are even looked up — so every real booking attempt here
+  returns a 503 before any order/payment row is created. This phase treats that as its own calm,
+  expected `serviceUnavailable` state, exactly mirroring Phase 4/5. `/verify-payment` is implemented
+  and unit-tested against a fake but not reachable here — an explicit Phase 8 dependency.
+- **Order management**: a full "my diagnostic orders" list (`GET /api/v1/diagnostic-orders/mine`)
+  opening into a detail screen (`GET /api/v1/diagnostic-orders/[id]`) with items, collection details,
+  payment, cancel (`POST .../[id]/cancel`), and — once released — the report.
+- **Report access** (`diagnostic_report_controller.dart`), respecting `docs/mobile/SECURITY-DESIGN.md
+  §8`: two separate, explicit actions, neither automatic. "View" fetches a fresh signed URL and hands
+  it to the system browser/viewer (`url_launcher`, never an in-app WebView). "Download" fetches a
+  fresh signed URL and saves the bytes to this app's own private sandbox directory (`path_provider`'s
+  `getApplicationDocumentsDirectory()`, never shared/public storage) — never auto-opens or auto-shares
+  the saved file.
+- **Recommendations** (`diagnostic_recommendations_screen.dart`): `GET /api/v1/diagnostic-recommendations/
+  mine`, with "book from this recommendation" — since a recommendation carries no `labId` (it's
+  clinical intent, not a booking), this searches the real catalogue by the recommendation's own
+  test/package name to find current lab options, then threads the recommendation's `id` through to
+  `bookOrder()`'s `recommendationId` field.
+- Two small, deliberate edits to `home_screen.dart`: the diagnostics preview card and the diagnostics
+  active-orders tile are now tappable (to `/diagnostics` and `/diagnostics/orders` — the preview card's
+  thinner model has no lab id to jump straight to a specific test with, and there's no detail-by-id
+  route to resolve one against regardless, so the real search screen is the honest destination) — the
+  same minimal, justified pattern every prior phase used.
 
 ## Layout
 

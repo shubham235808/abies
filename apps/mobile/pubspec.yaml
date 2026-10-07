@@ -39,6 +39,16 @@ dependencies:
   # only, never a replacement for backend auth.
   local_auth: ^2.3.0
 
+  # Phase 6 (diagnostics): resolves this app's own private sandbox directory
+  # for downloaded diagnostic reports — never shared/public storage
+  # (docs/mobile/SECURITY-DESIGN.md §8).
+  path_provider: ^2.1.1
+
+  # Phase 6 (diagnostics): hands a short-lived signed report URL to the
+  # system browser/viewer on an explicit "View report" tap only — never an
+  # in-app WebView (SECURITY-DESIGN.md §8-9) and never automatic.
+  url_launcher: ^6.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
