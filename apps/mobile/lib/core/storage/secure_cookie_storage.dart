@@ -7,11 +7,11 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// one (docs/mobile/SECURITY-DESIGN.md §2), even though HTTP transports it as
 /// a cookie.
 ///
-/// IMPLEMENTS `cookie_jar`'s `Storage` interface. Written without the Flutter
-/// SDK available to check the resolved package version's exact method
-/// signatures (see apps/mobile/README.md "Status") — verify this against
-/// `package:cookie_jar`'s actual `Storage` abstract class once `flutter pub
-/// get` has run, before relying on it.
+/// Implements `cookie_jar`'s `Storage` interface — checked against
+/// cookie_jar 4.0.9's actual `abstract class Storage`
+/// (`package:cookie_jar/src/storage.dart`) after `flutter pub get` ran; see
+/// apps/mobile/README.md "Status" for what else in this app is still
+/// unverified.
 class SecureCookieStorage implements Storage {
   SecureCookieStorage({FlutterSecureStorage? secureStorage})
       : _secureStorage = secureStorage ?? const FlutterSecureStorage();
@@ -38,9 +38,6 @@ class SecureCookieStorage implements Storage {
       await delete(key);
     }
   }
-
-  @override
-  Future<void> close() async {}
 
   String _prefixed(String key) => 'abies_cookie_$key';
 }

@@ -39,7 +39,7 @@ class PatientProfile {
   final List<FamilyMember> familyMembers;
 
   String get displayName {
-    final full = [firstName, lastName].where((p) => p != null && p!.isNotEmpty).join(' ');
+    final full = [firstName, lastName].where((p) => p != null && p.isNotEmpty).join(' ');
     return full.isEmpty ? 'Your profile' : full;
   }
 
