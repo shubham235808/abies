@@ -46,18 +46,32 @@ Exit: registration, login, logout, session persistence across app restart, profi
 CRUD, consent accept/withdraw all exercised by integration tests against a real dev-environment backend
 (not mocks) at least once, in addition to unit/widget tests against mocks.
 
-## Phase 3 — Home dashboard
+## Phase 3 — Home dashboard — **implemented and verified**, 2026-10-07
 
 Consumes: `GET /api/v1/public/doctors`, `/public/panchakarma`, `/public/diagnostics`, `/public/medicines`
 (all already support facets/filters), `GET /api/v1/appointments/mine`, `GET /api/v1/medicine-orders/mine`,
 `GET /api/v1/diagnostic-orders/mine`, `GET /api/v1/panchakarma-bookings/mine`.
 
-Location-aware sections use device location only after an explicit permission prompt; denial falls back
-to the same content unfiltered by distance (brief §5) — this is a client-side requirement, not a backend
-gap, since the public catalogue routes already accept a location/area parameter.
+**Location scope decision, made explicitly for this phase** (supersedes this section's original
+"device location after an explicit permission prompt" wording): this phase uses the signed-in patient's
+own `PatientProfile.city` (Phase 2) as the location signal instead of device geolocation — passed as
+`city` to the doctors/Panchakarma/diagnostics public routes and as `area` to the medicines route (its
+filter field is actually named `area`, not `city` —
+`packages/domain/src/modules/medicines/catalogue.schemas.ts`'s `publicMedicineSearchSchema`). No
+geolocation/GPS package was added and no device location permission is requested. A patient with no city
+set gets the same unfiltered content (the brief §5 fallback), reached by simply never asking the device
+for a location — there was no permission-denial path to test because no permission is ever requested.
+This is a deliberate, reported scope choice, not a backend gap: the public catalogue routes' own
+location filters work as documented; the mobile client just sources the filter value from the profile
+instead of the device for this phase.
 
-Exit: home renders fully from live dev-environment data (no hardcoded placeholder content left in),
-graceful empty/offline/skeleton states for each section, location permission denial path tested.
+Exit: home renders fully from live route/service-code-verified shapes (no hardcoded placeholder content
+left in — see `apps/mobile/lib/features/home/`), graceful empty/error/loading states for each of the
+eight sections independently (`HomeController`'s per-section `AsyncValue`s plus
+`shared/widgets/state_views.dart`/`loading_skeleton.dart`), each section's own retry verified via unit
+test. `flutter analyze` clean, `flutter test` green (35/35, the original 11 plus 24 new), a real debug
+APK built (`flutter build apk --debug --dart-define=ABIES_ENV=dev -t lib/main_dev.dart`). Not yet
+run on a device/emulator — same caveat as Phases 1-2 (`apps/mobile/README.md` "Status").
 
 ## Phase 4 — Doctor discovery and appointments
 

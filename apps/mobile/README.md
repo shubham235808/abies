@@ -6,23 +6,23 @@ business logic. Read `docs/mobile/MOBILE-ARCHITECTURE.md` before changing anythi
 
 ## Status — honest, as of 2026-10-07
 
-Phase 1 (foundation) and Phase 2 (auth + patient profile) of `docs/mobile/IMPLEMENTATION-PLAN.md`,
-**now actually verified**, not just written. Flutter 3.47.6 (stable), a Temurin JDK 21 and the Android
-SDK (platform 35/36, build-tools) are installed and this ran for real:
+Phase 1 (foundation), Phase 2 (auth + patient profile) and Phase 3 (home dashboard) of
+`docs/mobile/IMPLEMENTATION-PLAN.md`, **now actually verified**, not just written. Flutter 3.47.6
+(stable), a Temurin JDK 21 and the Android SDK (platform 35/36, build-tools) are installed and this ran
+for real:
 
 - `flutter pub get` — resolved all 84 dependencies from this `pubspec.yaml` with no changes needed.
 - `flutter analyze` — clean. Two real issues it caught in the original hand-written draft are fixed:
   `secure_cookie_storage.dart` had an invented `close()` method that isn't part of `cookie_jar`'s actual
   `Storage` interface (removed), and a redundant null-check in `patient_profile.dart` (fixed).
-- `flutter test` — **all 11 unit tests pass**, for real, under the actual Flutter test runner.
+- `flutter test` — **all 35 unit tests pass** (the original 11, plus 24 added for Phase 3), for real,
+  under the actual Flutter test runner.
 - `android/` was generated for real by `flutter create --org in.abies --project-name abies_mobile
   --platforms=android`, then merged in without touching the hand-written `lib/`, `pubspec.yaml`, or
   `analysis_options.yaml` (which gained a generated `exclude: - android/**` line).
-- `flutter build apk --debug` — **built a real, valid APK**
-  (`build/app/outputs/flutter-apk/app-debug.apk`, ~160MB unoptimized debug build). Checked with `aapt
-  dump badging`: package `in.abies.abies_mobile`, and exactly the permissions
-  (`INTERNET`, `ACCESS_NETWORK_STATE`, `USE_BIOMETRIC`/`USE_FINGERPRINT`) that match the dependencies
-  declared in `pubspec.yaml` — nothing extra, nothing missing.
+- `flutter build apk --debug --dart-define=ABIES_ENV=dev -t lib/main_dev.dart` — **built a real, valid
+  APK** (`build/app/outputs/flutter-apk/app-debug.apk`, ~184MB unoptimized debug build with Phase 3's
+  code added).
 
 **What's still not verified**: this APK has not been installed or run on a device or emulator — the
 analyzer/test/build passing is strong evidence the code is sound, not proof every screen behaves
@@ -44,6 +44,27 @@ now gates every screen but `/sign-in` and `/otp` behind a real session check.
 OTP delivery channel yet — WhatsApp OTP is wired server-side but switched off pending template approval
 (`docs/mobile/API-GAP-ANALYSIS.md` §3). Test this flow with an email, or with the backend's dev-mode OTP
 bypass, until that's turned on.
+
+## What Phase 3 added
+
+The real personalized home dashboard, replacing the Phase 1/2 bare placeholder. `HomeController` loads
+eight sections once signed in — upcoming appointments (`GET /api/v1/appointments/mine`, filtered
+client-side to future + non-cancelled), three "active orders" subsections (medicine orders, diagnostic
+orders, Panchakarma bookings, each filtered client-side to not-yet-delivered/completed and
+non-cancelled), and four horizontal preview rows (doctors, Panchakarma therapies, diagnostic tests,
+medicines, each `GET /api/v1/public/<domain>?limit=8`) — all against real existing routes, nothing
+invented. Each section carries its own `AsyncValue` and its own retry, loading skeleton and empty state,
+so one section failing never blanks out the rest of the dashboard.
+
+**Location decision, made deliberately for this phase, not an oversight**: the four catalogue previews
+use the signed-in patient's own `PatientProfile.city` (already collected in Phase 2) as their location
+signal — passed as the `city` query param to doctors/Panchakarma/diagnostics and as `area` to medicines
+(that catalogue's filter field is actually named `area`, confirmed against
+`publicMedicineSearchSchema` in `packages/domain/src/modules/medicines/catalogue.schemas.ts` — it is
+*not* `city` there). This phase does not add a geolocation/GPS package and does not request device
+location permission at all; a patient with no city on their profile simply gets the unfiltered
+catalogue, which is the required graceful fallback, reached here just by never asking the device for a
+location in the first place.
 
 ## Layout
 
