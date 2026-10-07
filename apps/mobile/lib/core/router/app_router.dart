@@ -1,22 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-/// Navigation skeleton (docs/mobile/MOBILE-ARCHITECTURE.md §4). Routes here
-/// are Phase 1 placeholders only — each one is a stand-in screen, not a real
-/// feature, and is explicitly not "done" (brief §27's own warning against
-/// marking placeholders complete). Phases 2-9 replace each placeholder with
-/// its real feature screen as that phase lands.
+import '../../features/auth/presentation/auth_controller.dart';
+import '../../features/auth/presentation/otp_screen.dart';
+import '../../features/auth/presentation/sign_in_screen.dart';
+import '../../features/home/presentation/home_screen.dart';
+import '../../features/profile/presentation/profile_screen.dart';
+
+/// Navigation (docs/mobile/MOBILE-ARCHITECTURE.md §4). `/sign-in` and
+/// `/otp` are reachable signed out; everything else requires a session —
+/// enforced here by `redirect`, not by each screen checking for itself.
 ///
-/// Deep-link routes (`/doctor/:slug` etc.) must resolve against the real
-/// public API before rendering a real screen once built
-/// (docs/mobile/API-GAP-ANALYSIS.md §7) — not implemented yet; this skeleton
-/// only reserves the route shape.
-GoRouter buildAppRouter() {
+/// Deep-link routes (`/doctor/:slug` etc.) are reserved but not implemented
+/// (still Phase 1 placeholders) — see docs/mobile/API-GAP-ANALYSIS.md §7 for
+/// the "resolve against the real API before navigating" rule they must
+/// follow once built.
+final appRouterProvider = Provider<GoRouter>((ref) {
+  final refreshNotifier = _AuthRefreshNotifier(ref);
+  ref.onDispose(refreshNotifier.dispose);
+
   return GoRouter(
     initialLocation: '/',
+    refreshListenable: refreshNotifier,
+    redirect: (context, state) {
+      final authAsync = ref.read(authControllerProvider);
+      return authAsync.when(
+        data: (auth) {
+          final loggingIn = state.matchedLocation == '/sign-in' || state.matchedLocation == '/otp';
+          if (!auth.isSignedIn && !loggingIn) return '/sign-in';
+          if (auth.isSignedIn && loggingIn) return '/';
+          return null;
+        },
+        // Nothing to redirect to yet — wait for the first /auth/me to resolve.
+        loading: () => null,
+        // Treat an unexpected failure to even check the session as signed-out,
+        // never as a silent "stay on whatever screen this was".
+        error: (_, __) => '/sign-in',
+      );
+    },
     routes: [
-      GoRoute(path: '/', builder: (context, state) => const _PlaceholderScreen(title: 'ABIES')),
-      GoRoute(path: '/sign-in', builder: (context, state) => const _PlaceholderScreen(title: 'Sign in')),
+      GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
+      GoRoute(path: '/sign-in', builder: (context, state) => const SignInScreen()),
+      GoRoute(
+        path: '/otp',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          return OtpScreen(
+            requestId: extra['requestId'] as String,
+            isNewAccount: extra['isNewAccount'] as bool? ?? false,
+            devOtp: extra['devOtp'] as String?,
+          );
+        },
+      ),
+      GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       GoRoute(path: '/doctor/:slug', builder: (context, state) => _PlaceholderScreen(title: 'Doctor ${state.pathParameters['slug']}')),
       GoRoute(path: '/product/:id', builder: (context, state) => _PlaceholderScreen(title: 'Product ${state.pathParameters['id']}')),
       GoRoute(path: '/appointment/:id', builder: (context, state) => _PlaceholderScreen(title: 'Appointment ${state.pathParameters['id']}')),
@@ -24,6 +61,23 @@ GoRouter buildAppRouter() {
       GoRoute(path: '/panchakarma/:id', builder: (context, state) => _PlaceholderScreen(title: 'Panchakarma ${state.pathParameters['id']}')),
     ],
   );
+});
+
+/// Bridges Riverpod state changes into go_router's `Listenable`-based
+/// refresh mechanism, so a sign-in/sign-out re-runs `redirect` without the
+/// app needing to call `router.refresh()` by hand at every call site.
+class _AuthRefreshNotifier extends ChangeNotifier {
+  _AuthRefreshNotifier(Ref ref) {
+    _subscription = ref.listen(authControllerProvider, (_, __) => notifyListeners());
+  }
+
+  late final ProviderSubscription<AsyncValue<AuthState>> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.close();
+    super.dispose();
+  }
 }
 
 class _PlaceholderScreen extends StatelessWidget {
