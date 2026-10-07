@@ -27,6 +27,20 @@ import '../../features/panchakarma/presentation/panchakarma_booking_screen.dart'
 import '../../features/panchakarma/presentation/panchakarma_centres_screen.dart';
 import '../../features/panchakarma/presentation/panchakarma_search_screen.dart';
 import '../../features/panchakarma/presentation/panchakarma_therapy_detail_screen.dart';
+import '../../features/pharmacy/domain/cart.dart';
+import '../../features/pharmacy/domain/medicine_summary.dart';
+import '../../features/pharmacy/domain/pharmacy_summary.dart';
+import '../../features/pharmacy/presentation/cart_screen.dart';
+import '../../features/pharmacy/presentation/checkout_screen.dart';
+import '../../features/pharmacy/presentation/medicine_detail_screen.dart';
+import '../../features/pharmacy/presentation/medicine_order_detail_screen.dart';
+import '../../features/pharmacy/presentation/medicine_order_list_screen.dart';
+import '../../features/pharmacy/presentation/medicine_search_screen.dart';
+import '../../features/pharmacy/presentation/pharmacy_detail_screen.dart';
+import '../../features/prescriptions/domain/prescription_summary.dart';
+import '../../features/prescriptions/presentation/prescription_detail_screen.dart';
+import '../../features/prescriptions/presentation/prescription_purchase_screen.dart';
+import '../../features/prescriptions/presentation/prescriptions_list_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 
 /// Navigation (docs/mobile/MOBILE-ARCHITECTURE.md §4). `/sign-in` and
@@ -36,9 +50,11 @@ import '../../features/profile/presentation/profile_screen.dart';
 /// `/doctor/:slug` (Phase 4) is a real deep-link route — reachable both from
 /// in-app navigation and as a web-style link — and resolves the slug
 /// against the real backend itself before showing anything
-/// (`DoctorDetailScreen`, docs/mobile/API-GAP-ANALYSIS.md §7). The other
-/// `/product/:id`, `/appointment/:id` deep-link routes remain Phase 1
-/// placeholders — Phase 7's own screens.
+/// (`DoctorDetailScreen`, docs/mobile/API-GAP-ANALYSIS.md §7). The
+/// `/appointment/:id` deep-link route remains a Phase 1 placeholder (no
+/// phase has claimed it as a cold deep link yet). The former `/product/:id`
+/// placeholder is gone — Phase 7's real `/pharmacy*`/`/prescriptions*`
+/// routes replace it below.
 ///
 /// Phase 6's `/diagnostics*` routes are real (replacing the Phase 1
 /// `/diagnostics/:id` placeholder entirely), but — same gap as Panchakarma
@@ -55,6 +71,14 @@ import '../../features/profile/presentation/profile_screen.dart';
 /// data via `extra` from in-app navigation; opened without it, they show an
 /// honest "start from search" state rather than attempting a network call
 /// that doesn't exist.
+///
+/// Phase 7's `/pharmacy*`/`/prescriptions*` routes are real, with the same
+/// already-known gap once more: `/pharmacy/medicine/:id`, `/pharmacy/
+/// store/:id` and `/prescriptions/:id` all carry their data via `extra`
+/// rather than re-fetching (no `GET /public/medicines/[id]`, `/public/
+/// pharmacies/[id]`, or `GET /prescriptions/[id]` exist). `/pharmacy/
+/// checkout` likewise takes its `Cart` via `extra` — there is no
+/// single-cart `GET` either, only the plural `/patients/me/cart`.
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _AuthRefreshNotifier(ref);
   ref.onDispose(refreshNotifier.dispose);
@@ -140,7 +164,34 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => DiagnosticOrderDetailScreen(orderId: state.pathParameters['id']!),
       ),
       GoRoute(path: '/diagnostics/recommendations', builder: (context, state) => const DiagnosticRecommendationsScreen()),
-      GoRoute(path: '/product/:id', builder: (context, state) => _PlaceholderScreen(title: 'Product ${state.pathParameters['id']}')),
+      GoRoute(path: '/pharmacy', builder: (context, state) => const MedicineSearchScreen()),
+      GoRoute(
+        path: '/pharmacy/medicine/:id',
+        builder: (context, state) => MedicineDetailScreen(medicine: state.extra as MedicineSummary?),
+      ),
+      GoRoute(
+        path: '/pharmacy/store/:id',
+        builder: (context, state) => PharmacyDetailScreen(pharmacy: state.extra as PharmacySummary?),
+      ),
+      GoRoute(path: '/pharmacy/cart', builder: (context, state) => const CartScreen()),
+      GoRoute(
+        path: '/pharmacy/checkout',
+        builder: (context, state) => CheckoutScreen(cart: state.extra as Cart?),
+      ),
+      GoRoute(path: '/pharmacy/orders', builder: (context, state) => const MedicineOrderListScreen()),
+      GoRoute(
+        path: '/pharmacy/orders/:id',
+        builder: (context, state) => MedicineOrderDetailScreen(orderId: state.pathParameters['id']!),
+      ),
+      GoRoute(path: '/prescriptions', builder: (context, state) => const PrescriptionsListScreen()),
+      GoRoute(
+        path: '/prescriptions/:id',
+        builder: (context, state) => PrescriptionDetailScreen(prescription: state.extra as PrescriptionSummary?),
+      ),
+      GoRoute(
+        path: '/prescriptions/:id/purchase',
+        builder: (context, state) => PrescriptionPurchaseScreen(prescription: state.extra as PrescriptionSummary?),
+      ),
       GoRoute(path: '/appointment/:id', builder: (context, state) => _PlaceholderScreen(title: 'Appointment ${state.pathParameters['id']}')),
     ],
   );

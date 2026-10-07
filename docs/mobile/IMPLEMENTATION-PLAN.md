@@ -257,20 +257,77 @@ oversight (report-download's authorization is already enforced server-side by `r
 patient-ownership check in `downloadUrl()`, confirmed by reading the real code; this phase did not
 additionally stand up a second account in this environment to exercise that boundary end-to-end).
 
-## Phase 7 — Pharmacy and prescriptions
+## Phase 7 — Pharmacy and prescriptions — **implemented and verified**, 2026-10-07
 
-Consumes: `GET /api/v1/public/medicines`, `/facets`, `GET/POST /api/v1/patients/me/cart`,
-`/cart/items/[id]`, `/cart/[id]/checkout`, `GET /api/v1/medicine-orders/mine`, `/[id]`,
-`POST /api/v1/medicine-orders/verify-payment`, `/[id]/cancel`, `/[id]/review`,
-`GET /api/v1/patients/me/prescriptions`.
+Consumes: `GET /api/v1/public/medicines`, `/facets`, `/public/medicines/[id]/reviews`,
+`GET /api/v1/public/pharmacies`, `GET/POST /api/v1/patients/me/cart`, `PATCH`/`DELETE .../cart/
+items/[id]`, `POST .../cart/[id]/checkout`, `GET /api/v1/medicine-orders/mine`, `/[id]`,
+`POST /api/v1/medicine-orders`, `/verify-payment`, `/[id]/cancel`, `/[id]/review`,
+`GET /api/v1/patients/me/prescriptions`, `GET /api/v1/prescriptions/[id]/match`.
 
-Prescription-gated items follow whatever the backend's existing prescription-validation rule returns on
-checkout — the mobile cart never has its own "is this a prescription medicine" logic that could drift
-from the backend's (brief §10's own rule).
+**What's actually done now**: the real medicine catalogue search (`GET /api/v1/public/medicines`,
+OTC-only, with `publicMedicineSearchSchema`'s full filter set) plus the real facets; medicine/pharmacy
+detail screens with a working "start from the catalogue" fallback for a cold deep link (no detail-by-id
+route exists — see below); a multi-cart-aware cart screen (one active cart per pharmacy — EXPANSION-1b)
+with quantity edit/remove and a checkout flow per cart (address → checkout → payment-or-unavailable); a
+full "my medicine orders" list + detail screen with cancel and per-item review; "my prescriptions" with
+a detail screen via `extra`; and the real "purchase from a finalized prescription" flow (pick pharmacy →
+match → pick quantities → order directly) — all against the real dev backend's route/service code (read
+directly, not guessed), and all unit-tested against fakes (`apps/mobile/test/unit/pharmacy_models_test.
+dart`, `prescription_models_test.dart`, `cart_controller_test.dart`, `checkout_flow_controller_test.
+dart`, `medicine_orders_controller_test.dart`, `prescription_purchase_controller_test.dart` — 35 new
+tests, 167 total, all passing).
 
-Exit: catalogue→cart→checkout→payment→order-history flow tested; a prescription-required item's
-checkout-time enforcement verified to come from the backend response, not a client-side check that could
-be bypassed by a modified client.
+**The already-known detail-route gap, found again here, same shape as Phase 5/6**: no
+`GET /public/medicines/[id]` and no `GET /public/pharmacies/[id]` exist (confirmed by reading every
+route under `apps/platform-api/src/app/api/v1/public/medicines*` and `.../public/pharmacies*`). Resolved
+exactly like Panchakarma/Diagnostics: the medicine/pharmacy detail screens carry their data via
+`GoRouter`'s navigation `extra`, never re-fetched by id; opened cold they show an honest "start from the
+catalogue" state. There is also no single-cart `GET` (only the plural `/patients/me/cart`), so
+`CheckoutScreen` takes its `Cart` via `extra` too, and `CheckoutFlowController` re-fetches every cart via
+`myCarts()` to re-verify it immediately before checkout rather than trusting that `extra`.
+
+**Three further real gaps found by this phase, beyond the already-known one — found by reading the
+brief's own named routes/services, not assumed from their descriptions**:
+
+- `GET /api/v1/prescriptions/[id]/route.ts` has **no `GET` handler at all** — only a doctor-only
+  `PATCH` (`requireRole(ctx, 'DOCTOR')`, for `updatePrescription()`). Unlike Phase 6's doctor-only
+  report-download route, there is no route being "worked around" here — there is simply no
+  single-prescription read endpoint for anyone. Since `listFinalizedPrescriptionsForPatient()`'s own
+  per-row shape already carries every item field this app needs, `PrescriptionDetailScreen` reads its
+  object via `extra`, never a call that doesn't exist.
+- A `Prescription` has **no storage-key/document field of any kind** in `packages/domain/prisma/
+  schema.prisma` — confirmed by reading the full model. Unlike a `DiagnosticOrder`'s `DiagnosticReport`,
+  there is nothing to view or download here; this app shows only the prescription's structured fields
+  and does not build a document viewer for a file that doesn't exist.
+- **The brief's own guessed purchase-from-prescription mechanism doesn't hold once the real code is
+  read**: `addToCart()` refuses any `requiresPrescription` medicine outright with a 400 ("order it from
+  a finalized prescription instead of the cart"), so a matched prescription item can never be "added to
+  cart... one per matched item" as the brief's phrasing guessed. The real, working path is
+  `POST /api/v1/medicine-orders` (`bookOrder()`) called directly — confirmed patient-reachable
+  (`requireRole(ctx, 'PATIENT')`) — which is also the **only** path for a prescription-gated item, cart
+  checkout being OTC-only. A smaller, inherited gap sits one level deeper:
+  `matchPrescriptionAtPharmacy()` aggregates availability by `medicineId` only, with no variant
+  granularity, so a prescribed medicine with real pack-size variants (EXPANSION-1) can show "available"
+  from match while `bookOrder()`'s own variant-aware FEFO lookup still fails to find a non-variant batch
+  — a backend-side limitation this phase's mobile code surfaces rather than works around (out of scope
+  to fix here). See `lib/features/pharmacy/PHASE.md` and `lib/features/prescriptions/PHASE.md` for the
+  full reasoning on all three.
+
+Prescription-gated items follow whatever the backend's existing prescription-validation rule returns —
+`addToCart()`'s own 400 keeps them out of the cart entirely, and `bookOrder()`'s own validation is what's
+authoritative for the direct-order path; the mobile UI never duplicates either check as the real gate
+(brief §10's own rule).
+
+**Payment deferred to Phase 8**, same as every prior phase: `isConfigured()`'s 503 is the actually
+reachable outcome in this dev environment (`RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` blank), handled as a
+calm `serviceUnavailable` state in both the cart-checkout and prescription-purchase flows; the
+success-path plumbing is implemented and unit-tested against a fake only.
+
+Exit: catalogue→cart→checkout→payment-or-unavailable→order-history flow tested; a prescription-required
+item's actual purchase path (direct order booking, confirmed by reading the real `addToCart()`/
+`bookOrder()` code — not the cart) verified to defer entirely to the backend's own response, never a
+client-side check that could be bypassed by a modified client.
 
 ## Phase 8 — Payments
 

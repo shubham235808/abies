@@ -7,21 +7,23 @@ business logic. Read `docs/mobile/MOBILE-ARCHITECTURE.md` before changing anythi
 ## Status — honest, as of 2026-10-07
 
 Phase 1 (foundation), Phase 2 (auth + patient profile), Phase 3 (home dashboard), Phase 4 (doctor
-discovery and appointments), Phase 5 (Panchakarma discovery and bookings) and Phase 6 (diagnostics
-discovery, booking, orders, reports, recommendations) of `docs/mobile/IMPLEMENTATION-PLAN.md`, **now
-actually verified**, not just written. Flutter 3.47.6 (stable), a Temurin JDK 21 and the Android SDK
-(platform 35/36, build-tools) are installed and this ran for real:
+discovery and appointments), Phase 5 (Panchakarma discovery and bookings), Phase 6 (diagnostics
+discovery, booking, orders, reports, recommendations) and Phase 7 (pharmacy catalogue, cart, checkout,
+medicine orders, and prescriptions) of `docs/mobile/IMPLEMENTATION-PLAN.md`, **now actually verified**,
+not just written. Flutter 3.47.6 (stable), a Temurin JDK 21 and the Android SDK (platform 35/36,
+build-tools) are installed and this ran for real:
 
-- `flutter pub get` — resolved all dependencies from this `pubspec.yaml` (Phase 6 added `path_provider`
-  and `url_launcher`, both resolved with no conflicts).
+- `flutter pub get` — resolved all dependencies from this `pubspec.yaml` (no new dependencies needed for
+  Phase 7 — the `path_provider`/`url_launcher` Phase 6 added are unused here, since Phase 7 has no
+  document to view/download, see `lib/features/prescriptions/PHASE.md`).
 - `flutter analyze` — clean.
-- `flutter test` — **all 132 unit tests pass** (the original 92 through Phase 5, plus 40 added for
-  Phase 6), for real, under the actual Flutter test runner.
+- `flutter test` — **all 167 unit tests pass** (the original 132 through Phase 6, plus 35 added for
+  Phase 7), for real, under the actual Flutter test runner.
 - `android/` was generated for real by `flutter create --org in.abies --project-name abies_mobile
   --platforms=android`, then merged in without touching the hand-written `lib/`, `pubspec.yaml`, or
   `analysis_options.yaml` (which gained a generated `exclude: - android/**` line).
 - `flutter build apk --debug --dart-define=ABIES_ENV=dev -t lib/main_dev.dart` — **built a real, valid
-  APK** (`build/app/outputs/flutter-apk/app-debug.apk`, ~184MB unoptimized debug build with Phase 6's
+  APK** (`build/app/outputs/flutter-apk/app-debug.apk`, ~176MB unoptimized debug build with Phase 7's
   code added).
 
 **What's still not verified**: this APK has not been installed or run on a device or emulator — the
@@ -211,6 +213,84 @@ preview already hinted at using only `city`/`limit`:
   thinner model has no lab id to jump straight to a specific test with, and there's no detail-by-id
   route to resolve one against regardless, so the real search screen is the honest destination) — the
   same minimal, justified pattern every prior phase used.
+
+## What Phase 7 added
+
+Real pharmacy discovery (medicine catalogue, cart, checkout, orders — `lib/features/pharmacy/`) and
+prescription discovery/purchase (`lib/features/prescriptions/`), against the routes Phase 3's home
+preview already hinted at using only `area`/`limit`:
+
+- **Catalogue** (`medicine_search_screen.dart`): `GET /api/v1/public/medicines` — OTC-only
+  (`requiresPrescription: false`; confirmed by reading `searchPublic()` directly), with the full
+  `publicMedicineSearchSchema` filter set (`q`, `area` — **not** `city`, same confirmed-by-reading
+  naming quirk Phase 3's own preview found — `category`, `brand`, `isFmcg`, `priceMin`/`priceMax`) and
+  `GET /api/v1/public/medicines/facets`. `GET /api/v1/public/medicines/[id]/reviews` is a real, id-keyed
+  endpoint fetched from the medicine detail screen even though there's no single-medicine detail route
+  (see below).
+- **A real gap, found and reported rather than worked around (the already-known shape)**: no
+  `GET /public/medicines/[id]` and no `GET /public/pharmacies/[id]` exist (confirmed by reading every
+  route under `.../api/v1/public/medicines*` and `.../api/v1/public/pharmacies*`), the same gap Phase
+  5/6 found for Panchakarma/Diagnostics. `MedicineDetailScreen`/`PharmacyDetailScreen` read their data
+  from `GoRouter`'s navigation `extra` instead of re-fetching by id; opened cold they show an honest
+  "start from the catalogue" state. There's also no single-cart `GET` (only the plural `/patients/me/
+  cart`), so `CheckoutScreen` takes its `Cart` via `extra` too — see `lib/features/pharmacy/PHASE.md`.
+- **Cart, multi-cart aware** (`cart_controller.dart`/`cart_screen.dart`): a patient can have one *active*
+  cart per pharmacy (EXPANSION-1b — `addToCart()` finds-or-creates per `(patient, pharmacy)`), so
+  `GET /api/v1/patients/me/cart` returns `{ carts }` (plural). The cart screen is a list of per-pharmacy
+  sections, each with quantity edit (`PATCH .../cart/items/[id]`), remove (the real, separate
+  `DELETE .../cart/items/[id]` — confirmed both routes exist independently, not PATCH-to-0 as the only
+  path), and its own "Checkout" action.
+- **Two genuinely separate, both-real purchase paths — a finding worth flagging** (see
+  `lib/features/pharmacy/PHASE.md` for the full reasoning): cart checkout
+  (`POST .../cart/[id]/checkout` → `checkoutCart()` → `bookOrder()` with no `prescriptionId`) is the
+  **OTC-only** path, since `addToCart()` itself refuses any `requiresPrescription` medicine with a 400.
+  `POST /api/v1/medicine-orders` (`bookOrder()` directly) is confirmed **patient-reachable**
+  (`requireRole(ctx, 'PATIENT')`) and is the **only** path for a prescription-gated item — used
+  exclusively by the prescription-purchase flow below. The brief's own guess that matched prescription
+  items would go through the cart turned out not to hold once the real `addToCart()` code was read; this
+  app uses the real reachable route instead of inventing a workaround.
+- **Checkout** (`checkout_flow_controller.dart`): delivery address (+ optional family member) → checkout
+  → payment-or-unavailable, adapted from Phase 4/5/6's own booking-flow shape. `confirmCheckout` always
+  re-fetches *every* active cart (`myCarts()` — there is no single-cart `GET`) immediately before calling
+  `/checkout`, and refuses to proceed if the chosen cart is gone, empty, or has any item the fresh fetch
+  now reports `available: false` (a live stock/price check `getCart()`/`listMyCarts()` already expose per
+  item) — the same "never trust an earlier fetch at the moment of payment" rule, adapted to a cart's own
+  re-checkable field rather than a single slot/therapy/test's existence.
+- **Prescription-gated checkout is backend-authoritative, never a client-side gate** (brief §10):
+  `checkoutCartSchema`/`checkoutCart()` carry no prescription logic at all (prescription items can never
+  reach the cart in the first place — `addToCart()`'s own 400), and `bookOrder()`'s own validation (does
+  this medicine require, and have, a matching `prescriptionItemId`) is what's authoritative for the
+  direct-order path. This app's UI never duplicates that check as the real gate.
+- **Payment, read directly from the real code before building anything** (`bookOrder()` in
+  `packages/domain/src/modules/medicines/orders.service.ts`, shared by both purchase paths):
+  `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` are blank in this environment's `.env`, and `isConfigured()`
+  is checked *first* — so every real checkout/order attempt here returns a 503 before any order/payment
+  row is created. Both flows treat that as their own calm, expected `serviceUnavailable` state, exactly
+  mirroring Phase 4/5/6. `/verify-payment` is implemented and unit-tested against a fake but not
+  reachable here — an explicit Phase 8 dependency.
+- **Order management** (`medicine_order_list_screen.dart`/`medicine_order_detail_screen.dart`): a full
+  "my medicine orders" list (`GET /api/v1/medicine-orders/mine`) opening into a detail screen
+  (`GET /api/v1/medicine-orders/[id]`) with items, delivery, shipment, payment, cancel
+  (`POST .../[id]/cancel`), and — once DELIVERED — a per-item review action
+  (`POST .../[id]/review`, where `id` is the **order id** and `medicineId` goes in the body).
+- **Prescriptions** (`lib/features/prescriptions/`): "My prescriptions"
+  (`GET /api/v1/patients/me/prescriptions`, finalized-only) opening into a detail screen via `extra` —
+  **a real gap found**: `GET /api/v1/prescriptions/[id]/route.ts` has no `GET` handler at all (only a
+  doctor-only `PATCH`), confirmed by reading that file directly, so there is genuinely nowhere to
+  re-fetch a single prescription from, cold or otherwise. **No document viewer either** — a
+  `Prescription` has no storage-key/document field of any kind in the schema, unlike a diagnostic
+  report. See `lib/features/prescriptions/PHASE.md` for both, plus a third, inherited gap in
+  `matchPrescriptionAtPharmacy()`'s own variant handling.
+- **Purchase from a finalized prescription** (`prescription_purchase_controller.dart`): pick a pharmacy
+  (`GET /api/v1/public/pharmacies`) → `GET /api/v1/prescriptions/[id]/match?pharmacyId=` resolves which
+  items that pharmacy actually stocks → pick quantities for the available ones → `bookOrder()` directly
+  (see above). `confirmPurchase` always re-runs the real match call immediately before booking, and
+  refuses to include any item the fresh match no longer reports available in the requested quantity.
+- Two small, deliberate edits to `home_screen.dart`: the medicines preview card and the medicine
+  active-orders tile are now tappable (to `/pharmacy` and `/pharmacy/orders` — the preview card's
+  thinner model has no pharmacy id to jump straight to a specific medicine with, and there's no
+  detail-by-id route to resolve one against regardless, so the real catalogue screen is the honest
+  destination) — the same minimal, justified pattern every prior phase used.
 
 ## Layout
 

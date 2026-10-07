@@ -327,9 +327,13 @@ class _MedicineOrderTile extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: const Icon(Icons.medication_outlined),
+  leading: const Icon(Icons.medication_outlined),
         title: Text(order.pharmacyName ?? 'Pharmacy order'),
         subtitle: Text('${order.itemCount} item${order.itemCount == 1 ? '' : 's'} · ${_statusLabel(order.status)}'),
+        // Full cancel/review detail lives on the real "my medicine orders"
+        // list (Phase 7) — this card is still just a dashboard preview,
+        // same rule as Phase 4/5/6's own order/booking tiles.
+        onTap: () => context.push('/pharmacy/orders'),
       ),
     );
   }
@@ -467,11 +471,22 @@ class _MedicineCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _PreviewCard(
-      leadingIcon: Icons.medication_outlined,
-      title: medicine.name,
-      subtitle: medicine.brandName ?? medicine.pharmacyName ?? '',
-      trailing: [Text('₹${medicine.price}')],
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      // Phase 3's preview card has no pharmacyId and is a narrower shape
+      // than the real search result anyway, so it can't jump straight to a
+      // specific medicine detail (there's no public single-medicine route
+      // to resolve one by id either — see `MedicineSummary`'s doc
+      // comment); the real medicine catalogue search screen is the honest
+      // destination, same "tile → list" shape as `_PanchakarmaCard`/
+      // `_DiagnosticCard`.
+      onTap: () => context.push('/pharmacy'),
+      child: _PreviewCard(
+        leadingIcon: Icons.medication_outlined,
+        title: medicine.name,
+        subtitle: medicine.brandName ?? medicine.pharmacyName ?? '',
+        trailing: [Text('₹${medicine.price}')],
+      ),
     );
   }
 }
