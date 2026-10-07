@@ -6,22 +6,20 @@ business logic. Read `docs/mobile/MOBILE-ARCHITECTURE.md` before changing anythi
 
 ## Status — honest, as of 2026-10-07
 
-Phase 1 (foundation), Phase 2 (auth + patient profile) and Phase 3 (home dashboard) of
-`docs/mobile/IMPLEMENTATION-PLAN.md`, **now actually verified**, not just written. Flutter 3.47.6
-(stable), a Temurin JDK 21 and the Android SDK (platform 35/36, build-tools) are installed and this ran
-for real:
+Phase 1 (foundation), Phase 2 (auth + patient profile), Phase 3 (home dashboard) and Phase 4 (doctor
+discovery and appointments) of `docs/mobile/IMPLEMENTATION-PLAN.md`, **now actually verified**, not just
+written. Flutter 3.47.6 (stable), a Temurin JDK 21 and the Android SDK (platform 35/36, build-tools) are
+installed and this ran for real:
 
-- `flutter pub get` — resolved all 84 dependencies from this `pubspec.yaml` with no changes needed.
-- `flutter analyze` — clean. Two real issues it caught in the original hand-written draft are fixed:
-  `secure_cookie_storage.dart` had an invented `close()` method that isn't part of `cookie_jar`'s actual
-  `Storage` interface (removed), and a redundant null-check in `patient_profile.dart` (fixed).
-- `flutter test` — **all 35 unit tests pass** (the original 11, plus 24 added for Phase 3), for real,
-  under the actual Flutter test runner.
+- `flutter pub get` — resolved all dependencies from this `pubspec.yaml` with no changes needed.
+- `flutter analyze` — clean.
+- `flutter test` — **all 72 unit tests pass** (the original 35 through Phase 3, plus 37 added for Phase
+  4), for real, under the actual Flutter test runner.
 - `android/` was generated for real by `flutter create --org in.abies --project-name abies_mobile
   --platforms=android`, then merged in without touching the hand-written `lib/`, `pubspec.yaml`, or
   `analysis_options.yaml` (which gained a generated `exclude: - android/**` line).
 - `flutter build apk --debug --dart-define=ABIES_ENV=dev -t lib/main_dev.dart` — **built a real, valid
-  APK** (`build/app/outputs/flutter-apk/app-debug.apk`, ~184MB unoptimized debug build with Phase 3's
+  APK** (`build/app/outputs/flutter-apk/app-debug.apk`, ~184MB unoptimized debug build with Phase 4's
   code added).
 
 **What's still not verified**: this APK has not been installed or run on a device or emulator — the
@@ -65,6 +63,40 @@ signal — passed as the `city` query param to doctors/Panchakarma/diagnostics a
 location permission at all; a patient with no city on their profile simply gets the unfiltered
 catalogue, which is the required graceful fallback, reached here just by never asking the device for a
 location in the first place.
+
+## What Phase 4 added
+
+Real doctor discovery and the appointment booking/management flow, against routes Phase 3's home
+preview already hinted at using only `city`/`limit`:
+
+- **Search** (`lib/features/doctors/`): `GET /api/v1/public/doctors` with the full filter set
+  (`q`, `city`, `specialty`, `language`, `mode`, `accepting`, pagination), `GET /api/v1/public/doctors/
+  facets` for real filter option values, and a doctor detail screen (`GET /api/v1/public/doctors/
+  [slug]` + `/reviews`) that replaces the Phase 1 `/doctor/:slug` placeholder. A slug that doesn't
+  resolve shows a clean "not available" state, never a blank screen (`docs/mobile/
+  API-GAP-ANALYSIS.md` §7). The doctor's photo (`/photo` route) is confirmed by reading that route to be
+  a public 302 redirect to a signed storage URL — no auth needed, so the detail screen's `Image.network`
+  points at it directly.
+- **Booking** (`lib/features/appointments/`): `GET /api/v1/appointments/slots` → `POST .../hold` →
+  payment-or-unavailable → confirmation, driven by `BookingController`. Availability is never trusted
+  from an earlier fetch — `confirmBooking` always re-fetches the slot list immediately before calling
+  `/hold`, and refuses to hold a slot that fresh fetch no longer lists.
+- **Payment, read directly from the real code before building anything** (`holdSlot()` in
+  `packages/domain/src/modules/appointments/appointments.service.ts`): `RAZORPAY_KEY_ID`/
+  `RAZORPAY_KEY_SECRET` are blank in this environment's `.env`, so every real `/hold` call here returns
+  a 503 before any appointment/payment row is even created. The booking flow treats that as its own
+  calm, expected `serviceUnavailable` state ("booking isn't available in this environment yet"), not an
+  error or a crash. The full success-path plumbing (`AppointmentHold`, `/verify-payment`) is implemented
+  and unit-tested against a fake, but has no real Razorpay Flutter SDK call behind it — that's an
+  explicit Phase 8 dependency (`docs/mobile/API-GAP-ANALYSIS.md` §5), not something this phase could
+  have tested end to end in this environment regardless.
+- **Appointment management**: a full "my appointments" list (`GET /api/v1/appointments/mine`'s complete
+  joined shape — doctor, clinic, family member, payment, consultation — not Phase 3's narrower
+  dashboard summary), with cancel (`POST .../cancel`) and review (`POST .../review`) actions inline.
+- Two small, deliberate edits to Phase 3's already-shipped `home_screen.dart`: the doctor preview card
+  and the "Upcoming appointments" tile are now tappable (to `/doctor/:slug` and `/appointments`), and
+  the AppBar gained a search icon to `/doctors` — the three smallest changes needed to actually reach
+  this phase's new screens, per Phase 3's own "tapping a card does nothing yet — Phases 4+" note.
 
 ## Layout
 

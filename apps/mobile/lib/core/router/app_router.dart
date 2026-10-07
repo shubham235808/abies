@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/appointments/presentation/appointment_list_screen.dart';
+import '../../features/appointments/presentation/booking_screen.dart';
 import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/auth/presentation/otp_screen.dart';
 import '../../features/auth/presentation/sign_in_screen.dart';
+import '../../features/doctors/presentation/doctor_detail_screen.dart';
+import '../../features/doctors/presentation/doctor_search_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 
@@ -12,10 +16,12 @@ import '../../features/profile/presentation/profile_screen.dart';
 /// `/otp` are reachable signed out; everything else requires a session —
 /// enforced here by `redirect`, not by each screen checking for itself.
 ///
-/// Deep-link routes (`/doctor/:slug` etc.) are reserved but not implemented
-/// (still Phase 1 placeholders) — see docs/mobile/API-GAP-ANALYSIS.md §7 for
-/// the "resolve against the real API before navigating" rule they must
-/// follow once built.
+/// `/doctor/:slug` (Phase 4) is a real deep-link route — reachable both from
+/// in-app navigation and as a web-style link — and resolves the slug
+/// against the real backend itself before showing anything
+/// (`DoctorDetailScreen`, docs/mobile/API-GAP-ANALYSIS.md §7). The other
+/// `/product/:id`, `/appointment/:id`, `/diagnostics/:id`, `/panchakarma/:id`
+/// deep-link routes remain Phase 1 placeholders — Phases 5-7's own screens.
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _AuthRefreshNotifier(ref);
   ref.onDispose(refreshNotifier.dispose);
@@ -54,7 +60,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
-      GoRoute(path: '/doctor/:slug', builder: (context, state) => _PlaceholderScreen(title: 'Doctor ${state.pathParameters['slug']}')),
+      GoRoute(path: '/doctors', builder: (context, state) => const DoctorSearchScreen()),
+      GoRoute(
+        path: '/doctor/:slug',
+        builder: (context, state) => DoctorDetailScreen(slug: state.pathParameters['slug']!),
+      ),
+      GoRoute(
+        path: '/doctor/:slug/book',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          return BookingScreen(slug: state.pathParameters['slug']!, initialMode: extra['mode'] as String?);
+        },
+      ),
+      GoRoute(path: '/appointments', builder: (context, state) => const AppointmentListScreen()),
       GoRoute(path: '/product/:id', builder: (context, state) => _PlaceholderScreen(title: 'Product ${state.pathParameters['id']}')),
       GoRoute(path: '/appointment/:id', builder: (context, state) => _PlaceholderScreen(title: 'Appointment ${state.pathParameters['id']}')),
       GoRoute(path: '/diagnostics/:id', builder: (context, state) => _PlaceholderScreen(title: 'Diagnostics ${state.pathParameters['id']}')),

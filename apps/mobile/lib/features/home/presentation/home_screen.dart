@@ -35,6 +35,11 @@ class HomeScreen extends ConsumerWidget {
         title: const Text('ABIES Ayurveda'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Find a doctor',
+            onPressed: () => context.push('/doctors'),
+          ),
+          IconButton(
             icon: const Icon(Icons.person_outline),
             tooltip: 'My profile',
             onPressed: () => context.push('/profile'),
@@ -304,6 +309,9 @@ class _AppointmentTile extends StatelessWidget {
           if (appointment.clinicName != null) appointment.clinicName!,
           if (appointment.familyMemberName != null) 'For ${appointment.familyMemberName}',
         ].join(' · ')),
+        // Full cancel/review detail lives on the real "my appointments" list
+        // (Phase 4) — this card is still just a dashboard preview.
+        onTap: () => context.push('/appointments'),
       ),
     );
   }
@@ -370,14 +378,18 @@ class _DoctorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _PreviewCard(
-      leadingIcon: Icons.person_outline,
-      title: doctor.name,
-      subtitle: doctor.specialties.isNotEmpty ? doctor.specialties.first : (doctor.city ?? ''),
-      trailing: [
-        if (doctor.rating != null) Text('★ ${doctor.rating!.toStringAsFixed(1)}'),
-        if (doctor.startingFee != null) Text('From ₹${doctor.startingFee}'),
-      ],
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => context.push('/doctor/${doctor.slug}'),
+      child: _PreviewCard(
+        leadingIcon: Icons.person_outline,
+        title: doctor.name,
+        subtitle: doctor.specialties.isNotEmpty ? doctor.specialties.first : (doctor.city ?? ''),
+        trailing: [
+          if (doctor.rating != null) Text('★ ${doctor.rating!.toStringAsFixed(1)}'),
+          if (doctor.startingFee != null) Text('From ₹${doctor.startingFee}'),
+        ],
+      ),
     );
   }
 }

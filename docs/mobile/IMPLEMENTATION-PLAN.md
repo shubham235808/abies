@@ -73,18 +73,48 @@ test. `flutter analyze` clean, `flutter test` green (35/35, the original 11 plus
 APK built (`flutter build apk --debug --dart-define=ABIES_ENV=dev -t lib/main_dev.dart`). Not yet
 run on a device/emulator — same caveat as Phases 1-2 (`apps/mobile/README.md` "Status").
 
-## Phase 4 — Doctor discovery and appointments
+## Phase 4 — Doctor discovery and appointments — **implemented and verified**, 2026-10-07
 
 Consumes: `GET /api/v1/public/doctors`, `/public/doctors/facets`, `/public/doctors/[slug]`,
-`/public/doctors/[slug]/reviews`, `GET /api/v1/appointments/slots`, `POST /api/v1/appointments/hold`,
-`POST /api/v1/appointments/verify-payment`, `POST /api/v1/appointments/[id]/cancel`,
-`POST /api/v1/appointments/[id]/review`.
+`/public/doctors/[slug]/reviews`, `/public/doctors/[slug]/photo`, `GET /api/v1/appointments/slots`,
+`POST /api/v1/appointments/hold`, `POST /api/v1/appointments/verify-payment`,
+`POST /api/v1/appointments/[id]/cancel`, `POST /api/v1/appointments/[id]/review`,
+`GET /api/v1/appointments/mine`.
 
 Availability is never computed client-side — slot listing and hold are both server round-trips, every
-time, including right before showing "book now" as enabled (brief §7's own rule).
+time, including right before showing "book now" as enabled (brief §7's own rule):
+`BookingController.confirmBooking` (`apps/mobile/lib/features/appointments/presentation/
+booking_controller.dart`) re-fetches the slot list immediately before calling `/hold` and refuses to
+hold a slot that fresh fetch no longer lists.
 
-Exit: full search→book→pay→confirm flow against the real dev backend, double-booking attempt (two holds
-on the same slot) verified to fail server-side as expected, cancellation and review flows tested.
+**What's actually done now**: the real search screen (full filter set, not just Phase 3's `city`+
+`limit`), the real doctor detail screen (with a working not-found fallback for an unresolved slug —
+API-GAP-ANALYSIS.md §7), slot selection, slot hold, the service-unavailable-for-payment state, cancel,
+and review — all against the real dev backend's route/service code (read directly, not guessed), and
+all unit-tested against fakes (`apps/mobile/test/unit/doctor_models_test.dart`,
+`appointment_models_test.dart`, `doctors_controller_test.dart`, `booking_controller_test.dart`,
+`appointments_controller_test.dart`).
+
+**What's deferred to Phase 8, and why this isn't a Phase 4 gap**: `RAZORPAY_KEY_ID`/
+`RAZORPAY_KEY_SECRET` are blank in this environment's `.env` (confirmed by reading
+`packages/domain/src/lib/payments/razorpay.ts`'s `isConfigured()` and `appointments.service.ts`'s
+`holdSlot()`, which throws a 503 `ServiceUnavailableError` before creating anything when they're blank),
+so a full search→book→**pay**→confirm flow and a real double-booking race against a live gateway cannot
+be exercised end to end in this environment regardless of mobile-side work — the real Razorpay Flutter
+SDK integration, and testing the pay step for real, are Phase 8 (`docs/mobile/API-GAP-ANALYSIS.md` §5,
+which also flags the missing idempotency key on these same POST routes as a Phase-8 prerequisite). This
+phase implements the full `/hold` success-path plumbing (`AppointmentHold`, `/verify-payment`) and
+tests it against a fake API, but never calls a real payment SDK. The *booking-conflict* race (two holds
+racing for the same slot) is exercised today, without a real payment gateway, via
+`BookingController`'s own handling of the backend's `409 ConflictError` and via the re-fetch-before-hold
+check above — both unit-tested in `booking_controller_test.dart`.
+
+Exit: search/detail/slot-selection/hold/cancel/review flows implemented and unit-tested against the
+real route/service contracts; the service-unavailable payment state handled as a normal, displayable
+outcome, not a crash; `flutter analyze` clean, `flutter test` green (72/72 — the original 35 through
+Phase 3, plus 37 new), a real debug APK built. A full pay→confirm flow against a live gateway, and a
+real double-booking race against that gateway, are explicitly carried into Phase 8 once real Razorpay
+keys exist somewhere this app can be tested against end to end — not deferred by oversight.
 
 ## Phase 5 — Panchakarma
 

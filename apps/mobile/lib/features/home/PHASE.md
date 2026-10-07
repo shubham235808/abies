@@ -33,10 +33,14 @@ still there — this phase didn't remove either.
 
 ## Still not this phase
 
-- Tapping a doctor/therapy/test/medicine preview card does nothing yet — doctor detail, therapy/test/
-  product detail, and every booking/cart/checkout flow are Phases 4-7.
-- No search bar, no facets/filters beyond the implicit city/area signal, no "see all" screens for any of
-  the four catalogues — those are part of the Phase 4-7 discovery/listing screens, not the home dashboard.
+- **Updated by Phase 4**: tapping a doctor preview card now opens the real doctor detail screen
+  (`/doctor/:slug`), the AppBar gained a search icon to `/doctors`, and tapping the "Upcoming
+  appointments" tile opens the real appointments list (`/appointments`) — the three smallest, most
+  justified edits Phase 4 made to this already-shipped screen, per its own "don't touch home/auth/
+  profile except where genuinely necessary" rule. Therapy/test/medicine preview cards still do nothing
+  yet — that's Phases 5-7.
+- No search bar/facets/filters for the therapy/test/medicine catalogues, no "see all" screens for any of
+  those three — Phases 5-7's own discovery/listing screens, not the home dashboard.
 - No push notifications, no promotional banners, no recommendations engine.
 - No pull-to-refresh analytics/observability wiring beyond what Phase 1's `Observability` abstraction
   already provides.
