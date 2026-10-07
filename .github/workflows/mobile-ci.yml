@@ -1,0 +1,54 @@
+# CI for apps/mobile only (docs/mobile/IMPLEMENTATION-PLAN.md §11). Deliberately
+# separate from the backend's Tekton/ArgoCD pipeline — Kubernetes hosts backend
+# services only, never mobile binaries (brief §23's own rule), so this lives as
+# its own GitHub Actions workflow against the repo already on GitHub, not as a
+# Tekton Task in the cluster.
+#
+# STATUS: written without a Flutter SDK available in this session to actually
+# run it (see apps/mobile/README.md). Analyze+test should work once apps/mobile
+# is a real `flutter create`'d project with a resolved pubspec.lock. The build/
+# sign/deliver jobs are commented out — they need store credentials and signing
+# material (Play Console, App Store Connect, Android keystore, APNs key) that
+# don't exist yet; see docs/mobile/IMPLEMENTATION-PLAN.md §11. Uncomment and
+# wire up secrets only once those exist, not before.
+name: mobile-ci
+
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  # android-build:
+  #   needs: analyze-and-test
+  #   runs-on: ubuntu-latest
+  #   # Requires an Android keystore + key.properties supplied via repo secrets,
+  #   # never committed (docs/mobile/SECURITY-DESIGN.md §10). Not configured yet.
+
+  # ios-build:
+  #   needs: analyze-and-test
+  #   runs-on: macos-latest
+  #   # Needs a GitHub-hosted macOS runner (confirmed available, cost/minutes
+  #   # trade-off to revisit at Phase 11) and an Apple Developer Program
+  #   # certificate/provisioning profile supplied via repo secrets. Not
+  #   # configured yet — no Apple Developer account exists for ABIES as of
+  #   # this writing.
