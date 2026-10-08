@@ -4,13 +4,27 @@
 # its own GitHub Actions workflow against the repo already on GitHub, not as a
 # Tekton Task in the cluster.
 #
-# STATUS: written without a Flutter SDK available in this session to actually
-# run it (see apps/mobile/README.md). Analyze+test should work once apps/mobile
-# is a real `flutter create`'d project with a resolved pubspec.lock. The build/
-# sign/deliver jobs are commented out — they need store credentials and signing
-# material (Play Console, App Store Connect, Android keystore, APNs key) that
-# don't exist yet; see docs/mobile/IMPLEMENTATION-PLAN.md §11. Uncomment and
-# wire up secrets only once those exist, not before.
+# STATUS as of Phase 11 (docs/mobile/IMPLEMENTATION-PLAN.md §11), updated from
+# the Phase 1 version of this file now that a real Flutter/Android SDK has
+# actually run every job below once by hand (apps/mobile/README.md "What
+# Phase 11 added"):
+#   - analyze-and-test: unchanged from Phase 1, already real.
+#   - android-build: now real — builds a debug-signed APK per flavor
+#     (dev/uat/prod) and uploads each as a workflow artifact. Needs no
+#     secrets; nothing here is store-distributable.
+#   - android-release-signed: real job definition, but gated behind four
+#     repo secrets that do NOT exist in this repository yet (see the job's
+#     own comment for exactly which). Until they're added, GitHub Actions
+#     skips this job outright (the `if:` condition is false) — it does not
+#     silently no-op mid-run and does not fall back to debug signing; that
+#     fallback only exists for local/dev builds via android/key.properties
+#     (apps/mobile/android/app/build.gradle.kts), never in CI.
+#   - play-store-upload: still not written at all — needs a real Play
+#     Console service account and an existing app listing
+#     (docs/mobile/PLAY-STORE-RELEASE.md). Left as a comment stub, not a
+#     fake step, so nobody mistakes this for a working upload path.
+#   - ios-build: untouched — a separate track owns iOS; this box has no
+#     Xcode/macOS to verify an iOS CI job against anyway.
 name: mobile-ci
 
 on:
@@ -38,11 +52,117 @@ jobs:
       - run: flutter analyze
       - run: flutter test
 
-  # android-build:
-  #   needs: analyze-and-test
+  # Builds an unsigned/debug-signed APK per flavor (matrix: dev/uat/prod) and
+  # uploads each as a workflow artifact. This needs no secrets and produces
+  # nothing store-distributable — it's the same debug-signing fallback as a
+  # local `flutter build apk --debug --flavor <x>`, run for real in CI so a
+  # broken flavor/manifest/gradle change is caught on every PR, not just on
+  # whoever's machine happens to build next.
+  android-build:
+    needs: analyze-and-test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    strategy:
+      matrix:
+        flavor: [dev, uat, prod]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+      - run: flutter pub get
+      - name: Build debug APK (${{ matrix.flavor }})
+        run: |
+          flutter build apk --debug \
+            --flavor ${{ matrix.flavor }} \
+            --dart-define=ABIES_ENV=${{ matrix.flavor }} \
+            -t lib/main_${{ matrix.flavor }}.dart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: abies-mobile-${{ matrix.flavor }}-debug-apk
+          path: apps/mobile/build/app/outputs/flutter-apk/app-${{ matrix.flavor }}-debug.apk
+          retention-days: 14
+          if-no-files-found: error
+
+  # Builds a REAL release-signed APK (prod flavor only) — this is the job
+  # that actually needs the Android keystore. It stays gated behind four
+  # repository secrets that do not exist in this GitHub repo as of this
+  # writing:
+  #
+  #   ANDROID_KEYSTORE_BASE64    - `base64 -w0 release.jks` of the real
+  #                                keystore, generated and backed up
+  #                                outside source control (never
+  #                                regenerated — losing it blocks all
+  #                                future updates to the same Play Store
+  #                                listing; docs/mobile/
+  #                                IMPLEMENTATION-PLAN.md §11).
+  #   ANDROID_KEYSTORE_PASSWORD  - the keystore's store password.
+  #   ANDROID_KEY_ALIAS          - the signing key's alias inside it.
+  #   ANDROID_KEY_PASSWORD       - that key's own password.
+  #
+  # The `if:` below means GitHub Actions skips this job entirely — shown as
+  # "skipped", not green, not silently absent — for every run until all
+  # four secrets are added under Settings -> Secrets and variables ->
+  # Actions. Add them there, never by editing this file or committing a
+  # key.properties (docs/mobile/SECURITY-DESIGN.md §10,
+  # apps/mobile/.gitignore).
+  android-release-signed:
+    needs: analyze-and-test
+    runs-on: ubuntu-latest
+    if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+      - run: flutter pub get
+      - name: Decode the release keystore (from secrets, never committed)
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.jks
+      - name: Write android/key.properties (gitignored, this runner only)
+        run: |
+          cat > android/key.properties <<EOF
+          storeFile=release.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+      - name: Build release-signed APK (prod)
+        run: |
+          flutter build apk --release \
+            --flavor prod \
+            --dart-define=ABIES_ENV=prod \
+            -t lib/main_prod.dart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: abies-mobile-prod-release-signed
+          path: apps/mobile/build/app/outputs/flutter-apk/app-prod-release.apk
+          retention-days: 30
+          if-no-files-found: error
+
+  # play-store-upload:
+  #   needs: android-release-signed
   #   runs-on: ubuntu-latest
-  #   # Requires an Android keystore + key.properties supplied via repo secrets,
-  #   # never committed (docs/mobile/SECURITY-DESIGN.md §10). Not configured yet.
+  #   # Not written — do not uncomment this with placeholder credentials.
+  #   # Needs, in addition to the four android-release-signed secrets above:
+  #   #   - A real Google Play Console developer account and app listing
+  #   #     already created by hand (docs/mobile/PLAY-STORE-RELEASE.md) —
+  #   #     this job can only push to an app that already exists in Play
+  #   #     Console, it can't create one.
+  #   #   - secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON: a Google Play Android
+  #   #     Developer API service account key (JSON), granted release
+  #   #     access to that app, created from Play Console's own API access
+  #   #     settings — not something this environment can generate.
+  #   # Once both exist, the real step is typically r0adkll/upload-google-play
+  #   # or a `fastlane supply` invocation against the AAB this job's release
+  #   # build would need to produce instead of an APK (`flutter build appbundle`
+  #   # --release, same flavor/signing setup as android-release-signed).
 
   # ios-build:
   #   needs: analyze-and-test

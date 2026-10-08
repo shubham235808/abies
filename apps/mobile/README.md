@@ -7,10 +7,13 @@ business logic. Read `docs/mobile/MOBILE-ARCHITECTURE.md` before changing anythi
 ## Status — honest, as of 2026-10-08
 
 Phase 1 (foundation) through Phase 8 (idempotency keys) of `docs/mobile/IMPLEMENTATION-PLAN.md`, plus
-Phase 10 (security hardening, observability, performance — Phase 9/push-notifications and Phase
-11/release engineering are explicitly blocked on external accounts this environment doesn't have, see
-IMPLEMENTATION-PLAN.md), **now actually verified**, not just written. Flutter 3.47.6 (stable), a
-Temurin JDK 21 and the Android SDK (platform 35/36, build-tools) are installed and this ran for real:
+Phase 10 (security hardening, observability, performance) and now Phase 11's achievable half (Android
+release engineering — flavors, signing scaffold, CI). Phase 9 (push notifications) is still explicitly
+blocked on a Firebase project and backend device-token work this environment doesn't have; Phase 11's
+iOS half is explicitly a separate track's responsibility and out of scope here — see
+`docs/mobile/PRODUCTION-READINESS.md` for the full honest state of every phase against every quality
+gate. Flutter 3.47.6 (stable), a Temurin JDK 21 and the Android SDK (platform 35/36, build-tools) are
+installed and this ran for real:
 
 - `flutter pub get` — resolved all dependencies from this `pubspec.yaml` (Phase 10 added **no new
   dependency** — see "What Phase 10 added" below for why `sentry_flutter` was tried and reverted).
@@ -27,6 +30,16 @@ Temurin JDK 21 and the Android SDK (platform 35/36, build-tools) are installed a
   syntactically-plausible but fake DSN) — **also built successfully**, proving the DSN-gated real
   implementation at least compiles and activates on startup without crashing, even though nothing real
   is behind that fake DSN (it would just send events into the void against `example.com`).
+- Phase 11: `flutter build apk --debug --flavor <dev|uat|prod> --dart-define=ABIES_ENV=<same> -t
+  lib/main_<same>.dart` — **all three flavors built successfully**, each a distinct, side-by-side-
+  installable package (`in.abies.abies_mobile.dev`/`.uat`, and the unsuffixed `in.abies.abies_mobile`
+  for `prod`), each with a distinct app label ("Abies Dev"/"Abies UAT"/"Abies" — confirmed with `aapt
+  dump badging`, not just read from source). `flutter build apk --release --flavor dev
+  --dart-define=ABIES_ENV=dev -t lib/main_dev.dart` — **also built successfully**
+  (`app-dev-release.apk`, 57.9MB), confirmed signed with the local Android debug keystore (`apksigner
+  verify --print-certs`, fingerprint matched `~/.android/debug.keystore` exactly) — proving the
+  release-signing fallback in `android/app/build.gradle.kts` works, while being explicit that this is a
+  debug-signed build, not a store-distributable one (no real keystore exists in this repo/environment).
 
 **What's still not verified**: this APK has not been installed or run on a device or emulator — the
 analyzer/test/build passing is strong evidence the code is sound, not proof every screen behaves
@@ -400,6 +413,67 @@ at its full original resolution into memory even though it's only ever displayed
 decoding at the actual display size scaled for the device's pixel ratio
 (`lib/features/doctors/presentation/doctor_detail_screen.dart`).
 
+## What Phase 11 added
+
+Android release engineering — the achievable half (`docs/mobile/IMPLEMENTATION-PLAN.md` §11; iOS and
+any store-publish step are explicitly out of scope here — see `docs/mobile/PRODUCTION-READINESS.md` and
+`docs/mobile/PLAY-STORE-RELEASE.md` for exactly what's blocked and on what). No feature's business logic
+changed.
+
+- **Three Android product flavors** (`android/app/build.gradle.kts`): `dev`, `uat`, `prod` — matching
+  the three existing Dart entrypoints and the `ABIES_ENV` dart-define convention
+  (`lib/core/env/app_env.dart`) exactly. `dev`/`uat` get an `applicationIdSuffix` (`.dev`/`.uat`); `prod`
+  keeps the base `in.abies.abies_mobile` id unsuffixed, since it's the one real store listing — all
+  three are still distinct ids, so all three install side by side on one device
+  (`docs/mobile/MOBILE-ARCHITECTURE.md` §8). Each flavor also gets a distinct app label ("Abies
+  Dev"/"Abies UAT"/"Abies") via a per-flavor Gradle `resValue("string", "app_name", ...)` —  confirmed
+  to be the real, correct Flutter/Android mechanism for this (not a guess): it generates a flavor-scoped
+  `strings.xml` at build time with no hand-maintained `src/<flavor>/res/values/strings.xml` needed, and
+  required explicitly turning on `android.buildFeatures.resValues = true` (off by default on this AGP
+  version — found by a real build failure, not assumed). `AndroidManifest.xml`'s `android:label` now
+  reads `@string/app_name` instead of the old hardcoded `"abies_mobile"`. All three flavors' debug builds
+  were verified for real (see "Status" above).
+- **Release signing, ready but inactive**: a release `signingConfig` in `build.gradle.kts` loads
+  `android/key.properties` when it exists and uses it for real release signing; when it doesn't (every
+  case in this repo/environment), it falls back to the debug signing config, so `flutter build apk
+  --release` still succeeds everywhere this repo is checked out. `android/key.properties` and
+  `android/app/*.jks`/`*.keystore` were confirmed — with `git check-ignore -v`, not just read from the
+  pattern — to already be correctly gitignored by both `android/.gitignore` (generated by `flutter
+  create`, Phase 1) and `apps/mobile/.gitignore`'s own belt-and-suspenders `**/key.properties`/
+  `**/*.jks`/`**/*.keystore` rules; no change was needed there, it was already right.
+- **CI** (`.github/workflows/mobile-ci.yml`): `analyze-and-test` is unchanged (already real, no
+  flavor-related adjustment needed since analyze/test don't build a flavor). Two new real jobs: `android-build` (matrix dev/uat/prod, builds and uploads a debug APK per flavor — needs no secrets,
+  produces nothing store-distributable) and `android-release-signed` (builds a real release-signed
+  `prod` APK, but gated behind four repository secrets — `ANDROID_KEYSTORE_BASE64`,
+  `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` — that do not exist in this
+  GitHub repository yet; its `if:` condition means the job is visibly *skipped*, not silently absent or
+  faked, until they're added). A `play-store-upload` job is left as a commented stub only — deliberately
+  not written against credentials that don't exist. `ios-build` is untouched — a separate track owns
+  iOS.
+- **Docs**: `docs/mobile/PRODUCTION-READINESS.md` (every phase 1-10 against every brief §27 quality
+  gate — functional/tested/secure/API-compatible/documented/reviewed/buildable-on-android/
+  buildable-on-iOS) and `docs/mobile/PLAY-STORE-RELEASE.md` (the real steps once a Play Console account
+  exists, including an honest look at this app's actual Data Safety footprint and the real — unfinished
+  — `/privacy` page at `apps/client-web`).
+
+**Running a flavored or release build** (the real commands, for whoever picks this up next):
+
+```
+# Debug, any flavor — --flavor, the dart-define, and -t are three independent flags Flutter needs;
+# none of them implies the others once product flavors exist (flutter help build apk).
+flutter build apk --debug --flavor dev  --dart-define=ABIES_ENV=dev  -t lib/main_dev.dart
+flutter build apk --debug --flavor uat  --dart-define=ABIES_ENV=uat  -t lib/main_uat.dart
+flutter build apk --debug --flavor prod --dart-define=ABIES_ENV=prod -t lib/main_prod.dart
+
+# Release — debug-signed fallback here (no android/key.properties exists); real signing the moment
+# that file exists (docs/mobile/PLAY-STORE-RELEASE.md §2). ALWAYS pass --flavor once flavors exist —
+# omitting it makes Gradle's `assembleRelease` build all three flavors at once, and the Flutter tool
+# then can't find the single `app-release.apk` it expects, reporting a (misleading, non-fatal-looking)
+# "Gradle build failed to produce an .apk file" even though every per-flavor APK built fine under
+# build/app/outputs/apk/<flavor>/release/ — found by hitting this for real in this phase, not guessed.
+flutter build apk --release --flavor prod --dart-define=ABIES_ENV=prod -t lib/main_prod.dart
+```
+
 ## Layout
 
 See `docs/mobile/MOBILE-ARCHITECTURE.md` 1 for the full rationale. Short version: `lib/core/` is
@@ -411,12 +485,16 @@ implementation phase fills it in — none of them are implemented yet except wha
 
 ## Environments
 
-Three flavors via Dart compile-time defines, not a runtime switch (`lib/core/env/app_env.dart`):
+Three flavors via Dart compile-time defines, not a runtime switch (`lib/core/env/app_env.dart`), and
+(since Phase 11) three matching Android product flavors with their own application id and app label —
+see "What Phase 11 added" above for the real build commands:
 
 ```
 flutter run --dart-define=ABIES_ENV=dev
-flutter build apk --dart-define=ABIES_ENV=prod
+flutter build apk --flavor prod --dart-define=ABIES_ENV=prod -t lib/main_prod.dart
 ```
 
 Only `dev` (`https://dev.abies.in`) is a real, deployed environment today. `uat` and `prod` base URLs in
-`app_env.dart` are placeholders — see `docs/mobile/CURRENT-BACKEND-API.md` 7.
+`app_env.dart` are placeholders — see `docs/mobile/CURRENT-BACKEND-API.md` 7. The Android `uat`/`prod`
+flavors build and install correctly regardless; they just point at hostnames that don't resolve to a
+running ABIES backend yet.

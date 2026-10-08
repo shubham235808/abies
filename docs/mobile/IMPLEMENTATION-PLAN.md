@@ -445,9 +445,71 @@ Kubernetes GitOps flow — it does not touch ArgoCD, Tekton-for-backend, or any 
 Android/Xcode-capable runner, or a separate CI system if the cluster's build nodes can't run Xcode for
 iOS — macOS build infrastructure is a real constraint to confirm, not assume).
 
-Exit: a signed build installs from each store's internal testing track.
+**Implemented and verified, 2026-10-08 — the achievable half only.** This environment has a real
+Android SDK but no Play Console account, no Apple Developer account, no signing keystore, and (being
+Linux) no Xcode — so nothing here could ever produce a store-distributable artifact or touch iOS. What
+*is* achievable was built and actually verified, not just written:
+
+- **Three Android product flavors** (`android/app/build.gradle.kts`): `dev`/`uat`/`prod`, matching the
+  three `main_*.dart` entrypoints and the `ABIES_ENV` dart-define convention exactly.
+  `applicationIdSuffix` (`.dev`/`.uat`, `prod` unsuffixed) makes all three installable side by side on
+  one device (`MOBILE-ARCHITECTURE.md` §8); a per-flavor Gradle `resValue("string", "app_name", ...)`
+  gives each a distinct label ("Abies Dev"/"Abies UAT"/"Abies"), which needed
+  `android.buildFeatures.resValues = true` turned on explicitly (found by a real build failure, not
+  assumed) and `AndroidManifest.xml`'s `android:label` repointed at `@string/app_name`. All three
+  flavors' debug builds verified for real: `flutter build apk --debug --flavor <dev|uat|prod>
+  --dart-define=ABIES_ENV=<same> -t lib/main_<same>.dart` — all three succeed; package ids and labels
+  confirmed with `aapt dump badging`, not just read from source.
+- **Release signing, ready but inactive**: a release `signingConfig` loads `android/key.properties`
+  when present, falls back to the debug signing config when it isn't (every case here). `flutter build
+  apk --release --flavor dev --dart-define=ABIES_ENV=dev -t lib/main_dev.dart` succeeded for real,
+  producing `app-dev-release.apk` (57.9MB), confirmed signed with the local debug keystore via
+  `apksigner verify --print-certs` (fingerprint matched `~/.android/debug.keystore` exactly) — a
+  release-mode build genuinely works here, clearly understood as debug-signed, not a real release
+  artifact. **Found and worked around, not guessed**: omitting `--flavor` on a flavored project makes
+  Gradle's `assembleRelease` build *all three* flavors at once, and the Flutter tool then can't locate
+  the single `app-release.apk` it expects — reported as a (non-fatal-looking) "Gradle build failed to
+  produce an .apk file" even though every per-flavor APK built fine. `--flavor` must always be passed
+  once product flavors exist.
+- `android/key.properties` and `android/app/*.jks`/`*.keystore` confirmed — with `git check-ignore -v`,
+  not just read from the `.gitignore` pattern — to already be correctly excluded by both
+  `android/.gitignore` (Phase 1's `flutter create` output) and `apps/mobile/.gitignore`; no change
+  needed, Phase 1's discipline here already held.
+- **CI** (`.github/workflows/mobile-ci.yml`): `analyze-and-test` unchanged (no flavor-related change
+  needed). `android-build` now real (matrix dev/uat/prod, debug APK per flavor, uploaded as a workflow
+  artifact, no secrets needed). `android-release-signed` now a real job definition, but gated behind
+  four repo secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+  `ANDROID_KEY_PASSWORD`) that don't exist in this GitHub repo yet — its `if:` means it's visibly
+  skipped, not silently absent, until they're added. `play-store-upload` left as an unwritten comment
+  stub — deliberately not built against credentials that don't exist. `ios-build` untouched (separate
+  track).
+- **Docs produced in this same pass** (pulled forward from Phase 12 below, since the brief bundles the
+  Android-achievable release-engineering work with its own honest readiness write-up):
+  `docs/mobile/PRODUCTION-READINESS.md` and `docs/mobile/PLAY-STORE-RELEASE.md`. `APP-STORE-RELEASE.md`
+  already exists (commit `02a18ca`, the separate iOS track's own deliverable) — not touched here.
+- **Still entirely blocked, honestly, on exactly what**: a Play Console account + app listing, an Apple
+  Developer account, a real Android signing keystore, a Mac with Xcode for anything iOS, and a real
+  `uat`/`prod` backend (`CURRENT-BACKEND-API.md` §7) — none of which this environment can create. See
+  `docs/mobile/PRODUCTION-READINESS.md`'s own "What's blocked" section for the full list with exactly
+  what unblocks each one.
+
+Exit: a signed build installs from each store's internal testing track — **not met for either store**
+(no real signing key, no store account, for Android; no Mac/Xcode at all for iOS). What *is* met: every
+Android flavor builds, and a release-mode build succeeds end to end with the documented debug-signing
+fallback.
 
 ## Phase 12 — Production readiness review
 
 `docs/mobile/PRODUCTION-READINESS.md`, `PLAY-STORE-RELEASE.md`, `APP-STORE-RELEASE.md` produced and
 reviewed against every quality gate in brief §27, for every phase, not just the last one.
+
+**All three documents already exist**, produced ahead of this phase number: `APP-STORE-RELEASE.md` by
+the separate iOS track (commit `02a18ca`), and `PRODUCTION-READINESS.md`/`PLAY-STORE-RELEASE.md` by
+Phase 11's own pass above, since that phase's brief explicitly asked for them alongside its
+Android-release-engineering work rather than deferring them here. What this phase number still has
+left, if anyone revisits it: a second-reviewer pass over those three documents (none has had one — see
+`PRODUCTION-READINESS.md`'s own cross-cutting "Reviewed" finding, which applies to its own production
+just as honestly as to every phase it covers) and re-checking all three once any blocked item (a Play
+Console account, a keystore, a Mac, a real UAT/prod backend) actually unblocks, since several of their
+findings (e.g. the Data Safety table, the privacy-policy gap) are snapshots of today's code and will go
+stale the moment that code changes.
