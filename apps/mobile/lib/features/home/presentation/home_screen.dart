@@ -6,6 +6,7 @@ import '../../../core/api/api_exception.dart';
 import '../../../shared/widgets/loading_skeleton.dart';
 import '../../../shared/widgets/state_views.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../auth/presentation/pending_redirect.dart';
 import '../domain/appointment_summary.dart';
 import '../domain/diagnostic_order_summary.dart';
 import '../domain/diagnostic_preview.dart';
@@ -16,11 +17,18 @@ import '../domain/panchakarma_booking_summary.dart';
 import '../domain/panchakarma_preview.dart';
 import 'home_controller.dart';
 
-/// The real personalized home dashboard (docs/mobile/IMPLEMENTATION-PLAN.md
-/// Phase 3), replacing the Phase 1/2 placeholder. Doctor/product detail and
-/// any booking flow are deliberately not here yet — tapping a preview card
-/// has nowhere real to go until Phase 4+ builds those screens (see
+/// The home dashboard (docs/mobile/IMPLEMENTATION-PLAN.md Phase 3),
+/// replacing the Phase 1/2 placeholder. Doctor/product detail and any
+/// booking flow are deliberately not here yet — tapping a preview card has
+/// nowhere real to go until Phase 4+ builds those screens (see
 /// lib/features/home/PHASE.md).
+///
+/// **The first screen a signed-out visitor sees** (brief: "must NOT show
+/// login on first launch"), not a login wall — the AppBar swaps "My
+/// profile"/sign-out for a single "Sign in" action, and the body shows only
+/// the public catalogue preview rows plus a prompt instead of the four
+/// personal sections (see `HomeController`'s own doc comment for why those
+/// four are never fetched at all signed out, not just hidden).
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -28,6 +36,7 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authControllerProvider).value;
     final user = auth?.user;
+    final signedIn = auth?.isSignedIn ?? false;
     final homeAsync = ref.watch(homeControllerProvider);
 
     return Scaffold(
@@ -39,16 +48,28 @@ class HomeScreen extends ConsumerWidget {
             tooltip: 'Find a doctor',
             onPressed: () => context.push('/doctors'),
           ),
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            tooltip: 'My profile',
-            onPressed: () => context.push('/profile'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Sign out',
-            onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-          ),
+          if (signedIn) ...[
+            IconButton(
+              icon: const Icon(Icons.person_outline),
+              tooltip: 'My profile',
+              onPressed: () => context.push('/profile'),
+            ),
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: 'Sign out',
+              onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
+            ),
+          ] else
+            TextButton(
+              onPressed: () {
+                // An explicit, unprompted "Sign in" — nothing specific to
+                // return to, so clear any stale pending redirect from an
+                // earlier, unrelated protected-action attempt.
+                ref.read(pendingRedirectProvider.notifier).state = null;
+                context.push('/sign-in');
+              },
+              child: const Text('Sign in', style: TextStyle(color: Colors.white)),
+            ),
         ],
       ),
       body: homeAsync.when(
@@ -77,43 +98,46 @@ class _HomeBody extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
-          _WelcomeHeader(name: greetingName, city: data.city),
-          _ListSection<AppointmentSummary>(
-            title: 'Upcoming appointments',
-            async: data.upcomingAppointments,
-            emptyMessage: 'No upcoming appointments.',
-            emptyIcon: Icons.event_available_outlined,
-            onRetry: notifier.retryAppointments,
-            itemBuilder: (context, appt) => _AppointmentTile(appointment: appt),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-            child: Text('Active orders', style: Theme.of(context).textTheme.titleLarge),
-          ),
-          _ListSection<MedicineOrderSummary>(
-            title: 'Medicines',
-            async: data.activeMedicineOrders,
-            emptyMessage: 'No active medicine orders.',
-            emptyIcon: Icons.medication_outlined,
-            onRetry: notifier.retryMedicineOrders,
-            itemBuilder: (context, order) => _MedicineOrderTile(order: order),
-          ),
-          _ListSection<DiagnosticOrderSummary>(
-            title: 'Diagnostics',
-            async: data.activeDiagnosticOrders,
-            emptyMessage: 'No active diagnostic bookings.',
-            emptyIcon: Icons.biotech_outlined,
-            onRetry: notifier.retryDiagnosticOrders,
-            itemBuilder: (context, order) => _DiagnosticOrderTile(order: order),
-          ),
-          _ListSection<PanchakarmaBookingSummary>(
-            title: 'Panchakarma',
-            async: data.activePanchakarmaBookings,
-            emptyMessage: 'No active Panchakarma bookings.',
-            emptyIcon: Icons.spa_outlined,
-            onRetry: notifier.retryPanchakarmaBookings,
-            itemBuilder: (context, booking) => _PanchakarmaBookingTile(booking: booking),
-          ),
+          _WelcomeHeader(name: greetingName, city: data.city, isSignedIn: data.isSignedIn),
+          if (!data.isSignedIn) const _GuestSignInPrompt(),
+          if (data.isSignedIn) ...[
+            _ListSection<AppointmentSummary>(
+              title: 'Upcoming appointments',
+              async: data.upcomingAppointments,
+              emptyMessage: 'No upcoming appointments.',
+              emptyIcon: Icons.event_available_outlined,
+              onRetry: notifier.retryAppointments,
+              itemBuilder: (context, appt) => _AppointmentTile(appointment: appt),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+              child: Text('Active orders', style: Theme.of(context).textTheme.titleLarge),
+            ),
+            _ListSection<MedicineOrderSummary>(
+              title: 'Medicines',
+              async: data.activeMedicineOrders,
+              emptyMessage: 'No active medicine orders.',
+              emptyIcon: Icons.medication_outlined,
+              onRetry: notifier.retryMedicineOrders,
+              itemBuilder: (context, order) => _MedicineOrderTile(order: order),
+            ),
+            _ListSection<DiagnosticOrderSummary>(
+              title: 'Diagnostics',
+              async: data.activeDiagnosticOrders,
+              emptyMessage: 'No active diagnostic bookings.',
+              emptyIcon: Icons.biotech_outlined,
+              onRetry: notifier.retryDiagnosticOrders,
+              itemBuilder: (context, order) => _DiagnosticOrderTile(order: order),
+            ),
+            _ListSection<PanchakarmaBookingSummary>(
+              title: 'Panchakarma',
+              async: data.activePanchakarmaBookings,
+              emptyMessage: 'No active Panchakarma bookings.',
+              emptyIcon: Icons.spa_outlined,
+              onRetry: notifier.retryPanchakarmaBookings,
+              itemBuilder: (context, booking) => _PanchakarmaBookingTile(booking: booking),
+            ),
+          ],
           _PreviewRow<DoctorPreview>(
             title: 'Doctors near you',
             async: data.doctors,
@@ -149,10 +173,11 @@ class _HomeBody extends ConsumerWidget {
 }
 
 class _WelcomeHeader extends StatelessWidget {
-  const _WelcomeHeader({required this.name, required this.city});
+  const _WelcomeHeader({required this.name, required this.city, required this.isSignedIn});
 
   final String? name;
   final String? city;
+  final bool isSignedIn;
 
   @override
   Widget build(BuildContext context) {
@@ -161,15 +186,49 @@ class _WelcomeHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Welcome${name != null ? ', $name' : ''}', style: Theme.of(context).textTheme.headlineSmall),
+          Text(
+            isSignedIn ? 'Welcome${name != null ? ', $name' : ''}' : 'Welcome to ABIES Ayurveda',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 4),
           Text(
-            city != null && city!.isNotEmpty
-                ? 'Showing results near $city'
-                : 'Add your city in your profile to see results near you',
+            !isSignedIn
+                ? 'Browse doctors, therapies, diagnostics and medicines — sign in when you\'re ready to book.'
+                : (city != null && city!.isNotEmpty
+                    ? 'Showing results near $city'
+                    : 'Add your city in your profile to see results near you'),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Shown in place of the "Upcoming appointments"/"Active orders" sections
+/// for a signed-out visitor — those sections are never fetched signed out
+/// (`HomeController`'s own doc comment), so this is the one explicit prompt
+/// to sign in on this screen, not a forced redirect.
+class _GuestSignInPrompt extends ConsumerWidget {
+  const _GuestSignInPrompt();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Card(
+        child: ListTile(
+          leading: const Icon(Icons.login),
+          title: const Text('Sign in to see your appointments and orders'),
+          subtitle: const Text('Add items to your cart and browse freely — sign in only when you need to.'),
+          trailing: FilledButton(
+            onPressed: () {
+              ref.read(pendingRedirectProvider.notifier).state = null;
+              context.push('/sign-in');
+            },
+            child: const Text('Sign in'),
+          ),
+        ),
       ),
     );
   }

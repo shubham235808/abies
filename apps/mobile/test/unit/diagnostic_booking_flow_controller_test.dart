@@ -1,4 +1,10 @@
+import 'dart:async';
+
 import 'package:abies_mobile/core/api/api_exception.dart';
+import 'package:abies_mobile/features/auth/data/auth_api.dart';
+import 'package:abies_mobile/features/auth/domain/auth_result.dart';
+import 'package:abies_mobile/features/auth/domain/session_user.dart';
+import 'package:abies_mobile/features/auth/presentation/auth_controller.dart';
 import 'package:abies_mobile/features/diagnostics/data/diagnostics_api.dart';
 import 'package:abies_mobile/features/diagnostics/domain/diagnostic_booking_args.dart';
 import 'package:abies_mobile/features/diagnostics/domain/diagnostic_booking_creation.dart';
@@ -129,6 +135,39 @@ DiagnosticPackageSummary _package({String id = 'p1', String labId = 'lab1', int 
   );
 }
 
+const _testUser = SessionUser(id: 'u1', mobile: '+919876543210', email: 'asha@example.test', role: 'PATIENT');
+
+/// `confirmBooking()` now checks `authControllerProvider` before ever
+/// calling the backend (see this controller's `requiresAuth` outcome) — so
+/// every test below that gets past client-side validation and actually
+/// reaches the network needs a resolved, signed-in auth state in the
+/// container.
+class _FakeAuthApi implements AuthApi {
+  _FakeAuthApi({this.meResult});
+
+  SessionUser? meResult;
+  final StreamController<void> _unauthorized = StreamController<void>.broadcast();
+
+  @override
+  Stream<void> get onUnauthorized => _unauthorized.stream;
+  @override
+  Future<SessionUser?> me() async => meResult;
+  @override
+  Future<void> logout() async => meResult = null;
+  @override
+  Future<RequestOtpResult> requestOtp({String? mobile, String? email}) => throw UnimplementedError('not used in these tests');
+  @override
+  Future<VerifyOtpResult> verifyOtp({required String requestId, required String otp, required bool acceptedTerms, String? name}) =>
+      throw UnimplementedError('not used in these tests');
+}
+
+ProviderContainer _signedInContainer(_FakeDiagnosticsApi api) {
+  return ProviderContainer(overrides: [
+    diagnosticsApiProvider.overrideWithValue(api),
+    authApiProvider.overrideWithValue(_FakeAuthApi(meResult: _testUser)),
+  ]);
+}
+
 void main() {
   group('DiagnosticBookingFlowController — single test', () {
     final args = DiagnosticBookingArgs(target: DiagnosticBookingTarget.forTests([_test()]));
@@ -158,8 +197,9 @@ void main() {
           razorpayOrderId: 'order_1',
           razorpayKeyId: 'rzp_test',
         );
-      final container = ProviderContainer(overrides: [diagnosticsApiProvider.overrideWithValue(api)]);
+      final container = _signedInContainer(api);
       addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
       final notifier = container.read(diagnosticBookingFlowControllerProvider(args).notifier);
       notifier.setScheduledAt(DateTime.now().add(const Duration(days: 1)));
 
@@ -176,8 +216,9 @@ void main() {
 
     test('confirmBooking refuses to book a test missing from the fresh re-fetch', () async {
       final api = _FakeDiagnosticsApi()..refetchTests = []; // no longer offered
-      final container = ProviderContainer(overrides: [diagnosticsApiProvider.overrideWithValue(api)]);
+      final container = _signedInContainer(api);
       addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
       final notifier = container.read(diagnosticBookingFlowControllerProvider(args).notifier);
       notifier.setScheduledAt(DateTime.now().add(const Duration(days: 1)));
 
@@ -195,8 +236,9 @@ void main() {
           message: 'Online payments are not configured in this environment yet — booking is unavailable.',
           statusCode: 503,
         );
-      final container = ProviderContainer(overrides: [diagnosticsApiProvider.overrideWithValue(api)]);
+      final container = _signedInContainer(api);
       addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
       final notifier = container.read(diagnosticBookingFlowControllerProvider(args).notifier);
       notifier.setScheduledAt(DateTime.now().add(const Duration(days: 1)));
 
@@ -219,6 +261,27 @@ void main() {
       expect(api.bookCallCount, 0);
       final state = container.read(diagnosticBookingFlowControllerProvider(args));
       expect(state.outcome.kind, DiagnosticBookOutcomeKind.validationError);
+    });
+
+    test('confirmBooking signed out: never calls search() or book(), and surfaces requiresAuth', () async {
+      final api = _FakeDiagnosticsApi()..refetchTests = [_test()];
+      final container = ProviderContainer(overrides: [
+        diagnosticsApiProvider.overrideWithValue(api),
+        authApiProvider.overrideWithValue(_FakeAuthApi(meResult: null)),
+      ]);
+      addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
+      final notifier = container.read(diagnosticBookingFlowControllerProvider(args).notifier);
+      notifier.setScheduledAt(DateTime.now().add(const Duration(days: 1)));
+
+      await notifier.confirmBooking();
+
+      expect(api.searchTestsCallCount, 0,
+          reason: 'collection-mode/schedule selection is public browsing, but confirming is gated before any network call');
+      expect(api.bookCallCount, 0);
+      final state = container.read(diagnosticBookingFlowControllerProvider(args));
+      expect(state.outcome.kind, DiagnosticBookOutcomeKind.requiresAuth);
+      expect(state.submitting, isFalse);
     });
 
     test('setCollectionMode(HOME) is a no-op when the lab does not support home collection', () async {
@@ -249,8 +312,9 @@ void main() {
           razorpayOrderId: 'order_1',
           razorpayKeyId: 'rzp_test',
         );
-      final container = ProviderContainer(overrides: [diagnosticsApiProvider.overrideWithValue(api)]);
+      final container = _signedInContainer(api);
       addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
       final notifier = container.read(diagnosticBookingFlowControllerProvider(args).notifier);
       notifier.setScheduledAt(DateTime.now().add(const Duration(days: 1)));
 
@@ -267,8 +331,9 @@ void main() {
       final t2 = _test(id: 't2');
       final args = DiagnosticBookingArgs(target: DiagnosticBookingTarget.forTests([t1, t2]));
       final api = _FakeDiagnosticsApi()..refetchTests = [t1]; // t2 missing
-      final container = ProviderContainer(overrides: [diagnosticsApiProvider.overrideWithValue(api)]);
+      final container = _signedInContainer(api);
       addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
       final notifier = container.read(diagnosticBookingFlowControllerProvider(args).notifier);
       notifier.setScheduledAt(DateTime.now().add(const Duration(days: 1)));
 
@@ -294,8 +359,9 @@ void main() {
           razorpayOrderId: 'order_1',
           razorpayKeyId: 'rzp_test',
         );
-      final container = ProviderContainer(overrides: [diagnosticsApiProvider.overrideWithValue(api)]);
+      final container = _signedInContainer(api);
       addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
       final notifier = container.read(diagnosticBookingFlowControllerProvider(args).notifier);
       notifier.setScheduledAt(DateTime.now().add(const Duration(days: 1)));
 
@@ -324,8 +390,9 @@ void main() {
           razorpayOrderId: 'order_1',
           razorpayKeyId: 'rzp_test',
         );
-      final container = ProviderContainer(overrides: [diagnosticsApiProvider.overrideWithValue(api)]);
+      final container = _signedInContainer(api);
       addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
       final notifier = container.read(diagnosticBookingFlowControllerProvider(args).notifier);
       notifier.setScheduledAt(DateTime.now().add(const Duration(days: 1)));
 

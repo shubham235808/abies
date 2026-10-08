@@ -185,9 +185,9 @@ PanchakarmaBookingSummary _panchakarmaBooking({required String id, required Stri
   );
 }
 
-ProviderContainer _buildContainer({required FakeHomeApi home, String? city}) {
+ProviderContainer _buildContainer({required FakeHomeApi home, String? city, bool signedIn = true}) {
   final container = ProviderContainer(overrides: [
-    authApiProvider.overrideWithValue(FakeAuthApi()),
+    authApiProvider.overrideWithValue(FakeAuthApi()..meResult = signedIn ? testUser : null),
     profileApiProvider.overrideWithValue(FakeProfileApi(city: city)),
     consentApiProvider.overrideWithValue(FakeConsentApi()),
     homeApiProvider.overrideWithValue(home),
@@ -317,5 +317,96 @@ void main() {
       final data = container.read(homeControllerProvider).value!;
       expect(data.activeMedicineOrders.value!.map((o) => o.id), ['o1']);
     });
+
+    test(
+        'signed out: isSignedIn is false, the four /mine sections are empty without ever calling the backend, '
+        'and the public previews still load unfiltered', () async {
+      final home = FakeHomeApi()
+        ..doctors = [] // irrelevant to the assertions below; just confirms previews still run
+        ..panchakarma = [];
+      final container = _buildContainer(home: home, signedIn: false);
+      addTearDown(container.dispose);
+
+      final data = await container.read(homeControllerProvider.future);
+
+      expect(data.isSignedIn, isFalse);
+      expect(data.city, isNull, reason: 'no profile to read a city from while signed out');
+      expect(data.upcomingAppointments.value, isEmpty);
+      expect(data.activeMedicineOrders.value, isEmpty);
+      expect(data.activeDiagnosticOrders.value, isEmpty);
+      expect(data.activePanchakarmaBookings.value, isEmpty);
+      // The public catalogue previews are still attempted, unfiltered (no
+      // profile city to pass) — browsing stays available signed out.
+      expect(data.doctors.hasValue, isTrue);
+      expect(home.lastDoctorsCity, isNull);
+      expect(home.lastMedicinesArea, isNull);
+    });
+
+    test('signed out: never calls any of the four /mine endpoints at all (not just empty-on-error)', () async {
+      // FakeHomeApi's myAppointments/etc. always succeed with an empty list
+      // by default, so the real assertion is on these never being called in
+      // the first place — wrap the fake to prove it, rather than just
+      // asserting on the resulting empty lists (which `data.appointments`
+      // being `AsyncValue.data([])` could equally mean "called and happened
+      // to return empty").
+      var calledMine = false;
+      final guarded = _MineCallTrackingHomeApi(FakeHomeApi(), onMineCall: () => calledMine = true);
+      final container = ProviderContainer(overrides: [
+        authApiProvider.overrideWithValue(FakeAuthApi()..meResult = null),
+        profileApiProvider.overrideWithValue(FakeProfileApi()),
+        consentApiProvider.overrideWithValue(FakeConsentApi()),
+        homeApiProvider.overrideWithValue(guarded),
+      ]);
+      addTearDown(container.dispose);
+
+      await container.read(homeControllerProvider.future);
+
+      expect(calledMine, isFalse);
+    });
   });
+}
+
+/// Wraps [FakeHomeApi] to prove the four `/mine`-shaped calls are never
+/// invoked at all for a signed-out visitor, not merely empty.
+class _MineCallTrackingHomeApi implements HomeApi {
+  _MineCallTrackingHomeApi(this._inner, {required this.onMineCall});
+
+  final FakeHomeApi _inner;
+  final void Function() onMineCall;
+
+  @override
+  Future<List<AppointmentSummary>> myAppointments() {
+    onMineCall();
+    return _inner.myAppointments();
+  }
+
+  @override
+  Future<List<MedicineOrderSummary>> myMedicineOrders() {
+    onMineCall();
+    return _inner.myMedicineOrders();
+  }
+
+  @override
+  Future<List<DiagnosticOrderSummary>> myDiagnosticOrders() {
+    onMineCall();
+    return _inner.myDiagnosticOrders();
+  }
+
+  @override
+  Future<List<PanchakarmaBookingSummary>> myPanchakarmaBookings() {
+    onMineCall();
+    return _inner.myPanchakarmaBookings();
+  }
+
+  @override
+  Future<List<DoctorPreview>> previewDoctors({String? city, int limit = 8}) => _inner.previewDoctors(city: city, limit: limit);
+
+  @override
+  Future<List<PanchakarmaPreview>> previewPanchakarma({String? city, int limit = 8}) => _inner.previewPanchakarma(city: city, limit: limit);
+
+  @override
+  Future<List<DiagnosticPreview>> previewDiagnostics({String? city, int limit = 8}) => _inner.previewDiagnostics(city: city, limit: limit);
+
+  @override
+  Future<List<MedicinePreview>> previewMedicines({String? area, int limit = 8}) => _inner.previewMedicines(area: area, limit: limit);
 }

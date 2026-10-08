@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../auth/presentation/pending_redirect.dart';
 import '../domain/diagnostic_booking_args.dart';
 import 'diagnostic_booking_flow_controller.dart';
 
@@ -69,6 +70,20 @@ class _BookingBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Collection-mode/schedule selection is public browsing — only "Confirm
+    // booking" needs a session (see
+    // `DiagnosticBookingFlowController.confirmBooking` and
+    // `app_router.dart`'s redirect doc comment). Signed out, that button
+    // sets this `requiresAuth` outcome instead of calling the backend;
+    // react here by sending the visitor to sign in and recording this
+    // exact screen (args + whatever they'd already picked, preserved via
+    // Riverpod's own provider state) as where to land back once they do.
+    ref.listen(diagnosticBookingFlowControllerProvider(args), (previous, next) {
+      if (next.outcome.kind == DiagnosticBookOutcomeKind.requiresAuth) {
+        ref.read(pendingRedirectProvider.notifier).state = PendingRedirect(location: '/diagnostics/book', extra: args);
+        context.push('/sign-in');
+      }
+    });
     final target = args.target;
     final state = ref.watch(diagnosticBookingFlowControllerProvider(args));
     final controller = ref.read(diagnosticBookingFlowControllerProvider(args).notifier);
@@ -140,6 +155,10 @@ class _BookOutcomeBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (outcome.kind) {
       case DiagnosticBookOutcomeKind.none:
+        return const SizedBox.shrink();
+      case DiagnosticBookOutcomeKind.requiresAuth:
+        // Nothing to show — `_BookingBody`'s `ref.listen` above already
+        // navigates away to `/sign-in` the instant this outcome appears.
         return const SizedBox.shrink();
       case DiagnosticBookOutcomeKind.success:
         final result = outcome.result!;

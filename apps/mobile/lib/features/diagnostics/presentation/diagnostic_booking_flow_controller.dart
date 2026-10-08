@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
+import '../../auth/presentation/auth_controller.dart';
 import '../data/diagnostics_api.dart';
 import '../domain/diagnostic_booking_args.dart';
 import '../domain/diagnostic_booking_creation.dart';
@@ -23,6 +24,14 @@ enum DiagnosticBookOutcomeKind {
   /// or the backend's own error if it was deactivated in the instant between
   /// that check and the actual booking call.
   conflict,
+
+  /// Signed out — `confirmBooking` never even called the backend
+  /// (`POST /diagnostic-orders` is `requireSession`+
+  /// `requireRole('PATIENT')`). Collection-mode/schedule selection itself is
+  /// public (`app_router.dart`'s redirect doc comment), so this is the one
+  /// place that gates on auth — the screen reacts to this outcome by
+  /// sending the visitor to sign in and straight back.
+  requiresAuth,
 
   /// A client-side validation failure caught *before* calling the backend
   /// (missing scheduled time, or a home-collection address when required) —
@@ -158,6 +167,12 @@ class DiagnosticBookingFlowController extends StateNotifier<DiagnosticBookingSta
           message: 'Please enter an address for home sample collection.',
         ),
       );
+      return;
+    }
+
+    final isSignedIn = _ref.read(authControllerProvider).value?.isSignedIn ?? false;
+    if (!isSignedIn) {
+      state = state.copyWith(outcome: const DiagnosticBookOutcome(DiagnosticBookOutcomeKind.requiresAuth));
       return;
     }
 

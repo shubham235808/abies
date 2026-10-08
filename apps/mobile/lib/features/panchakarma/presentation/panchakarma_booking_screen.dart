@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../auth/presentation/pending_redirect.dart';
 import '../domain/panchakarma_therapy.dart';
 import 'panchakarma_booking_flow_controller.dart';
 
@@ -54,6 +55,20 @@ class _BookingBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Session-count selection is public browsing — only "Confirm booking"
+    // needs a session (see `PanchakarmaBookingFlowController.confirmBooking`
+    // and `app_router.dart`'s redirect doc comment). Signed out, that
+    // button sets this `requiresAuth` outcome instead of calling the
+    // backend; react here by sending the visitor to sign in and recording
+    // this exact screen (therapy + whatever session count they'd already
+    // picked, preserved via Riverpod's own provider state) as where to
+    // land back once they do.
+    ref.listen(panchakarmaBookingFlowControllerProvider(therapy), (previous, next) {
+      if (next.outcome.kind == PanchakarmaBookOutcomeKind.requiresAuth) {
+        ref.read(pendingRedirectProvider.notifier).state = PendingRedirect(location: '/panchakarma/book', extra: therapy);
+        context.push('/sign-in');
+      }
+    });
     final state = ref.watch(panchakarmaBookingFlowControllerProvider(therapy));
     final controller = ref.read(panchakarmaBookingFlowControllerProvider(therapy).notifier);
     final estimatedTotal = therapy.price * state.sessionCount;
@@ -112,6 +127,10 @@ class _BookOutcomeBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (outcome.kind) {
       case PanchakarmaBookOutcomeKind.none:
+        return const SizedBox.shrink();
+      case PanchakarmaBookOutcomeKind.requiresAuth:
+        // Nothing to show — `_BookingBody`'s `ref.listen` above already
+        // navigates away to `/sign-in` the instant this outcome appears.
         return const SizedBox.shrink();
       case PanchakarmaBookOutcomeKind.success:
         final result = outcome.result!;

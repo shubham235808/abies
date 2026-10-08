@@ -30,6 +30,7 @@ const int homePreviewLimit = 8;
 class HomeData {
   const HomeData({
     required this.city,
+    required this.isSignedIn,
     required this.appointments,
     required this.medicineOrders,
     required this.diagnosticOrders,
@@ -42,8 +43,18 @@ class HomeData {
 
   /// The location signal used for the catalogue previews below — the
   /// signed-in patient's own `PatientProfile.city`, or null if they haven't
-  /// set one (in which case the previews below are unfiltered, not empty).
+  /// set one (in which case the previews below are unfiltered, not empty)
+  /// — also null for a signed-out visitor, who has no profile to read one
+  /// from at all.
   final String? city;
+
+  /// False for a signed-out visitor browsing the public catalogue (brief:
+  /// "must NOT show login on first launch"). [appointments]/
+  /// [medicineOrders]/[diagnosticOrders]/[panchakarmaBookings] are never
+  /// even attempted in that case — this is how `HomeScreen` decides whether
+  /// to render those four personal sections at all, rather than a "no
+  /// bookings yet" empty state that would wrongly imply an account exists.
+  final bool isSignedIn;
 
   final AsyncValue<List<AppointmentSummary>> appointments;
   final AsyncValue<List<MedicineOrderSummary>> medicineOrders;
@@ -85,6 +96,7 @@ class HomeData {
   }) {
     return HomeData(
       city: city,
+      isSignedIn: isSignedIn,
       appointments: appointments ?? this.appointments,
       medicineOrders: medicineOrders ?? this.medicineOrders,
       diagnosticOrders: diagnosticOrders ?? this.diagnosticOrders,
@@ -97,44 +109,50 @@ class HomeData {
   }
 }
 
-/// Loads the personalized home dashboard (docs/mobile/IMPLEMENTATION-PLAN.md
-/// Phase 3). Only meaningful once signed in, same rule as
-/// [ProfileController] — depends on [authControllerProvider] (and, for the
-/// patient's city, on [profileControllerProvider] itself) so it never
-/// fetches before there's a session.
+/// Loads the home dashboard (docs/mobile/IMPLEMENTATION-PLAN.md Phase 3).
 ///
-/// **Location, deliberately**: this phase uses the signed-in patient's own
-/// `PatientProfile.city` (already collected in Phase 2's profile screen) as
-/// the location signal for the public catalogue previews, and nothing else.
-/// It does not add a geolocation/GPS package and does not request device
-/// location permission — that's a scope decision for this phase, not an
-/// oversight (see apps/mobile/README.md "What Phase 3 added" and
+/// **Browsable signed out** (brief: "must NOT show login on first
+/// launch... must allow a customer to browse... without being forced to
+/// authenticate"): a signed-out visitor gets the same four public
+/// catalogue preview rows as a signed-in patient, just none of the
+/// `/mine`-shaped personal sections (appointments/orders/bookings) — those
+/// are never even attempted, not fetched-then-hidden, the same way
+/// [ProfileController] never fetches before there's a session. Only once
+/// signed in does this also read the patient's own `PatientProfile.city`
+/// (Phase 2) as the previews' location signal.
+///
+/// **Location, deliberately**: this uses the signed-in patient's own
+/// `PatientProfile.city` and nothing else — never device geolocation/GPS
+/// permission (see apps/mobile/README.md "What Phase 3 added" and
 /// docs/mobile/IMPLEMENTATION-PLAN.md's Phase 3 entry for the reasoning). A
-/// patient with no city set on their profile simply gets the unfiltered
-/// catalogue, which is the brief's own required fallback behavior.
+/// patient with no city set, or a signed-out visitor with no profile at
+/// all, simply gets the unfiltered catalogue.
 class HomeController extends AsyncNotifier<HomeData> {
   @override
   Future<HomeData> build() async {
     final auth = await ref.watch(authControllerProvider.future);
     if (!auth.isSignedIn) {
-      throw StateError('HomeController read before sign-in');
+      return _load(null, isSignedIn: false);
     }
     final profile = await ref.watch(profileControllerProvider.future);
-    return _load(profile.profile.city);
+    return _load(profile.profile.city, isSignedIn: true);
   }
 
-  Future<HomeData> _load(String? city) async {
+  Future<HomeData> _load(String? city, {required bool isSignedIn}) async {
     final api = ref.read(homeApiProvider);
-    final appointments = await AsyncValue.guard(api.myAppointments);
-    final medicineOrders = await AsyncValue.guard(api.myMedicineOrders);
-    final diagnosticOrders = await AsyncValue.guard(api.myDiagnosticOrders);
-    final panchakarmaBookings = await AsyncValue.guard(api.myPanchakarmaBookings);
+    final appointments = isSignedIn ? await AsyncValue.guard(api.myAppointments) : const AsyncValue.data(<AppointmentSummary>[]);
+    final medicineOrders = isSignedIn ? await AsyncValue.guard(api.myMedicineOrders) : const AsyncValue.data(<MedicineOrderSummary>[]);
+    final diagnosticOrders =
+        isSignedIn ? await AsyncValue.guard(api.myDiagnosticOrders) : const AsyncValue.data(<DiagnosticOrderSummary>[]);
+    final panchakarmaBookings =
+        isSignedIn ? await AsyncValue.guard(api.myPanchakarmaBookings) : const AsyncValue.data(<PanchakarmaBookingSummary>[]);
     final doctors = await AsyncValue.guard(() => api.previewDoctors(city: city, limit: homePreviewLimit));
     final panchakarma = await AsyncValue.guard(() => api.previewPanchakarma(city: city, limit: homePreviewLimit));
     final diagnostics = await AsyncValue.guard(() => api.previewDiagnostics(city: city, limit: homePreviewLimit));
     final medicines = await AsyncValue.guard(() => api.previewMedicines(area: city, limit: homePreviewLimit));
     return HomeData(
       city: city,
+      isSignedIn: isSignedIn,
       appointments: appointments,
       medicineOrders: medicineOrders,
       diagnosticOrders: diagnosticOrders,

@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../shared/widgets/state_views.dart';
+import '../../auth/presentation/auth_controller.dart';
 import '../domain/medicine_summary.dart';
 import '../domain/pharmacy_summary.dart';
 import 'cart_controller.dart';
+import 'local_cart_controller.dart';
 import 'medicine_search_controller.dart';
 
 /// Medicine detail (docs/mobile/IMPLEMENTATION-PLAN.md Phase 7), replacing
@@ -45,11 +47,35 @@ class _MedicineDetailScreenState extends ConsumerState<MedicineDetailScreen> {
     }
   }
 
+  /// "Allow adding products to the cart without login" (brief) — signed in,
+  /// this is still the real `POST /patients/me/cart` via `CartController`;
+  /// signed out, it goes into the on-device-only `LocalCartController`
+  /// instead (never `/patients/me/cart` — see `app_router.dart`'s redirect
+  /// doc comment for why there's no guest-cart backend call to make here).
   Future<void> _addToCart(MedicineSummary medicine) async {
     setState(() => _adding = true);
-    final error = await ref
-        .read(cartControllerProvider.notifier)
-        .addItem(pharmacyId: medicine.pharmacyId, medicineId: medicine.medicineId, variantId: _variantId, quantity: _quantity);
+    final signedIn = ref.read(authControllerProvider).value?.isSignedIn ?? false;
+    String? error;
+    if (signedIn) {
+      error = await ref
+          .read(cartControllerProvider.notifier)
+          .addItem(pharmacyId: medicine.pharmacyId, medicineId: medicine.medicineId, variantId: _variantId, quantity: _quantity);
+    } else {
+      final matchingVariants = medicine.variants.where((v) => v.variantId == _variantId).toList();
+      final unitPrice = matchingVariants.isNotEmpty ? matchingVariants.first.price : medicine.price;
+      final variantLabel = matchingVariants.isNotEmpty ? matchingVariants.first.label : null;
+      ref.read(localCartControllerProvider.notifier).addItem(
+            pharmacyId: medicine.pharmacyId,
+            pharmacyName: medicine.pharmacyName,
+            medicineId: medicine.medicineId,
+            medicineName: medicine.name,
+            imageUrl: medicine.imageUrl,
+            variantId: _variantId,
+            variantLabel: variantLabel,
+            unitPrice: unitPrice,
+            quantity: _quantity,
+          );
+    }
     if (!mounted) return;
     setState(() => _adding = false);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'Added to cart.')));

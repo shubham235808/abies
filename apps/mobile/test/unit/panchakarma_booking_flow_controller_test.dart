@@ -1,4 +1,10 @@
+import 'dart:async';
+
 import 'package:abies_mobile/core/api/api_exception.dart';
+import 'package:abies_mobile/features/auth/data/auth_api.dart';
+import 'package:abies_mobile/features/auth/domain/auth_result.dart';
+import 'package:abies_mobile/features/auth/domain/session_user.dart';
+import 'package:abies_mobile/features/auth/presentation/auth_controller.dart';
 import 'package:abies_mobile/features/panchakarma/data/panchakarma_api.dart';
 import 'package:abies_mobile/features/panchakarma/domain/panchakarma_booking_creation.dart';
 import 'package:abies_mobile/features/panchakarma/domain/panchakarma_booking_detail.dart';
@@ -64,6 +70,32 @@ class _FakePanchakarmaApi implements PanchakarmaApi {
   Future<List<PanchakarmaBookingDetail>> mine() => throw UnimplementedError('not used in these tests');
 }
 
+const _testUser = SessionUser(id: 'u1', mobile: '+919876543210', email: 'asha@example.test', role: 'PATIENT');
+
+/// `confirmBooking()` now checks `authControllerProvider` before ever
+/// calling the backend (see this controller's `requiresAuth` outcome) — so
+/// every test below that calls `confirmBooking()` needs a resolved auth
+/// state in the container, same as any other controller that depends on
+/// [authControllerProvider].
+class _FakeAuthApi implements AuthApi {
+  _FakeAuthApi({this.meResult});
+
+  SessionUser? meResult;
+  final StreamController<void> _unauthorized = StreamController<void>.broadcast();
+
+  @override
+  Stream<void> get onUnauthorized => _unauthorized.stream;
+  @override
+  Future<SessionUser?> me() async => meResult;
+  @override
+  Future<void> logout() async => meResult = null;
+  @override
+  Future<RequestOtpResult> requestOtp({String? mobile, String? email}) => throw UnimplementedError('not used in these tests');
+  @override
+  Future<VerifyOtpResult> verifyOtp({required String requestId, required String otp, required bool acceptedTerms, String? name}) =>
+      throw UnimplementedError('not used in these tests');
+}
+
 final _therapy = PanchakarmaTherapy.fromJson({
   'id': 't1',
   'name': 'Abhyanga',
@@ -75,6 +107,13 @@ final _therapy = PanchakarmaTherapy.fromJson({
   'requiredSupervision': false,
   'centre': {'id': 'c1', 'name': 'Wellness Centre', 'city': 'Pune', 'state': 'MH'},
 });
+
+ProviderContainer _signedInContainer(_FakePanchakarmaApi api) {
+  return ProviderContainer(overrides: [
+    panchakarmaApiProvider.overrideWithValue(api),
+    authApiProvider.overrideWithValue(_FakeAuthApi(meResult: _testUser)),
+  ]);
+}
 
 void main() {
   group('PanchakarmaBookingFlowController', () {
@@ -116,8 +155,9 @@ void main() {
           razorpayOrderId: 'order_1',
           razorpayKeyId: 'rzp_test',
         );
-      final container = ProviderContainer(overrides: [panchakarmaApiProvider.overrideWithValue(api)]);
+      final container = _signedInContainer(api);
       addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
       final notifier = container.read(panchakarmaBookingFlowControllerProvider(_therapy).notifier);
 
       await notifier.confirmBooking();
@@ -132,8 +172,9 @@ void main() {
 
     test('confirmBooking refuses to book a therapy missing from the fresh re-fetch, and never calls book()', () async {
       final api = _FakePanchakarmaApi()..refetchTherapies = []; // no longer offered
-      final container = ProviderContainer(overrides: [panchakarmaApiProvider.overrideWithValue(api)]);
+      final container = _signedInContainer(api);
       addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
       final notifier = container.read(panchakarmaBookingFlowControllerProvider(_therapy).notifier);
 
       await notifier.confirmBooking();
@@ -150,8 +191,9 @@ void main() {
           message: 'Online payments are not configured in this environment yet — booking is unavailable.',
           statusCode: 503,
         );
-      final container = ProviderContainer(overrides: [panchakarmaApiProvider.overrideWithValue(api)]);
+      final container = _signedInContainer(api);
       addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
       final notifier = container.read(panchakarmaBookingFlowControllerProvider(_therapy).notifier);
 
       await notifier.confirmBooking();
@@ -166,14 +208,34 @@ void main() {
       final api = _FakePanchakarmaApi()
         ..refetchTherapies = [_therapy]
         ..bookError = const ApiException(message: 'Therapy not found at this centre', statusCode: 404);
-      final container = ProviderContainer(overrides: [panchakarmaApiProvider.overrideWithValue(api)]);
+      final container = _signedInContainer(api);
       addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
       final notifier = container.read(panchakarmaBookingFlowControllerProvider(_therapy).notifier);
 
       await notifier.confirmBooking();
 
       final state = container.read(panchakarmaBookingFlowControllerProvider(_therapy));
       expect(state.outcome.kind, PanchakarmaBookOutcomeKind.conflict);
+    });
+
+    test('confirmBooking signed out: never calls search() or book(), and surfaces requiresAuth', () async {
+      final api = _FakePanchakarmaApi()..refetchTherapies = [_therapy];
+      final container = ProviderContainer(overrides: [
+        panchakarmaApiProvider.overrideWithValue(api),
+        authApiProvider.overrideWithValue(_FakeAuthApi(meResult: null)),
+      ]);
+      addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
+      final notifier = container.read(panchakarmaBookingFlowControllerProvider(_therapy).notifier);
+
+      await notifier.confirmBooking();
+
+      expect(api.searchCallCount, 0, reason: 'session-count selection is public browsing, but confirming is gated before any network call');
+      expect(api.bookCallCount, 0);
+      final state = container.read(panchakarmaBookingFlowControllerProvider(_therapy));
+      expect(state.outcome.kind, PanchakarmaBookOutcomeKind.requiresAuth);
+      expect(state.submitting, isFalse);
     });
   });
 }

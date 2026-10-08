@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exception.dart';
 import 'auth_controller.dart';
+import 'pending_redirect.dart';
 
 /// `POST /api/v1/auth/otp/request` with either a mobile number or an email —
 /// never both, matching the backend's own `.refine()` on the request schema.
@@ -61,6 +62,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Set by the router's redirect (an unauthenticated visit to a protected
+    // route) or by a screen's own "this one action needs auth" check (e.g.
+    // `/pharmacy/cart`'s "Checkout", `/panchakarma/book`'s "Confirm
+    // booking") — null just means "signed in from here will go home",
+    // which is still the normal, unprompted way to reach this screen.
+    final hasPendingAction = ref.watch(pendingRedirectProvider) != null;
     return Scaffold(
       appBar: AppBar(title: const Text('Sign in')),
       body: SafeArea(
@@ -73,7 +80,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               children: [
                 Text('Welcome to ABIES Ayurveda', style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
-                const Text("We'll send you a one-time code to sign in."),
+                Text(
+                  hasPendingAction
+                      ? "Sign in to continue — we'll take you right back to what you were doing."
+                      : "We'll send you a one-time code to sign in.",
+                ),
                 const SizedBox(height: 24),
                 if (!_useEmail)
                   TextFormField(

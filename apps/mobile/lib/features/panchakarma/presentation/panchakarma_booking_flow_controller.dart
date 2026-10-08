@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
+import '../../auth/presentation/auth_controller.dart';
 import '../domain/panchakarma_booking_creation.dart';
 import '../domain/panchakarma_therapy.dart';
 import 'panchakarma_search_controller.dart';
@@ -23,6 +24,14 @@ enum PanchakarmaBookOutcomeKind {
   /// or the backend's own `NotFoundError` if it was deactivated in the
   /// instant between that check and the actual booking call.
   conflict,
+
+  /// Signed out — `confirmBooking` never even called the backend
+  /// (`POST /panchakarma-bookings` is `requireSession`+
+  /// `requireRole('PATIENT')`). Session-count selection itself is public
+  /// (`app_router.dart`'s redirect doc comment), so this is the one place
+  /// that gates on auth — the screen reacts to this outcome by sending the
+  /// visitor to sign in and straight back.
+  requiresAuth,
 
   /// Any other failure (validation, transport, etc).
   error,
@@ -92,6 +101,13 @@ class PanchakarmaBookingFlowController extends StateNotifier<PanchakarmaBookingS
 
   Future<void> confirmBooking() async {
     if (state.submitting) return;
+
+    final isSignedIn = _ref.read(authControllerProvider).value?.isSignedIn ?? false;
+    if (!isSignedIn) {
+      state = state.copyWith(outcome: const PanchakarmaBookOutcome(PanchakarmaBookOutcomeKind.requiresAuth));
+      return;
+    }
+
     state = state.copyWith(submitting: true, outcome: PanchakarmaBookOutcome.none);
     final api = _ref.read(panchakarmaApiProvider);
 

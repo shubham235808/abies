@@ -3,7 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../pharmacy/presentation/cart_controller.dart';
+import '../../pharmacy/presentation/local_cart_controller.dart';
+import '../../pharmacy/presentation/medicine_search_controller.dart' show pharmacyApiProvider;
 import 'auth_controller.dart';
+import 'pending_redirect.dart';
 
 /// `POST /api/v1/auth/otp/verify`. `acceptedTerms` is required on *every*
 /// verify, not only sign-up — the backend rejects `false` outright and
@@ -68,8 +72,27 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
         return;
       }
       ref.read(authControllerProvider.notifier).onVerified(result.user);
+      // Best-effort — never blocks sign-in or navigation on a flush
+      // failure (see `LocalCartController.flushToBackend`'s own doc
+      // comment). Any item it couldn't push stays in the local cart for
+      // next time.
+      await ref.read(localCartControllerProvider.notifier).flushToBackend(
+            api: ref.read(pharmacyApiProvider),
+            invalidateCart: () => ref.invalidate(cartControllerProvider),
+          );
       if (!mounted) return;
-      context.go('/');
+      // "Return the customer to the exact action they were performing" —
+      // `pendingRedirectProvider` is set either by the router's redirect
+      // (an unauthenticated visit to a protected route) or by a screen's
+      // own "this one action needs auth" check; null just means there was
+      // nothing specific to return to, so home is right.
+      final pending = ref.read(pendingRedirectProvider);
+      ref.read(pendingRedirectProvider.notifier).state = null;
+      if (pending != null) {
+        context.go(pending.location, extra: pending.extra);
+      } else {
+        context.go('/');
+      }
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } finally {
