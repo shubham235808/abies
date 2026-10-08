@@ -2826,3 +2826,26 @@ model ContactEnquiry {
   @@index([email])
   @@index([createdAt])
 }
+
+// ---------------------------------------------------------------------------
+// Idempotency (API-GAP-ANALYSIS.md §5, mobile brief Phase 8). Protects the
+// booking/order write paths from a client-side retry (the common case on
+// Indian mobile networks, brief §19) creating a duplicate booking or order.
+// The key is caller-supplied (Idempotency-Key header); scoped per user and
+// route so one caller's key can never collide with another's or with a
+// different endpoint's. Stores the full first response so a replay is
+// byte-identical to what the original call returned, not just "found it".
+// ---------------------------------------------------------------------------
+
+model IdempotencyRecord {
+  id           String   @id @default(cuid())
+  userId       String
+  route        String
+  key          String
+  statusCode   Int
+  responseBody Json
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, route, key])
+  @@index([createdAt])
+}
