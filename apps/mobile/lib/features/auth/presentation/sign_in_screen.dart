@@ -109,6 +109,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Send OTP'),
                 ),
+                const SizedBox(height: 8),
+                Center(
+                  child: TextButton(
+                    onPressed: () => context.push('/connection-diagnostics'),
+                    child: const Text('Having trouble connecting?'),
+                  ),
+                ),
               ],
             ),
           ),

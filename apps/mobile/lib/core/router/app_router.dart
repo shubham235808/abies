@@ -20,6 +20,7 @@ import '../../features/diagnostics/presentation/diagnostics_search_screen.dart';
 import '../../features/doctors/presentation/doctor_detail_screen.dart';
 import '../../features/doctors/presentation/doctor_search_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
+import '../../features/network_diagnostics/presentation/connection_diagnostics_screen.dart';
 import '../../features/panchakarma/domain/panchakarma_therapy.dart';
 import '../../features/panchakarma/presentation/panchakarma_booking_detail_screen.dart';
 import '../../features/panchakarma/presentation/panchakarma_booking_list_screen.dart';
@@ -105,6 +106,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
       GoRoute(path: '/sign-in', builder: (context, state) => const SignInScreen()),
+      GoRoute(path: '/connection-diagnostics', builder: (context, state) => const ConnectionDiagnosticsScreen()),
       GoRoute(
         path: '/otp',
         builder: (context, state) {
