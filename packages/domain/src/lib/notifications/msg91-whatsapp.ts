@@ -1,31 +1,28 @@
 import type { NotificationAdapter, NotificationRecipient, SendResult } from './types';
-import {
-  missingMessage,
-  normaliseIndianMobile,
-  payloadLanguage,
-  readWhatsappConfig,
-  resolveTemplateId,
-  scalarVariables,
-} from './provider-config';
+import { missingMessage, normaliseIndianMobile, payloadLanguage, readWhatsappConfig, resolveTemplateId } from './provider-config';
 
 // MSG91 WhatsApp template send.
 //
 // Endpoint and body shape confirmed against a real, working example supplied
 // by the user (2026-10-08) — api.msg91.com's bulk outbound endpoint, not
 // control.msg91.com (the earlier guess here was wrong; this is the likely
-// reason WhatsApp delivery was never actually working). The template
-// language code must still match the approved template exactly (for example
-// "en" versus "en_US").
+// reason WhatsApp delivery was never actually working).
 //
-// button_1 ASSUMPTION, NOT YET CONFIRMED: abies_auth_otp has a button
-// component (user-confirmed 2026-10-08), but exactly what dynamic value that
-// button needs wasn't specified — the example supplied was generic MSG91
-// documentation with placeholder values. This adapter assumes the button's
-// url-subtype dynamic variable is the same OTP code as body_1 (the common
-// "tap to verify" pattern, where the template's own configured base URL has
-// the code appended). VERIFY against a real sandbox send before trusting
-// this for real users — if the button needs something else (a full
-// pre-built URL, a different value), this needs to change.
+// body_1/button_1 CONFIRMED against MSG91's own delivery logs (2026-10-08,
+// user shared the CSV export directly): abies_auth_otp takes exactly ONE
+// body parameter. An earlier version of this adapter also sent
+// expiresInSeconds as body_2 (generically dumping every scalar payload
+// field), which MSG91 rejected outright: "body: number of
+// localizable_params (2) does not match the expected number of params
+// (1)". button_1 being the same OTP code as body_1 is confirmed correct —
+// the one log row using only {body_1, button_1} shows delivery_report:
+// delivered. So this intentionally does NOT use every scalar field in the
+// payload (unlike the email adapters' approach) — it uses only `otp`,
+// matching this specific, currently-only approved template. A future
+// second WhatsApp template with a genuinely different param count would
+// need its own handling here, not a generic one; don't "fix" this back to
+// scalarVariables(payload) without checking the new template's real param
+// count first.
 //
 // WHATSAPP_MSG91_TEMPLATE_MAP values are approved WhatsApp template names,
 // keyed by ABIES template key and language. WHATSAPP_MSG91_NAMESPACE is one
@@ -57,18 +54,19 @@ export function createMsg91WhatsappAdapter(): NotificationAdapter {
         return { ok: false, error: `No MSG91 WhatsApp template mapped for ${templateKey} (${language})`, retryable: false };
       }
 
-      // Body variables become body_1, body_2, ... in payload order.
-      const variables = scalarVariables(payload);
-      const components: Record<string, { type: string; value?: string; subtype?: string }> = Object.fromEntries(
-        variables.map(([, value], index) => [`body_${index + 1}`, { type: 'text', value }]),
-      );
-      // See this file's header: abies_auth_otp has a url-subtype button whose
-      // dynamic value is assumed to be the same first variable (the OTP code)
-      // — not yet confirmed against a real sandbox send.
-      const firstVariable = variables[0];
-      if (firstVariable) {
-        components.button_1 = { subtype: 'url', type: 'text', value: firstVariable[1] };
+      // abies_auth_otp takes exactly one body parameter (see this file's
+      // header) — the OTP code, not every scalar field the caller happened
+      // to pass (expiresInSeconds is for the email channel's template, not
+      // this one).
+      const otp = payload.otp;
+      if (typeof otp !== 'string' && typeof otp !== 'number') {
+        return { ok: false, error: 'WhatsApp OTP payload is missing otp', retryable: false };
       }
+      const otpText = String(otp);
+      const components: Record<string, { type: string; value?: string; subtype?: string }> = {
+        body_1: { type: 'text', value: otpText },
+        button_1: { subtype: 'url', type: 'text', value: otpText },
+      };
       const body = {
         integrated_number: cfg.integratedNumber,
         content_type: 'template',

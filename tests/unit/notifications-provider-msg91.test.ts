@@ -73,11 +73,26 @@ describe('MSG91 WhatsApp adapter', () => {
         to: [NORMALISED],
         components: {
           body_1: { type: 'text', value: OTP },
-          body_2: { type: 'text', value: '300' },
           button_1: { subtype: 'url', type: 'text', value: OTP },
         },
       },
     ]);
+  });
+
+  it('never sends expiresInSeconds as body_2 — MSG91 rejects the template for a param-count mismatch', async () => {
+    setWaEnv();
+    fetchMock.mockResolvedValueOnce(respond(200, { type: 'success', request_id: 'wa-req-2' }));
+    await createMsg91WhatsappAdapter().send(recipient, 'auth.otp_code', { otp: OTP, expiresInSeconds: 300 });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.payload.template.to_and_components[0].components.body_2).toBeUndefined();
+  });
+
+  it('fails permanently when the payload has no otp', async () => {
+    setWaEnv();
+    const result = await createMsg91WhatsappAdapter().send(recipient, 'auth.otp_code', { expiresInSeconds: 300 });
+    expect(result).toEqual({ ok: false, error: 'WhatsApp OTP payload is missing otp', retryable: false });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('treats HTTP 429 as retryable and HTTP 400 as permanent', async () => {
