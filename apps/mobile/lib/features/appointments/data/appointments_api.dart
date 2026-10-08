@@ -22,12 +22,16 @@ abstract class AppointmentsApi {
   /// treat it as a normal, displayable state (see `BookingController`).
   /// Throws `statusCode == 409` if the slot was booked by someone else
   /// between the last slot list and this call.
+  /// [idempotencyKey]: one per booking attempt (docs/mobile/
+  /// IMPLEMENTATION-PLAN.md Phase 8) — reuse the same key across a single
+  /// attempt's own retries, never mint a fresh one per retry.
   Future<AppointmentHold> hold({
     required String doctorProfileId,
     required String mode,
     required DateTime startsAt,
     String? careRecipientFamilyMemberId,
     String? reasonForVisit,
+    String? idempotencyKey,
   });
 
   /// `POST /api/v1/appointments/verify-payment`. Not reachable from this
@@ -83,9 +87,11 @@ class AppointmentsApiImpl implements AppointmentsApi {
     required DateTime startsAt,
     String? careRecipientFamilyMemberId,
     String? reasonForVisit,
+    String? idempotencyKey,
   }) {
     return _client.post<AppointmentHold>(
       '/api/v1/appointments/hold',
+      idempotencyKey: idempotencyKey,
       body: {
         'doctorProfileId': doctorProfileId,
         'mode': mode,

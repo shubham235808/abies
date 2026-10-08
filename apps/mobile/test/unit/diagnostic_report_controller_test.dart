@@ -62,6 +62,7 @@ class _FakeDiagnosticsApi implements DiagnosticsApi {
     required String collectionMode,
     required String scheduledAt,
     String? address,
+    String? idempotencyKey,
   }) =>
       throw UnimplementedError('not used in these tests');
 

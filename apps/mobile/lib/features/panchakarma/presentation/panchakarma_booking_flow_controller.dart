@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../domain/panchakarma_booking_creation.dart';
 import '../domain/panchakarma_therapy.dart';
@@ -77,8 +78,15 @@ class PanchakarmaBookingFlowController extends StateNotifier<PanchakarmaBookingS
   final Ref _ref;
   final PanchakarmaTherapy _therapy;
 
+  // One key per distinct booking intent (docs/mobile/IMPLEMENTATION-PLAN.md
+  // Phase 8) — reused across confirmBooking()'s own retries, regenerated
+  // only when sessionCount actually changes (a different request, not a
+  // retry of the same one).
+  String _idempotencyKey = ApiClient.newIdempotencyKey();
+
   void setSessionCount(int count) {
-    if (count < 1 || count > 60) return;
+    if (count < 1 || count > 60 || count == state.sessionCount) return;
+    _idempotencyKey = ApiClient.newIdempotencyKey();
     state = state.copyWith(sessionCount: count, outcome: PanchakarmaBookOutcome.none);
   }
 
@@ -112,7 +120,12 @@ class PanchakarmaBookingFlowController extends StateNotifier<PanchakarmaBookingS
     }
 
     try {
-      final result = await api.book(centreId: _therapy.centreId, therapyId: _therapy.id, sessionCount: state.sessionCount);
+      final result = await api.book(
+        centreId: _therapy.centreId,
+        therapyId: _therapy.id,
+        sessionCount: state.sessionCount,
+        idempotencyKey: _idempotencyKey,
+      );
       state = state.copyWith(submitting: false, outcome: PanchakarmaBookOutcome(PanchakarmaBookOutcomeKind.success, result: result));
     } on ApiException catch (e) {
       if (e.statusCode == 503) {

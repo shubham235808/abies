@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../domain/cart.dart';
 import '../domain/medicine_order_creation.dart';
@@ -88,11 +89,20 @@ class CheckoutFlowController extends StateNotifier<CheckoutState> {
   final Ref _ref;
   final String cartId;
 
+  // One key per distinct checkout request (docs/mobile/IMPLEMENTATION-PLAN.md
+  // Phase 8) — reused across confirmCheckout()'s own retries, regenerated
+  // whenever the address/recipient actually change.
+  String _idempotencyKey = ApiClient.newIdempotencyKey();
+
   void setDeliveryAddress(String address) {
+    if (address == state.deliveryAddress) return;
+    _idempotencyKey = ApiClient.newIdempotencyKey();
     state = state.copyWith(deliveryAddress: address, outcome: CheckoutOutcome.none);
   }
 
   void setCareRecipientFamilyMemberId(String? id) {
+    if (id == state.careRecipientFamilyMemberId) return;
+    _idempotencyKey = ApiClient.newIdempotencyKey();
     state = state.copyWith(careRecipientFamilyMemberId: () => id, outcome: CheckoutOutcome.none);
   }
 
@@ -146,6 +156,7 @@ class CheckoutFlowController extends StateNotifier<CheckoutState> {
         cartId: cartId,
         deliveryAddress: address,
         careRecipientFamilyMemberId: state.careRecipientFamilyMemberId,
+        idempotencyKey: _idempotencyKey,
       );
       state = state.copyWith(submitting: false, outcome: CheckoutOutcome(CheckoutOutcomeKind.success, result: result));
     } on ApiException catch (e) {

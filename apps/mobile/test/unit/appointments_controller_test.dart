@@ -88,6 +88,7 @@ class _FakeAppointmentsApi implements AppointmentsApi {
     required DateTime startsAt,
     String? careRecipientFamilyMemberId,
     String? reasonForVisit,
+    String? idempotencyKey,
   }) =>
       throw UnimplementedError('not used in these tests');
 

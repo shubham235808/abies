@@ -54,7 +54,12 @@ class _FakePharmacyApi implements PharmacyApi {
   }
 
   @override
-  Future<MedicineOrderCreationResult> checkoutCart({required String cartId, required String deliveryAddress, String? careRecipientFamilyMemberId}) async {
+  Future<MedicineOrderCreationResult> checkoutCart({
+    required String cartId,
+    required String deliveryAddress,
+    String? careRecipientFamilyMemberId,
+    String? idempotencyKey,
+  }) async {
     checkoutCallCount += 1;
     lastCheckoutCartId = cartId;
     lastDeliveryAddress = deliveryAddress;
@@ -102,6 +107,7 @@ class _FakePharmacyApi implements PharmacyApi {
     String? prescriptionId,
     String? careRecipientFamilyMemberId,
     required List<Map<String, Object?>> items,
+    String? idempotencyKey,
   }) =>
       throw UnimplementedError('not used in these tests');
 

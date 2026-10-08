@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../../pharmacy/domain/medicine_order_creation.dart';
 import '../../pharmacy/presentation/medicine_search_controller.dart';
@@ -123,7 +124,14 @@ class PrescriptionPurchaseController extends StateNotifier<PrescriptionPurchaseS
   final Ref _ref;
   final String prescriptionId;
 
+  // One key per distinct purchase request (docs/mobile/IMPLEMENTATION-PLAN.md
+  // Phase 8) — reused across confirmPurchase()'s own retries, regenerated
+  // whenever pharmacy/quantities/address/recipient actually change (every
+  // setter below that changes what would actually be sent).
+  String _idempotencyKey = ApiClient.newIdempotencyKey();
+
   Future<void> selectPharmacy(String pharmacyId) async {
+    _idempotencyKey = ApiClient.newIdempotencyKey();
     state = state.copyWith(
       pharmacyId: () => pharmacyId,
       matchItems: () => const AsyncValue.loading(),
@@ -143,14 +151,20 @@ class PrescriptionPurchaseController extends StateNotifier<PrescriptionPurchaseS
     } else {
       next[prescriptionItemId] = quantity;
     }
+    if (next[prescriptionItemId] == state.quantities[prescriptionItemId]) return;
+    _idempotencyKey = ApiClient.newIdempotencyKey();
     state = state.copyWith(quantities: next, outcome: PurchaseOutcome.none);
   }
 
   void setDeliveryAddress(String address) {
+    if (address == state.deliveryAddress) return;
+    _idempotencyKey = ApiClient.newIdempotencyKey();
     state = state.copyWith(deliveryAddress: address, outcome: PurchaseOutcome.none);
   }
 
   void setCareRecipientFamilyMemberId(String? id) {
+    if (id == state.careRecipientFamilyMemberId) return;
+    _idempotencyKey = ApiClient.newIdempotencyKey();
     state = state.copyWith(careRecipientFamilyMemberId: () => id, outcome: PurchaseOutcome.none);
   }
 
@@ -212,6 +226,7 @@ class PrescriptionPurchaseController extends StateNotifier<PrescriptionPurchaseS
             items: selected
                 .map((item) => {'medicineId': item.medicineId, 'quantity': state.quantities[item.prescriptionItemId] ?? 0})
                 .toList(),
+            idempotencyKey: _idempotencyKey,
           );
       state = state.copyWith(submitting: false, outcome: PurchaseOutcome(PurchaseOutcomeKind.success, result: result));
     } on ApiException catch (e) {

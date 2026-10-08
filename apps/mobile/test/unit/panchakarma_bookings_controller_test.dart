@@ -84,7 +84,12 @@ class _FakePanchakarmaApi implements PanchakarmaApi {
   Future<List<PanchakarmaCentre>> centres({String? city}) => throw UnimplementedError('not used in these tests');
 
   @override
-  Future<PanchakarmaBookingCreationResult> book({required String centreId, required String therapyId, required int sessionCount}) =>
+  Future<PanchakarmaBookingCreationResult> book({
+    required String centreId,
+    required String therapyId,
+    required int sessionCount,
+    String? idempotencyKey,
+  }) =>
       throw UnimplementedError('not used in these tests');
 
   @override

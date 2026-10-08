@@ -28,7 +28,12 @@ class _FakePanchakarmaApi implements PanchakarmaApi {
   }
 
   @override
-  Future<PanchakarmaBookingCreationResult> book({required String centreId, required String therapyId, required int sessionCount}) async {
+  Future<PanchakarmaBookingCreationResult> book({
+    required String centreId,
+    required String therapyId,
+    required int sessionCount,
+    String? idempotencyKey,
+  }) async {
     bookCallCount += 1;
     if (bookError != null) throw bookError!;
     return bookResultValue!;

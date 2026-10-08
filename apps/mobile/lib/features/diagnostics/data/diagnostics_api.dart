@@ -41,6 +41,8 @@ abstract class DiagnosticsApi {
   /// orders.service.ts`) — the expected outcome in dev today, not a bug.
   /// Throws `statusCode == 400/404` if the lab/test/package no longer
   /// resolves, or `409` if a recommendation no longer accepts a new order.
+  /// [idempotencyKey]: one per booking attempt (docs/mobile/
+  /// IMPLEMENTATION-PLAN.md Phase 8), reused across that attempt's retries.
   Future<DiagnosticBookingCreationResult> book({
     required String labId,
     List<String>? testIds,
@@ -49,6 +51,7 @@ abstract class DiagnosticsApi {
     required String collectionMode,
     required String scheduledAt,
     String? address,
+    String? idempotencyKey,
   });
 
   /// `POST /api/v1/diagnostic-orders/verify-payment`. Not reachable from
@@ -141,10 +144,12 @@ class DiagnosticsApiImpl implements DiagnosticsApi {
     required String collectionMode,
     required String scheduledAt,
     String? address,
+    String? idempotencyKey,
   }) {
     assert((testIds != null && testIds.isNotEmpty) != (packageId != null), 'Provide either testIds or packageId, not both');
     return _client.post<DiagnosticBookingCreationResult>(
       '/api/v1/diagnostic-orders',
+      idempotencyKey: idempotencyKey,
       body: {
         'labId': labId,
         if (testIds != null) 'testIds': testIds,

@@ -52,6 +52,7 @@ class _FakeDiagnosticsApi implements DiagnosticsApi {
     required String collectionMode,
     required String scheduledAt,
     String? address,
+    String? idempotencyKey,
   }) async {
     bookCallCount += 1;
     lastBookArgs = {

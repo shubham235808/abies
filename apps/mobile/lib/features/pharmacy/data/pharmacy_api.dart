@@ -77,10 +77,13 @@ abstract class PharmacyApi {
   /// `cart.service.ts`), so this throws [ApiException] with
   /// `statusCode == 503` exactly when payments aren't configured in this
   /// environment, the expected outcome in dev today.
+  /// [idempotencyKey]: one per checkout attempt (docs/mobile/
+  /// IMPLEMENTATION-PLAN.md Phase 8), reused across that attempt's retries.
   Future<MedicineOrderCreationResult> checkoutCart({
     required String cartId,
     required String deliveryAddress,
     String? careRecipientFamilyMemberId,
+    String? idempotencyKey,
   });
 
   /// `POST /api/v1/medicine-orders` — `bookOrderSchema`'s direct order path,
@@ -93,12 +96,15 @@ abstract class PharmacyApi {
   /// for a plain OTC purchase (the cart is the OTC path). `items` is
   /// `bookOrderSchema`'s own array (1-20 entries of
   /// `{medicineId, variantId?, quantity}`).
+  /// [idempotencyKey]: one per booking attempt (docs/mobile/
+  /// IMPLEMENTATION-PLAN.md Phase 8), reused across that attempt's retries.
   Future<MedicineOrderCreationResult> bookOrder({
     required String pharmacyId,
     required String deliveryAddress,
     String? prescriptionId,
     String? careRecipientFamilyMemberId,
     required List<Map<String, Object?>> items,
+    String? idempotencyKey,
   });
 
   /// `POST /api/v1/medicine-orders/verify-payment`. Not reachable from this
@@ -236,9 +242,11 @@ class PharmacyApiImpl implements PharmacyApi {
     required String cartId,
     required String deliveryAddress,
     String? careRecipientFamilyMemberId,
+    String? idempotencyKey,
   }) {
     return _client.post<MedicineOrderCreationResult>(
       '/api/v1/patients/me/cart/$cartId/checkout',
+      idempotencyKey: idempotencyKey,
       body: {
         'deliveryAddress': deliveryAddress,
         if (careRecipientFamilyMemberId != null) 'careRecipientFamilyMemberId': careRecipientFamilyMemberId,
@@ -254,9 +262,11 @@ class PharmacyApiImpl implements PharmacyApi {
     String? prescriptionId,
     String? careRecipientFamilyMemberId,
     required List<Map<String, Object?>> items,
+    String? idempotencyKey,
   }) {
     return _client.post<MedicineOrderCreationResult>(
       '/api/v1/medicine-orders',
+      idempotencyKey: idempotencyKey,
       body: {
         'pharmacyId': pharmacyId,
         'deliveryAddress': deliveryAddress,

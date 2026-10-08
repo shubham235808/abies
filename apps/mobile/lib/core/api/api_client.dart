@@ -55,8 +55,23 @@ class ApiClient {
     return _send(() => _dio.get(path, queryParameters: query), decode);
   }
 
-  Future<T> post<T>(String path, {Object? body, required T Function(dynamic json) decode}) {
-    return _send(() => _dio.post(path, data: body), decode);
+  /// [idempotencyKey], when given, is sent as the `Idempotency-Key` header
+  /// (docs/mobile/IMPLEMENTATION-PLAN.md Phase 8). The backend replays the
+  /// first response for a repeated key instead of re-running the write —
+  /// generate one key per booking *attempt* with [newIdempotencyKey] and
+  /// reuse it across that attempt's retries, not a fresh one per retry
+  /// (a fresh key every time defeats the whole point).
+  Future<T> post<T>(String path, {Object? body, String? idempotencyKey, required T Function(dynamic json) decode}) {
+    final options = idempotencyKey == null ? null : Options(headers: {'Idempotency-Key': idempotencyKey});
+    return _send(() => _dio.post(path, data: body, options: options), decode);
+  }
+
+  /// One key per booking/order attempt — reuse it across that attempt's own
+  /// retries (e.g. a timeout-triggered resend), never generate a fresh one
+  /// per retry, or every retry becomes a new, undeduplicated write.
+  static String newIdempotencyKey() {
+    final rand = Random.secure();
+    return List.generate(24, (_) => rand.nextInt(16).toRadixString(16)).join();
   }
 
   Future<T> patch<T>(String path, {Object? body, required T Function(dynamic json) decode}) {

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../domain/appointment_hold.dart';
 import '../domain/appointment_slot.dart';
@@ -128,6 +129,13 @@ class BookingController extends StateNotifier<BookingState> {
   final Ref _ref;
   final BookingParams _params;
 
+  // One idempotency key per selected slot (docs/mobile/IMPLEMENTATION-PLAN.md
+  // Phase 8) — reused across confirmBooking()'s own retries for that same
+  // slot, regenerated only when the user picks a different one. Lives on the
+  // controller, not BookingState, since it's plumbing for the next network
+  // call, not something any screen needs to render.
+  String? _idempotencyKey;
+
   Future<void> _loadSlots() async {
     state = state.copyWith(slots: const AsyncValue.loading());
     final result = await AsyncValue.guard(
@@ -149,6 +157,7 @@ class BookingController extends StateNotifier<BookingState> {
   }
 
   void selectSlot(AppointmentSlot slot) {
+    _idempotencyKey = ApiClient.newIdempotencyKey();
     state = state.copyWith(selectedSlot: () => slot, holdOutcome: HoldOutcome.none);
   }
 
@@ -205,6 +214,7 @@ class BookingController extends StateNotifier<BookingState> {
         startsAt: slot.startsAt,
         careRecipientFamilyMemberId: state.careRecipientFamilyMemberId,
         reasonForVisit: state.reasonForVisit,
+        idempotencyKey: _idempotencyKey,
       );
       state = state.copyWith(submitting: false, holdOutcome: HoldOutcome(HoldOutcomeKind.success, hold: hold));
     } on ApiException catch (e) {

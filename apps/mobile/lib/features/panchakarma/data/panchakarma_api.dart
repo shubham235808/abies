@@ -36,10 +36,13 @@ abstract class PanchakarmaApi {
   /// normal, displayable state (see `PanchakarmaBookingFlowController`).
   /// Throws `statusCode == 404` if the centre/therapy pair no longer
   /// resolves (e.g. deactivated since it was last listed).
+  /// [idempotencyKey]: one per booking attempt (docs/mobile/
+  /// IMPLEMENTATION-PLAN.md Phase 8), reused across that attempt's retries.
   Future<PanchakarmaBookingCreationResult> book({
     required String centreId,
     required String therapyId,
     required int sessionCount,
+    String? idempotencyKey,
   });
 
   /// `POST /api/v1/panchakarma-bookings/verify-payment`. Not reachable from
@@ -109,9 +112,11 @@ class PanchakarmaApiImpl implements PanchakarmaApi {
     required String centreId,
     required String therapyId,
     required int sessionCount,
+    String? idempotencyKey,
   }) {
     return _client.post<PanchakarmaBookingCreationResult>(
       '/api/v1/panchakarma-bookings',
+      idempotencyKey: idempotencyKey,
       body: {'centreId': centreId, 'therapyId': therapyId, 'sessionCount': sessionCount},
       decode: (json) => PanchakarmaBookingCreationResult.fromJson(json as Map<String, dynamic>),
     );

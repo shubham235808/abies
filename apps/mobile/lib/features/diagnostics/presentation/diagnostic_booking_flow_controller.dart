@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../data/diagnostics_api.dart';
 import '../domain/diagnostic_booking_args.dart';
@@ -106,19 +107,31 @@ class DiagnosticBookingFlowController extends StateNotifier<DiagnosticBookingSta
   final Ref _ref;
   final DiagnosticBookingArgs _args;
 
+  // One key per distinct booking request (docs/mobile/IMPLEMENTATION-PLAN.md
+  // Phase 8) — reused across confirmBooking()'s own retries, regenerated
+  // whenever mode/time/address actually change (a different request, not a
+  // retry of the same one).
+  String _idempotencyKey = ApiClient.newIdempotencyKey();
+
   DiagnosticBookingTarget get target => _args.target;
 
   void setCollectionMode(String mode) {
     if (mode != 'HOME' && mode != 'LAB_VISIT') return;
     if (mode == 'HOME' && !target.homeCollectionSupported) return;
+    if (mode == state.collectionMode) return;
+    _idempotencyKey = ApiClient.newIdempotencyKey();
     state = state.copyWith(collectionMode: mode, outcome: DiagnosticBookOutcome.none);
   }
 
   void setScheduledAt(DateTime dateTime) {
+    if (dateTime == state.scheduledAt) return;
+    _idempotencyKey = ApiClient.newIdempotencyKey();
     state = state.copyWith(scheduledAt: () => dateTime, outcome: DiagnosticBookOutcome.none);
   }
 
   void setAddress(String address) {
+    if (address == state.address) return;
+    _idempotencyKey = ApiClient.newIdempotencyKey();
     state = state.copyWith(address: address, outcome: DiagnosticBookOutcome.none);
   }
 
@@ -182,6 +195,7 @@ class DiagnosticBookingFlowController extends StateNotifier<DiagnosticBookingSta
         collectionMode: state.collectionMode,
         scheduledAt: scheduledAt.toUtc().toIso8601String(),
         address: state.collectionMode == 'HOME' ? state.address.trim() : null,
+        idempotencyKey: _idempotencyKey,
       );
       state = state.copyWith(submitting: false, outcome: DiagnosticBookOutcome(DiagnosticBookOutcomeKind.success, result: result));
     } on ApiException catch (e) {

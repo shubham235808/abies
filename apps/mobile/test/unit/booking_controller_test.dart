@@ -21,6 +21,7 @@ class _FakeAppointmentsApi implements AppointmentsApi {
   Object? holdError;
   AppointmentHold? holdResultValue;
   int holdCallCount = 0;
+  final List<String?> holdIdempotencyKeys = [];
 
   @override
   Future<List<AppointmentSlot>> slots({required String doctorProfileId, String? mode, String? from, int days = 14}) async {
@@ -37,8 +38,10 @@ class _FakeAppointmentsApi implements AppointmentsApi {
     required DateTime startsAt,
     String? careRecipientFamilyMemberId,
     String? reasonForVisit,
+    String? idempotencyKey,
   }) async {
     holdCallCount += 1;
+    holdIdempotencyKeys.add(idempotencyKey);
     if (holdError != null) throw holdError!;
     return holdResultValue!;
   }
@@ -140,6 +143,59 @@ void main() {
       expect(state.holdOutcome.kind, HoldOutcomeKind.success);
       expect(state.holdOutcome.hold!.appointmentId, 'appt1');
       expect(state.submitting, isFalse);
+    });
+
+    test('confirmBooking sends an idempotency key, the same one on a retry of the same slot', () async {
+      final api = _FakeAppointmentsApi()
+        ..initialSlots = [_slotA]
+        ..refetchSlots = [_slotA]
+        ..holdResultValue = const AppointmentHold(
+          appointmentId: 'appt1',
+          appointmentStatus: 'PENDING_PAYMENT',
+          amount: 500,
+          currency: 'INR',
+          razorpayOrderId: 'order_1',
+          razorpayKeyId: 'rzp_test',
+        );
+      final container = ProviderContainer(overrides: [appointmentsApiProvider.overrideWithValue(api)]);
+      addTearDown(container.dispose);
+      const params = BookingParams(doctorProfileId: 'doc1', initialMode: 'VIDEO');
+      await _flush();
+      container.read(bookingControllerProvider(params).notifier).selectSlot(_slotA);
+
+      await container.read(bookingControllerProvider(params).notifier).confirmBooking();
+      await container.read(bookingControllerProvider(params).notifier).confirmBooking();
+
+      expect(api.holdIdempotencyKeys, hasLength(2));
+      expect(api.holdIdempotencyKeys[0], isNotNull);
+      expect(api.holdIdempotencyKeys[0], api.holdIdempotencyKeys[1], reason: 'retrying the same slot must reuse the same key, not mint a new one');
+    });
+
+    test('selecting a different slot generates a new idempotency key', () async {
+      final api = _FakeAppointmentsApi()
+        ..initialSlots = [_slotA, _slotB]
+        ..refetchSlots = [_slotA, _slotB]
+        ..holdResultValue = const AppointmentHold(
+          appointmentId: 'appt1',
+          appointmentStatus: 'PENDING_PAYMENT',
+          amount: 500,
+          currency: 'INR',
+          razorpayOrderId: 'order_1',
+          razorpayKeyId: 'rzp_test',
+        );
+      final container = ProviderContainer(overrides: [appointmentsApiProvider.overrideWithValue(api)]);
+      addTearDown(container.dispose);
+      const params = BookingParams(doctorProfileId: 'doc1', initialMode: 'VIDEO');
+      await _flush();
+      final notifier = container.read(bookingControllerProvider(params).notifier);
+
+      notifier.selectSlot(_slotA);
+      await notifier.confirmBooking();
+      notifier.selectSlot(_slotB);
+      await notifier.confirmBooking();
+
+      expect(api.holdIdempotencyKeys, hasLength(2));
+      expect(api.holdIdempotencyKeys[0], isNot(api.holdIdempotencyKeys[1]), reason: 'a different slot is a different booking, not a retry');
     });
 
     test('confirmBooking refuses to hold a slot missing from the fresh re-fetch, and never calls /hold', () async {
