@@ -1,5 +1,16 @@
 import { z } from 'zod';
 
+// z.coerce.boolean() is a trap for env vars: it runs JS's native Boolean(),
+// so Boolean("false") === true — any non-empty string coerces to true.
+// Found 2026-10-08 after EXPOSE_DEV_OTP: "false" in a ConfigMap kept
+// evaluating as true. Every boolean flag below must use this instead,
+// which only treats the literal string "true" as true.
+const strictBool = (defaultValue: 'true' | 'false') =>
+  z
+    .enum(['true', 'false'])
+    .default(defaultValue)
+    .transform((v) => v === 'true');
+
 // Fails fast at startup if a required var is missing, instead of surfacing
 // as an obscure runtime error the first time a route touches it.
 const envSchema = z.object({
@@ -39,9 +50,9 @@ const envSchema = z.object({
   ABIES_CONTACT_WHATSAPP: z.string().regex(/^\d{10,15}$/, 'digits only, with country code').default('919315175041'),
   ABIES_CONTACT_SUPPORT_EMAIL: z.string().email().default('support@abies.in'),
   SESSION_TTL_DAYS: z.coerce.number().default(7),
-  ADMIN_MFA_REQUIRED: z.coerce.boolean().default(true),
+  ADMIN_MFA_REQUIRED: strictBool('true'),
   OTP_DEV_CODE: z.string().optional(),
-  EXPOSE_DEV_OTP: z.coerce.boolean().default(false),
+  EXPOSE_DEV_OTP: strictBool('false'),
   DEV_ADMIN_MFA_CODE: z.string().optional(),
   // Off by default everywhere, including docker-compose.prod.yml — this is
   // NOT "disable prod security", it's a second, explicit opt-in that must
@@ -52,11 +63,11 @@ const envSchema = z.object({
   // deployment (docker-compose.yml), which is not the real ESXi Phase 12
   // target and has no real SMS/MFA provider to receive a code with. The
   // real deployment's .env must never set this to true.
-  ALLOW_DEV_AUTH_BYPASS_IN_PROD: z.coerce.boolean().default(false),
-  ALLOW_DOCTOR_SELF_ONBOARDING: z.coerce.boolean().default(false),
-  ALLOW_LAB_SELF_ONBOARDING: z.coerce.boolean().default(false),
-  ALLOW_PHARMACY_SELF_ONBOARDING: z.coerce.boolean().default(false),
-  ALLOW_PANCHAKARMA_CENTRE_SELF_ONBOARDING: z.coerce.boolean().default(false),
+  ALLOW_DEV_AUTH_BYPASS_IN_PROD: strictBool('false'),
+  ALLOW_DOCTOR_SELF_ONBOARDING: strictBool('false'),
+  ALLOW_LAB_SELF_ONBOARDING: strictBool('false'),
+  ALLOW_PHARMACY_SELF_ONBOARDING: strictBool('false'),
+  ALLOW_PANCHAKARMA_CENTRE_SELF_ONBOARDING: strictBool('false'),
   APP_BASE_URL: z.string().url(),
   UPLOAD_MAX_BYTES: z.coerce.number().default(10 * 1024 * 1024),
 
@@ -79,11 +90,10 @@ const envSchema = z.object({
   EMAIL_API_KEY: z.string().optional(),
   WHATSAPP_PROVIDER: z.string().default('mock'),
   // WhatsApp stays off until its templates are approved. While off, WhatsApp
-  // messages are recorded as suppressed (never shown as sent).
-  WHATSAPP_ENABLED: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform((v) => v === 'true'),
+  // messages are recorded as suppressed (never shown as sent). This was
+  // already correct (the pattern strictBool above is now modeled on) —
+  // simplified to use the shared helper, no behavior change.
+  WHATSAPP_ENABLED: strictBool('false'),
   WHATSAPP_API_KEY: z.string().optional(),
 
   // SMTP connection for EMAIL_PROVIDER=mailer91 (or the generic smtp). All
