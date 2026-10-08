@@ -16,6 +16,10 @@ export type TemplateMap = Record<string, Record<string, string>>;
 export interface Msg91WhatsappConfig {
   authKey: string;
   integratedNumber: string;
+  // The WhatsApp Business Account's namespace (MSG91/Meta term), one value
+  // for the whole account, not per-template — required by MSG91's bulk
+  // outbound-message endpoint alongside the template name.
+  namespace: string;
   templateMap: TemplateMap;
 }
 
@@ -24,6 +28,7 @@ export type ProviderConfigResult<T> = { ok: true; config: T } | { ok: false; mis
 export const WHATSAPP_ENV_KEYS = {
   authKey: 'WHATSAPP_MSG91_AUTH_KEY',
   integratedNumber: 'WHATSAPP_MSG91_INTEGRATED_NUMBER',
+  namespace: 'WHATSAPP_MSG91_NAMESPACE',
   templateMap: 'WHATSAPP_MSG91_TEMPLATE_MAP',
 } as const;
 
@@ -65,15 +70,17 @@ function readTemplateMap(name: string, env: NodeJS.ProcessEnv): TemplateMap | un
 export function readWhatsappConfig(env: NodeJS.ProcessEnv = process.env): ProviderConfigResult<Msg91WhatsappConfig> {
   const authKey = readString(WHATSAPP_ENV_KEYS.authKey, env);
   const integratedNumber = readString(WHATSAPP_ENV_KEYS.integratedNumber, env);
+  const namespace = readString(WHATSAPP_ENV_KEYS.namespace, env);
   const templateMap = readTemplateMap(WHATSAPP_ENV_KEYS.templateMap, env);
 
   const missing: string[] = [];
   if (!authKey) missing.push(WHATSAPP_ENV_KEYS.authKey);
   if (!integratedNumber) missing.push(WHATSAPP_ENV_KEYS.integratedNumber);
+  if (!namespace) missing.push(WHATSAPP_ENV_KEYS.namespace);
   if (!templateMap) missing.push(WHATSAPP_ENV_KEYS.templateMap);
-  if (missing.length || !authKey || !integratedNumber || !templateMap) return { ok: false, missing };
+  if (missing.length || !authKey || !integratedNumber || !namespace || !templateMap) return { ok: false, missing };
 
-  return { ok: true, config: { authKey, integratedNumber, templateMap } };
+  return { ok: true, config: { authKey, integratedNumber, namespace, templateMap } };
 }
 
 // One typed entry point for the provider channels.

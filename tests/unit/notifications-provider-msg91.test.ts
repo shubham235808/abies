@@ -6,6 +6,7 @@ import { createMsg91WhatsappAdapter } from '@abies/domain/lib/notifications/msg9
 const KEYS = [
   'WHATSAPP_MSG91_AUTH_KEY',
   'WHATSAPP_MSG91_INTEGRATED_NUMBER',
+  'WHATSAPP_MSG91_NAMESPACE',
   'WHATSAPP_MSG91_TEMPLATE_MAP',
 ];
 
@@ -17,6 +18,7 @@ const OTP = '482913';
 function setWaEnv() {
   process.env.WHATSAPP_MSG91_AUTH_KEY = WA_AUTH;
   process.env.WHATSAPP_MSG91_INTEGRATED_NUMBER = '919999999999';
+  process.env.WHATSAPP_MSG91_NAMESPACE = 'ns-sentinel-080e7405';
   process.env.WHATSAPP_MSG91_TEMPLATE_MAP = JSON.stringify({ 'auth.otp_code': { en: 'wa_otp_en' } });
 }
 
@@ -59,18 +61,20 @@ describe('MSG91 WhatsApp adapter', () => {
 
     expect(result).toEqual({ ok: true, providerRef: 'wa-req-1' });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('https://control.msg91.com/api/v5/whatsapp/');
+    expect(url).toBe('https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/');
     expect((init.headers as Record<string, string>).authkey).toBe(WA_AUTH);
     const body = JSON.parse(init.body as string);
     expect(body.integrated_number).toBe('919999999999');
     expect(body.payload.template.name).toBe('wa_otp_en');
     expect(body.payload.template.language).toEqual({ code: 'en', policy: 'deterministic' });
+    expect(body.payload.template.namespace).toBe('ns-sentinel-080e7405');
     expect(body.payload.template.to_and_components).toEqual([
       {
         to: [NORMALISED],
         components: {
           body_1: { type: 'text', value: OTP },
           body_2: { type: 'text', value: '300' },
+          button_1: { subtype: 'url', type: 'text', value: OTP },
         },
       },
     ]);
@@ -115,6 +119,7 @@ describe('MSG91 WhatsApp adapter', () => {
     expect(result.error).toContain('BLOCKED_EXTERNAL_CONFIGURATION');
     expect(result.error).toContain('WHATSAPP_MSG91_AUTH_KEY');
     expect(result.error).toContain('WHATSAPP_MSG91_INTEGRATED_NUMBER');
+    expect(result.error).toContain('WHATSAPP_MSG91_NAMESPACE');
     expect(result.error).toContain('WHATSAPP_MSG91_TEMPLATE_MAP');
     expect(fetchMock).not.toHaveBeenCalled();
   });

@@ -10,6 +10,7 @@ import {
 const KEYS = [
   'WHATSAPP_MSG91_AUTH_KEY',
   'WHATSAPP_MSG91_INTEGRATED_NUMBER',
+  'WHATSAPP_MSG91_NAMESPACE',
   'WHATSAPP_MSG91_TEMPLATE_MAP',
 ];
 
@@ -18,6 +19,7 @@ const WA_MAP = JSON.stringify({ 'auth.otp_code': { en: 'wa_template_sentinel' } 
 const FULL_WA = {
   WHATSAPP_MSG91_AUTH_KEY: 'WA-AUTHKEY-SENTINEL',
   WHATSAPP_MSG91_INTEGRATED_NUMBER: '919999999999',
+  WHATSAPP_MSG91_NAMESPACE: 'ns-sentinel',
   WHATSAPP_MSG91_TEMPLATE_MAP: WA_MAP,
 };
 
@@ -44,7 +46,12 @@ describe('readWhatsappConfig', () => {
   it('lists every missing WhatsApp key by name', () => {
     expect(readWhatsappConfig()).toEqual({
       ok: false,
-      missing: ['WHATSAPP_MSG91_AUTH_KEY', 'WHATSAPP_MSG91_INTEGRATED_NUMBER', 'WHATSAPP_MSG91_TEMPLATE_MAP'],
+      missing: [
+        'WHATSAPP_MSG91_AUTH_KEY',
+        'WHATSAPP_MSG91_INTEGRATED_NUMBER',
+        'WHATSAPP_MSG91_NAMESPACE',
+        'WHATSAPP_MSG91_TEMPLATE_MAP',
+      ],
     });
   });
 });

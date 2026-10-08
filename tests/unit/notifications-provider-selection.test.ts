@@ -32,6 +32,7 @@ afterEach(() => {
     'WHATSAPP_MSG91_AUTH_KEY',
     'WHATSAPP_MSG91_INTEGRATED_NUMBER',
     'WHATSAPP_MSG91_TEMPLATE_MAP',
+    'WHATSAPP_MSG91_NAMESPACE',
   ]) {
     delete process.env[k];
   }
@@ -42,13 +43,14 @@ describe('getAdapter provider selection', () => {
     envState.value = { ...envState.value, WHATSAPP_PROVIDER: 'msg91' };
     process.env.WHATSAPP_MSG91_AUTH_KEY = 'k';
     process.env.WHATSAPP_MSG91_INTEGRATED_NUMBER = '919999999999';
+    process.env.WHATSAPP_MSG91_NAMESPACE = 'ns';
     process.env.WHATSAPP_MSG91_TEMPLATE_MAP = JSON.stringify({ 'auth.otp_code': { en: 'wa_otp' } });
     fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ request_id: 'wa-1' }) });
 
     const adapter = getAdapter('WHATSAPP');
     const result = await adapter!.send({ userId: 'u1', mobile: '9876543210' }, 'auth.otp_code', { otp: '1' });
     expect(result).toEqual({ ok: true, providerRef: 'wa-1' });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://control.msg91.com/api/v5/whatsapp/');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/');
   });
 
   it('returns the MSG91 WhatsApp adapter with incomplete config, which then fails permanently', async () => {

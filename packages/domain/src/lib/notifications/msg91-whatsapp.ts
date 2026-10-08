@@ -10,21 +10,31 @@ import {
 
 // MSG91 WhatsApp template send.
 //
-// VERIFY BEFORE ACTIVATION: the endpoint path and the body shape below
-// (integrated_number, content_type, payload.template.to_and_components) must be
-// checked against MSG91's current WhatsApp documentation, and the template
-// language code must match the approved template exactly (for example "en"
-// versus "en_US"). This is a credential-dependent step. Do not set
-// WHATSAPP_PROVIDER=msg91 in any environment until a real send has been
-// checked against a sandbox number.
+// Endpoint and body shape confirmed against a real, working example supplied
+// by the user (2026-10-08) — api.msg91.com's bulk outbound endpoint, not
+// control.msg91.com (the earlier guess here was wrong; this is the likely
+// reason WhatsApp delivery was never actually working). The template
+// language code must still match the approved template exactly (for example
+// "en" versus "en_US").
+//
+// button_1 ASSUMPTION, NOT YET CONFIRMED: abies_auth_otp has a button
+// component (user-confirmed 2026-10-08), but exactly what dynamic value that
+// button needs wasn't specified — the example supplied was generic MSG91
+// documentation with placeholder values. This adapter assumes the button's
+// url-subtype dynamic variable is the same OTP code as body_1 (the common
+// "tap to verify" pattern, where the template's own configured base URL has
+// the code appended). VERIFY against a real sandbox send before trusting
+// this for real users — if the button needs something else (a full
+// pre-built URL, a different value), this needs to change.
 //
 // WHATSAPP_MSG91_TEMPLATE_MAP values are approved WhatsApp template names,
-// keyed by ABIES template key and language.
+// keyed by ABIES template key and language. WHATSAPP_MSG91_NAMESPACE is one
+// value for the whole WhatsApp Business Account, not per-template.
 //
 // Error text never includes the mobile number, the message body, the auth
 // key, or any provider response text.
 
-const ENDPOINT = 'https://control.msg91.com/api/v5/whatsapp/';
+const ENDPOINT = 'https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/';
 const TIMEOUT_MS = 10_000;
 
 export function createMsg91WhatsappAdapter(): NotificationAdapter {
@@ -48,9 +58,16 @@ export function createMsg91WhatsappAdapter(): NotificationAdapter {
       }
 
       // Body variables become body_1, body_2, ... in payload order.
-      const components = Object.fromEntries(
-        scalarVariables(payload).map(([, value], index) => [`body_${index + 1}`, { type: 'text', value }]),
+      const variables = scalarVariables(payload);
+      const components: Record<string, { type: string; value?: string; subtype?: string }> = Object.fromEntries(
+        variables.map(([, value], index) => [`body_${index + 1}`, { type: 'text', value }]),
       );
+      // See this file's header: abies_auth_otp has a url-subtype button whose
+      // dynamic value is assumed to be the same first variable (the OTP code)
+      // — not yet confirmed against a real sandbox send.
+      if (variables.length > 0) {
+        components.button_1 = { subtype: 'url', type: 'text', value: variables[0][1] };
+      }
       const body = {
         integrated_number: cfg.integratedNumber,
         content_type: 'template',
@@ -60,6 +77,7 @@ export function createMsg91WhatsappAdapter(): NotificationAdapter {
           template: {
             name: templateName,
             language: { code: language, policy: 'deterministic' },
+            namespace: cfg.namespace,
             to_and_components: [{ to: [mobile], components }],
           },
         },

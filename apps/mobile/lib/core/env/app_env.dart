@@ -19,11 +19,18 @@ class AppEnv {
     const raw = String.fromEnvironment('ABIES_ENV', defaultValue: 'dev');
     switch (raw) {
       case 'uat':
-        // No UAT environment exists yet (docs/mobile/CURRENT-BACKEND-API.md §7).
-        // Placeholder — confirm the real hostname before this is used for anything.
-        return const AppEnv._(Flavor.uat, 'https://uat.abies.in');
+        // abies-uat is real now (2026-10-08, docs/platform/UAT-ABIES-IN-HOSTNAME.md
+        // in this repo) — deployed and healthy in-cluster on the abies-gateway
+        // Gateway. Same hostname as below on purpose: see that doc's "what this
+        // does NOT do" section before assuming this actually reaches abies-uat
+        // from a real phone right now.
+        return const AppEnv._(Flavor.uat, 'https://abies.in');
       case 'prod':
-        // No production environment exists yet either. Placeholder.
+        // No production environment exists IN THIS CLUSTER yet — the real,
+        // live abies.in today is the separate standalone VM (Docker Compose),
+        // not Kubernetes. Same URL as uat above, deliberately: until abies.in's
+        // DNS is pointed at this cluster, both flavors reach whatever abies.in
+        // currently resolves to publicly (the VM), not abies-uat.
         return const AppEnv._(Flavor.prod, 'https://abies.in');
       case 'dev':
       default:
