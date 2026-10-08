@@ -65,8 +65,9 @@ export function createMsg91WhatsappAdapter(): NotificationAdapter {
       // See this file's header: abies_auth_otp has a url-subtype button whose
       // dynamic value is assumed to be the same first variable (the OTP code)
       // — not yet confirmed against a real sandbox send.
-      if (variables.length > 0) {
-        components.button_1 = { subtype: 'url', type: 'text', value: variables[0][1] };
+      const firstVariable = variables[0];
+      if (firstVariable) {
+        components.button_1 = { subtype: 'url', type: 'text', value: firstVariable[1] };
       }
       const body = {
         integrated_number: cfg.integratedNumber,
