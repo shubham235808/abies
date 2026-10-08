@@ -78,6 +78,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Center(
+                  // Decorative — the "Welcome to ABIES Ayurveda" heading right
+                  // below already says the same thing; a semantic label here
+                  // would make a screen reader announce it twice.
+                  child: Image.asset(
+                    'assets/images/abies-mark.png',
+                    width: 64,
+                    height: 64,
+                    excludeFromSemantics: true,
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Text('Welcome to ABIES Ayurveda', style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
                 Text(

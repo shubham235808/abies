@@ -56,3 +56,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Real ABIES brand mark (apps/client-web/public/abies-mark.png — what the
+  # website's own header/footer use), not the placeholder Flutter default.
+  assets:
+    - assets/images/abies-mark.png

@@ -41,7 +41,22 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ABIES Ayurveda'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Decorative — the adjacent "ABIES Ayurveda" text already says
+            // the same thing; excluded so a screen reader doesn't announce
+            // it twice.
+            Image.asset(
+              'assets/images/abies-mark.png',
+              width: 32,
+              height: 32,
+              excludeFromSemantics: true,
+            ),
+            const SizedBox(width: 10),
+            const Text('ABIES Ayurveda'),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
