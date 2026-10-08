@@ -95,6 +95,17 @@ class _DoctorDetailBody extends ConsumerWidget {
                       width: 72,
                       height: 72,
                       fit: BoxFit.cover,
+                      // Phase 10 perf fix: without cacheWidth/cacheHeight,
+                      // Flutter decodes this network image at its full
+                      // original resolution into memory even though it's
+                      // only ever displayed at 72x72 — an uploaded doctor
+                      // photo can legitimately be several megapixels. This
+                      // decodes at the actual display size (scaled for the
+                      // device's pixel ratio), per Flutter's own guidance
+                      // (docs.flutter.dev/perf/best-practices —
+                      // "Resize images for the device before fetching").
+                      cacheWidth: (72 * MediaQuery.of(context).devicePixelRatio).round(),
+                      cacheHeight: (72 * MediaQuery.of(context).devicePixelRatio).round(),
                       errorBuilder: (_, __, ___) => const CircleAvatar(radius: 36, child: Icon(Icons.person)),
                       loadingBuilder: (context, child, progress) =>
                           progress == null ? child : const SizedBox(width: 72, height: 72, child: LoadingSkeleton(height: 72, width: 72)),

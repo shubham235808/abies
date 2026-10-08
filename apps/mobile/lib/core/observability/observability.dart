@@ -3,8 +3,14 @@
 /// SDK directly — so Sentry/Crashlytics/anything else can be swapped in
 /// later by changing only the implementation registered here.
 ///
-/// No implementation is wired up yet (Phase 10). [NoopObservability] is the
-/// default so nothing crashes for lack of a provider during Phases 1-9.
+/// [NoopObservability] is the default, and remains the real behavior for
+/// every build so far — Phase 10 added a real implementation
+/// ([SentryHttpObservability] in `sentry_http_observability.dart`), but it
+/// only activates when a `SENTRY_DSN` dart-define is actually supplied
+/// (`resolveObservability()`), which no build (`main_dev.dart`/
+/// `main_uat.dart`/`main_prod.dart`) does yet. See that file's doc comment
+/// for why it's a hand-rolled HTTP sender rather than `package:
+/// sentry_flutter` directly.
 abstract class Observability {
   void recordError(Object error, StackTrace stackTrace, {String? context});
 

@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 
 import '../env/app_env.dart';
+import '../observability/observability.dart';
 import '../storage/secure_cookie_storage.dart';
 import 'api_exception.dart';
 
@@ -21,8 +22,9 @@ import 'api_exception.dart';
 /// client's only job on a 401 is to drop local session state and let the app
 /// route to sign-in. It never attempts a silent re-auth.
 class ApiClient {
-  ApiClient({required AppEnv env, Dio? dio, PersistCookieJar? cookieJar})
+  ApiClient({required AppEnv env, Dio? dio, PersistCookieJar? cookieJar, Observability? observability})
       : _env = env,
+        _observability = observability ?? const NoopObservability(),
         _cookieJar = cookieJar ?? PersistCookieJar(storage: SecureCookieStorage()),
         _dio = dio ?? Dio(BaseOptions(baseUrl: env.baseUrl, connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 20))) {
     _dio.interceptors.add(CookieManager(_cookieJar));
@@ -32,6 +34,7 @@ class ApiClient {
   final AppEnv _env;
   final Dio _dio;
   final PersistCookieJar _cookieJar;
+  final Observability _observability;
 
   /// Fires once per 401 response, so the app (not this client) decides how to
   /// route to sign-in. This client never calls it more than once per actual
@@ -52,7 +55,7 @@ class ApiClient {
   }
 
   Future<T> get<T>(String path, {Map<String, dynamic>? query, required T Function(dynamic json) decode}) {
-    return _send(() => _dio.get(path, queryParameters: query), decode);
+    return _send(path, () => _dio.get(path, queryParameters: query), decode);
   }
 
   /// [idempotencyKey], when given, is sent as the `Idempotency-Key` header
@@ -63,7 +66,7 @@ class ApiClient {
   /// (a fresh key every time defeats the whole point).
   Future<T> post<T>(String path, {Object? body, String? idempotencyKey, required T Function(dynamic json) decode}) {
     final options = idempotencyKey == null ? null : Options(headers: {'Idempotency-Key': idempotencyKey});
-    return _send(() => _dio.post(path, data: body, options: options), decode);
+    return _send(path, () => _dio.post(path, data: body, options: options), decode);
   }
 
   /// One key per booking/order attempt — reuse it across that attempt's own
@@ -75,19 +78,24 @@ class ApiClient {
   }
 
   Future<T> patch<T>(String path, {Object? body, required T Function(dynamic json) decode}) {
-    return _send(() => _dio.patch(path, data: body), decode);
+    return _send(path, () => _dio.patch(path, data: body), decode);
   }
 
   Future<T> delete<T>(String path, {required T Function(dynamic json) decode}) {
-    return _send(() => _dio.delete(path), decode);
+    return _send(path, () => _dio.delete(path), decode);
   }
 
-  Future<T> _send<T>(Future<Response<dynamic>> Function() request, T Function(dynamic json) decode) async {
+  Future<T> _send<T>(String path, Future<Response<dynamic>> Function() request, T Function(dynamic json) decode) async {
     try {
       final response = await request();
       return decode(response.data);
     } on DioException catch (error) {
       final mapped = _mapError(error);
+      // Status code + path + request id only — never the request/response
+      // body (docs/mobile/SECURITY-DESIGN.md §7; recordApiFailure's own
+      // signature doesn't accept one), and never blocking/throwing: a
+      // broken DSN must never become a second failure on top of this one.
+      _observability.recordApiFailure(path: path, statusCode: mapped.statusCode, requestId: mapped.requestId);
       if (mapped.isUnauthorized) {
         // Session is gone server-side (expired, revoked, or never existed) —
         // never attempt to keep using it. The app's own listener clears local

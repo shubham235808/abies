@@ -4,32 +4,36 @@ Patient-facing Android + iOS app for the ABIES Ayurveda platform. Consumes the s
 the website uses (see `docs/mobile/CURRENT-BACKEND-API.md`) — no separate database, no duplicated
 business logic. Read `docs/mobile/MOBILE-ARCHITECTURE.md` before changing anything structural here.
 
-## Status — honest, as of 2026-10-07
+## Status — honest, as of 2026-10-08
 
-Phase 1 (foundation), Phase 2 (auth + patient profile), Phase 3 (home dashboard), Phase 4 (doctor
-discovery and appointments), Phase 5 (Panchakarma discovery and bookings), Phase 6 (diagnostics
-discovery, booking, orders, reports, recommendations) and Phase 7 (pharmacy catalogue, cart, checkout,
-medicine orders, and prescriptions) of `docs/mobile/IMPLEMENTATION-PLAN.md`, **now actually verified**,
-not just written. Flutter 3.47.6 (stable), a Temurin JDK 21 and the Android SDK (platform 35/36,
-build-tools) are installed and this ran for real:
+Phase 1 (foundation) through Phase 8 (idempotency keys) of `docs/mobile/IMPLEMENTATION-PLAN.md`, plus
+Phase 10 (security hardening, observability, performance — Phase 9/push-notifications and Phase
+11/release engineering are explicitly blocked on external accounts this environment doesn't have, see
+IMPLEMENTATION-PLAN.md), **now actually verified**, not just written. Flutter 3.47.6 (stable), a
+Temurin JDK 21 and the Android SDK (platform 35/36, build-tools) are installed and this ran for real:
 
-- `flutter pub get` — resolved all dependencies from this `pubspec.yaml` (no new dependencies needed for
-  Phase 7 — the `path_provider`/`url_launcher` Phase 6 added are unused here, since Phase 7 has no
-  document to view/download, see `lib/features/prescriptions/PHASE.md`).
+- `flutter pub get` — resolved all dependencies from this `pubspec.yaml` (Phase 10 added **no new
+  dependency** — see "What Phase 10 added" below for why `sentry_flutter` was tried and reverted).
 - `flutter analyze` — clean.
-- `flutter test` — **all 167 unit tests pass** (the original 132 through Phase 6, plus 35 added for
-  Phase 7), for real, under the actual Flutter test runner.
+- `flutter test` — **all 187 unit tests pass** (169 through Phase 8, plus 18 added for Phase 10's
+  `Observability` implementation), for real, under the actual Flutter test runner.
 - `android/` was generated for real by `flutter create --org in.abies --project-name abies_mobile
   --platforms=android`, then merged in without touching the hand-written `lib/`, `pubspec.yaml`, or
   `analysis_options.yaml` (which gained a generated `exclude: - android/**` line).
 - `flutter build apk --debug --dart-define=ABIES_ENV=dev -t lib/main_dev.dart` — **built a real, valid
-  APK** (`build/app/outputs/flutter-apk/app-debug.apk`, ~176MB unoptimized debug build with Phase 7's
-  code added).
+  APK** (`build/app/outputs/flutter-apk/app-debug.apk`, ~184MB unoptimized debug build) with no
+  `SENTRY_DSN` define, proving the Observability abstraction's default (Noop) path.
+- The same build, repeated with `--dart-define=SENTRY_DSN=https://fake@example.com/1` (a
+  syntactically-plausible but fake DSN) — **also built successfully**, proving the DSN-gated real
+  implementation at least compiles and activates on startup without crashing, even though nothing real
+  is behind that fake DSN (it would just send events into the void against `example.com`).
 
 **What's still not verified**: this APK has not been installed or run on a device or emulator — the
 analyzer/test/build passing is strong evidence the code is sound, not proof every screen behaves
-correctly at runtime. **iOS cannot be built or verified at all from this environment** — that needs
-Xcode on macOS, which doesn't exist here; nothing in this repo claims otherwise.
+correctly at runtime, and nothing about cold-start time, scroll FPS or memory was actually measured
+(no device/emulator exists in this environment — Phase 10's performance work is a code-level audit
+only, see its section below). **iOS cannot be built or verified at all from this environment** — that
+needs Xcode on macOS, which doesn't exist here; nothing in this repo claims otherwise.
 
 If you're reading this on a different machine without the SDK installed: get Flutter from
 https://flutter.dev, run `flutter pub get` in this directory, and `flutter analyze`/`flutter test`
@@ -291,6 +295,110 @@ preview already hinted at using only `area`/`limit`:
   thinner model has no pharmacy id to jump straight to a specific medicine with, and there's no
   detail-by-id route to resolve one against regardless, so the real catalogue screen is the honest
   destination) — the same minimal, justified pattern every prior phase used.
+
+## What Phase 10 added
+
+A `docs/mobile/SECURITY-DESIGN.md` checklist pass against the actual Phase 1-8 code (not just in
+principle), a real `Observability` implementation, and a code-level performance audit
+(`docs/mobile/IMPLEMENTATION-PLAN.md` Phase 10). No feature's business logic changed.
+
+**Security audit — section by section** (full detail in `docs/mobile/SECURITY-DESIGN.md`, which this
+phase updated to match what was actually found):
+
+- §1 Transport, §2 Session storage, §4 Authorization, §9 WebViews, §11 API abuse surface: all
+  **confirmed already correct**, no fix needed. No `android:usesCleartextTraffic`/network-security-
+  config override exists (Android's own secure default holds), the cookie jar is genuinely
+  `flutter_secure_storage`-backed everywhere (`lib/core/storage/secure_cookie_storage.dart`), `AuthController.signOut()` really does call `POST /api/v1/auth/logout` before clearing the local cookie jar
+  (`lib/features/auth/presentation/auth_controller.dart:49-52`, `lib/features/auth/data/auth_api.dart:86-89`), there's no role-gated UI anywhere to accidentally rely on as a security control (this is a
+  patient-only app — every account is created `role: 'PATIENT'`), there is no `WebView` widget anywhere
+  in `lib/` (grepped, not assumed), and every search screen applies filters/queries only on an explicit
+  submit/Apply tap, never per-keystroke, so nothing here could retry-storm the backend's rate limits.
+- §3 Biometric unlock: **confirmed still not built**, correctly. `local_auth` remains a declared-but-
+  unused Phase-1 dependency (`pubspec.yaml`); nothing in this phase half-builds it, per the brief's own
+  instruction not to add scope here.
+- §5 Root/jailbreak detection: **confirmed still not implemented**, correctly — reserved for a future
+  finding that justifies it, per the design doc's own stated posture. Not touched.
+- §6 Screenshot/recording restriction: **confirmed correctly not added**, and deliberately still not
+  added after re-reading §6's own scoping rule. §6 scopes this to "the prescription document viewer and
+  any screen rendering a full payment instrument" — neither exists as an in-app screen. There is no
+  Razorpay SDK/payment-instrument UI integrated yet (Phases 4-8 all stop at a 503 `serviceUnavailable`
+  state before any real payment screen renders), and Phase 7 already found prescriptions have no
+  document/viewer at all (no storage-key field in the schema). The one real in-app document flow
+  (diagnostic reports, Phase 6) deliberately hands the signed URL to the *external* system
+  browser/viewer (`url_launcher`), never rendering it inside this app's own window — so a Flutter-side
+  screenshot restriction would have nothing of the document to actually protect even if added.
+- §7 Logging/PII: **audited directly, nothing found** — grepped every `print`/`debugPrint`/`log(` call
+  across all of `lib/` (not just the obvious spots); the only hits were unrelated `AlertDialog
+  builder:` callbacks, not logging. `ApiClient._mapError()` (`lib/core/api/api_client.dart`) never logs
+  or forwards a raw response body anywhere, in any build mode — it extracts only `message`/`issues`/
+  `statusCode`/`requestId` from the response and discards the rest. This section's real work was
+  building the redaction discipline *forward* into the new Observability implementation (below), not
+  fixing an existing leak — there wasn't one.
+- §8 File handling: **confirmed Phase 7 didn't regress Phase 6's discipline** — Phase 7 added no
+  report/prescription document code at all (prescriptions have no document field, see above), so
+  there was nothing to regress. The diagnostic report downloader still saves only to
+  `path_provider`'s app-private directory.
+- §10 Dependency/build security: `flutter pub outdated` ran clean — no package reports a known
+  vulnerability, only two discontinued-but-not-insecure transitive packages (`flutter_secure_storage_macos`,
+  `js`), neither reachable on this app's actual target platforms (Android/iOS). No `osv-scanner` or
+  `dart pub audit` is available in this environment (this Dart SDK — 3.13.5 — has no `pub audit`
+  subcommand, and `osv-scanner` isn't installed) — this is an honest environment gap, not a finding one
+  way or the other; wiring a real scanner into CI is Phase 11 territory (this repo's existing
+  `docs/security/SECRET-ROTATION-CHECKLIST.md` discipline already covers signing-key/credential
+  handling, untouched here).
+
+**Observability** (`lib/core/observability/`): [`Observability`](lib/core/observability/observability.dart)
+already existed as an interface with a `NoopObservability` default (Phase 1-9 never implemented it).
+This phase built a real implementation — **not** `package:sentry_flutter`. That SDK was actually tried
+first (`flutter pub add sentry_flutter`, which resolved fine), but `flutter build apk --debug` then
+failed at `:sentry_flutter:compileDebugKotlin` ("Language version 1.6 is no longer supported") because
+`sentry_flutter` is a real Android/iOS native plugin whose own Kotlin/Gradle requirement is
+incompatible with this sandbox's toolchain — exactly the "needs native setup beyond what a build here
+can handle" case the phase brief said to watch for. The dependency was reverted (`git diff pubspec.yaml`
+is empty) in favor of `SentryHttpObservability`
+(`lib/core/observability/sentry_http_observability.dart`): a small, dependency-free sender that talks
+directly to Sentry's plain HTTP "store" ingestion endpoint over `dart:io`'s `HttpClient` — no SDK, no
+native plugin, so it compiles and runs anywhere this app already does. If a real Sentry DSN is ever
+provisioned, this starts actually reporting the moment the dart-define is supplied; no code change
+needed.
+
+- **Gating**: `resolveObservability()` reads the `SENTRY_DSN` dart-define and returns
+  `NoopObservability` when it's empty (every build so far, including every build this phase produced)
+  — the same inactive-until-configured pattern this backend already uses everywhere else
+  (`EMAIL_PROVIDER=mock`, blank Razorpay keys). A malformed non-empty DSN also falls back to Noop
+  rather than crashing startup.
+- **Wiring**: `ApiClient._send()` (`lib/core/api/api_client.dart`) now calls
+  `observability.recordApiFailure(path:, statusCode:, requestId:)` on every mapped `ApiException` — the
+  method's own signature never accepts a request/response body, so there is structurally nothing to
+  leak there. `main_dev.dart`/`main_uat.dart`/`main_prod.dart` install `FlutterError.onError` and
+  `PlatformDispatcher.instance.onError` before `runApp`, so a genuinely unhandled error is reported
+  through the same abstraction instead of only crashing/printing to the console — both handlers still
+  let Flutter's own default behavior run too (nothing about debug output regressed).
+- **Redaction**: `redactForObservability()` mirrors the backend's `redactForStorage()` discipline,
+  masking anything email-shaped and any run of 4+ digits (covers OTP codes and mobile numbers, at the
+  cost of also masking harmless numeric ids — a deliberate conservative tradeoff) in every string this
+  implementation ever sends. Unit-tested in `test/unit/observability_test.dart`.
+- **Real limits, stated plainly**: no breadcrumbs, no session/release health tracking, no native
+  (NDK-level) crash capture — this is Dart-exception and API-failure reporting only, fire-and-forget,
+  single-attempt (no retry), with a 5-second timeout, swallowing its own send failures so a bad/
+  unreachable DSN can never itself become a second failure. `setUserContext()` is implemented and
+  tested but not yet called from `AuthController` — wiring a pseudonymous user id into every event
+  wasn't required by this phase's brief and would have meant touching auth's own code for a feature
+  nobody asked for here.
+
+**Performance** (code-level audit only — no device/emulator exists in this environment, see "Status"
+above): `flutter analyze` already enforces `prefer_const_constructors` via `flutter_lints` and was
+clean before this phase touched anything, so there was no missing-`const` backlog to fix. Every
+genuinely growing list already uses `ListView.builder`/`GridView.builder` (12 call sites); the plain
+`ListView(...)`/`Column(...)` usages found are all bounded detail-screen content (cart items, order line
+items, family members, booking sessions — realistically a handful, not a page), which is an appropriate,
+not a missing, choice. Every search field applies on explicit submit, never per-keystroke, so there's no
+debounce to add. The one real finding: `doctor_detail_screen.dart`'s `Image.network` call (the only
+`Image.network` anywhere in `lib/` — every other photo path already uses a redirect/placeholder, not a
+raw network image) had no `cacheWidth`/`cacheHeight`, so Flutter was decoding a doctor's uploaded photo
+at its full original resolution into memory even though it's only ever displayed at 72×72. Fixed by
+decoding at the actual display size scaled for the device's pixel ratio
+(`lib/features/doctors/presentation/doctor_detail_screen.dart`).
 
 ## Layout
 

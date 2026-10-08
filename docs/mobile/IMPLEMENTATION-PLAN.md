@@ -360,9 +360,68 @@ back to the website, verified by test, not by inspection.
 
 ## Phase 10 — Security hardening, observability, performance
 
-Runs the full SECURITY-DESIGN.md checklist against the app built in Phases 1-9 (not a parallel-track
-item — it's a gate on everything already built). Observability abstraction wired to a real provider.
-Performance pass: cold-start time, list-scroll jank, image loading on the catalogue screens.
+**Implemented and verified, 2026-10-08** — against the app actually built through Phase 8 (Phase 9,
+push notifications, is explicitly not built yet — blocked on a Firebase project this environment
+doesn't have — so there was nothing push-related for this pass to audit; this ran the full
+SECURITY-DESIGN.md checklist against Phases 1-8 as they actually exist, section by section, not just
+in principle). See `apps/mobile/README.md` "What Phase 10 added" for the full section-by-section
+findings; summarized here:
+
+- §1/§2/§4/§9/§11 (transport, session storage, authorization, WebViews, API abuse surface): all
+  confirmed already correct by reading the actual code, no fix needed.
+- §3 (biometric) and §5 (root/jailbreak): confirmed still correctly not built — not in this phase's
+  scope, not half-built here either.
+- §6 (screenshot restriction): confirmed correctly not added, re-checked against §6's own scoping rule
+  (neither target surface — an in-app payment-instrument screen, an in-app prescription viewer — exists
+  yet).
+- §7 (logging/PII): audited every `print`/`debugPrint`/logging call in `lib/`, including `ApiClient`'s
+  own error-mapping path specifically — no leak found. Built the redaction discipline forward into the
+  new Observability implementation instead.
+- §8 (file handling): confirmed Phase 7 did not regress Phase 6's app-private-storage discipline (Phase
+  7 added no document code to regress).
+- §10 (dependency/build security): `flutter pub outdated` run and reported; no `osv-scanner`/`dart pub
+  audit` available in this environment — stated as an honest gap, not papered over.
+
+**Observability**: `Observability` (`lib/core/observability/observability.dart`, existed since Phase 1
+as an interface + `NoopObservability`) now has a real implementation,
+`SentryHttpObservability` (`lib/core/observability/sentry_http_observability.dart`) — a dependency-free
+HTTP sender that speaks Sentry's plain "store" ingestion protocol directly, **not**
+`package:sentry_flutter`. That SDK was tried first and reverted: it resolved via `flutter pub add`, but
+`flutter build apk --debug` failed at `:sentry_flutter:compileDebugKotlin` (a Kotlin-Gradle-Plugin
+version incompatible with this sandbox's toolchain) — a real, reproducible native-build failure, not a
+guess. Gated on the `SENTRY_DSN` dart-define (empty in every build so far, including every build this
+phase itself produced); wired into `ApiClient`'s error path (`recordApiFailure`) and a top-level
+`FlutterError.onError`/`PlatformDispatcher.instance.onError` handler in all three `main_*.dart` entry
+points. Redaction (`redactForObservability()`) mirrors the backend's `redactForStorage()` discipline.
+18 new unit tests (`test/unit/observability_test.dart`) cover DSN-gated activation (empty/valid/
+malformed DSN) and redaction (email, OTP/mobile-number-shaped digit runs).
+
+**Performance**: code-level audit only — no device or emulator exists in this environment, so no
+cold-start time, scroll FPS, or memory was actually measured; this is stated plainly, not implied
+otherwise. Found and fixed one real issue: the app's only `Image.network` call (doctor detail photo,
+`lib/features/doctors/presentation/doctor_detail_screen.dart`) had no `cacheWidth`/`cacheHeight`, so a
+multi-megapixel uploaded photo was being decoded at full resolution to display at 72×72 — fixed by
+decoding at the actual display size. Everything else checked (const-constructor discipline, already
+enforced by `flutter_lints` and already clean; `ListView.builder`/`GridView.builder` on every genuinely
+growing list; no per-keystroke search triggering network calls) was already correct — reported as
+confirmed-fine, not padded with invented fixes.
+
+**Verification, real commands, real output** (`apps/mobile/` with Flutter 3.47.6 / JDK 21 / Android SDK
+36 as every prior phase used): `flutter analyze` clean; `flutter test` — all 187 tests pass (169 through
+Phase 8 + 18 new); `flutter build apk --debug --dart-define=ABIES_ENV=dev -t lib/main_dev.dart` — built
+a real APK with no `SENTRY_DSN` set; the same build repeated with
+`--dart-define=SENTRY_DSN=https://fake@example.com/1` — also built successfully, proving the DSN-gated
+path compiles and activates without crashing on startup (nothing real is behind that fake DSN — no
+network traffic to it was or could be verified as actually arriving anywhere, only that the app itself
+doesn't fail to build or start because of it).
+
+**Not done, explicitly out of scope for this phase**: SECURITY-REVIEW.md (the brief's §22 process
+artifact) was not produced as a separate document — this phase's findings live in
+`apps/mobile/README.md` and this entry instead, since no new Critical/High finding was discovered that
+would warrant one; `docs/mobile/SECURITY-DESIGN.md` itself was updated in place (§3/§5/§6/§7 sections)
+to describe the real, current state rather than staying a stale pre-Phase-10 description. CI
+integration of a dependency-vulnerability scanner is explicitly Phase 11 (release engineering)
+territory, not built here.
 
 Exit: SECURITY-REVIEW.md produced per the brief's §22 process, zero unresolved Critical/High findings.
 
