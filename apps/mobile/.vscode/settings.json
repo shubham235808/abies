@@ -1,0 +1,9 @@
+{
+  "dart.flutterSdkPath": "/home/devops/flutter",
+  "dart.sdkPath": "/home/devops/flutter/bin/cache/dart-sdk",
+  "dart.debugExternalPackageLibraries": false,
+  "dart.previewFlutterUiGuides": true,
+  "files.associations": {
+    "*.dart": "dart"
+  }
+}

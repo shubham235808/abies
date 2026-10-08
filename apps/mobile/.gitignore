@@ -19,3 +19,5 @@ build/
 **/*.keystore
 **/*.mobileprovision
 **/*.p12
+# Widget Preview related
+.widget_preview/
