@@ -71,7 +71,7 @@ export function createMsg91Adapter(): NotificationAdapter {
       try {
         const res = await fetch(ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', authkey: cfg.authKey },
+          headers: { 'Content-Type': 'application/json', accept: 'application/json', authkey: cfg.authKey },
           body: JSON.stringify({
             recipients: [
               {
