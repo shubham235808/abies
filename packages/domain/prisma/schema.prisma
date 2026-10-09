@@ -36,6 +36,11 @@ enum UserRole {
   SALES_MANAGER
   MARKETING
   AUDITOR
+  // Password-auth backend (docs/password-auth-backend.md), additive: new
+  // roles only. ADMIN is untouched — no existing row is remapped to
+  // SUPER_ADMIN, that was explicitly not requested.
+  FINANCE
+  SUPER_ADMIN
 }
 
 enum UserStatus {
@@ -62,6 +67,13 @@ model User {
   role                       UserRole                    @default(PATIENT)
   status                     UserStatus                  @default(ACTIVE)
   mfaEnabled                 Boolean                     @default(false)
+  // Password-auth backend (docs/password-auth-backend.md). Null means this
+  // account has never set a password — the OTP-only "legacy" state. This IS
+  // the migration marker (no separate migration-status field): null forces
+  // password setup on next login (auth.service.ts login()), non-null means
+  // the account already logs in with a password. Argon2id hash only, never
+  // the plaintext — see lib/password.ts.
+  passwordHash               String?
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
   patientProfile             PatientProfile?

@@ -37,6 +37,14 @@ const envSchema = z.object({
   // wired up until Phase 12).
   RATE_LIMIT_OTP_REQUEST_MAX: z.coerce.number().default(20),
   RATE_LIMIT_OTP_REQUEST_WINDOW_SECONDS: z.coerce.number().default(300),
+  // Brute-force protection on the password itself (password-auth backend,
+  // docs/password-auth-backend.md) — separate from and additional to the
+  // OTP request limit above. Enforced inside auth.service.ts login()
+  // (per-identifier, via the same checkRateLimit() Redis counter), not at
+  // the proxy.ts IP-scoped layer, since this guards one account against
+  // many password guesses rather than one caller's request volume.
+  RATE_LIMIT_LOGIN_MAX: z.coerce.number().default(10),
+  RATE_LIMIT_LOGIN_WINDOW_SECONDS: z.coerce.number().default(300),
   RATE_LIMIT_TICKET_CREATE_MAX: z.coerce.number().default(30),
   RATE_LIMIT_TICKET_CREATE_WINDOW_SECONDS: z.coerce.number().default(600),
   RATE_LIMIT_WEBHOOK_MAX: z.coerce.number().default(120),
