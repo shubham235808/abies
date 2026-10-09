@@ -40,6 +40,16 @@ const h = vi.hoisted(() => {
         Object.assign(row, data);
         return row;
       },
+      create: async ({ data }: { data: Record<string, any> }) => {
+        if (state.users.some((u) => u.mobile === data.mobile || u.email === data.email)) {
+          const err: any = new Error('Unique constraint failed');
+          err.code = 'P2002';
+          throw err;
+        }
+        const row = { id: `u${++state.seq}`, status: 'ACTIVE', ...data };
+        state.users.push(row);
+        return row;
+      },
     },
     otpChallenge: {
       findUnique: async ({ where }: { where: { id: string } }) =>
@@ -124,6 +134,7 @@ vi.mock('../../packages/domain/src/server/session', () => ({
 import {
   completePasswordSetup,
   login,
+  register,
   requestPasswordReset,
   resetPassword,
 } from '@abies/domain/modules/auth/auth.service';
@@ -140,6 +151,44 @@ beforeEach(() => {
   h.checkRateLimit.mockClear().mockResolvedValue(true);
   h.hashPassword.mockClear();
   h.verifyPassword.mockClear();
+});
+
+describe('register', () => {
+  it('creates an account with a password set immediately — no OTP step', async () => {
+    const result = await register({ name: 'Asha Rao', mobile: '9876543210', email: 'asha@example.com', password: 'correct-password-123' });
+
+    expect(h.hashPassword).toHaveBeenCalledWith('correct-password-123');
+    expect(h.state.users).toHaveLength(1);
+    expect(h.state.users[0]).toMatchObject({
+      name: 'Asha Rao',
+      mobile: '+919876543210',
+      email: 'asha@example.com',
+      role: 'PATIENT',
+      passwordHash: 'hashed:correct-password-123',
+    });
+    expect(h.createSession).toHaveBeenCalledWith(expect.objectContaining({ userId: h.state.users[0].id, role: 'PATIENT' }));
+    expect(result.token).toBeTruthy();
+    expect(h.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: h.state.users[0].id }),
+      expect.objectContaining({ action: 'REGISTER' }),
+    );
+  });
+
+  it('never accepts a role from the caller — always PATIENT, even if one were somehow passed through', async () => {
+    // register()'s own signature has no role parameter at all — this test
+    // documents that guarantee at the type level by construction (the call
+    // below wouldn't compile with a role field), not just by assertion.
+    await register({ name: 'Test', mobile: '9876543211', email: 'test2@example.com', password: 'correct-password-123' });
+    expect(h.state.users[0].role).toBe('PATIENT');
+  });
+
+  it('rejects a duplicate mobile or email with a clear error, not a 500', async () => {
+    await register({ name: 'First', mobile: '9876543212', email: 'dup@example.com', password: 'correct-password-123' });
+    await expect(
+      register({ name: 'Second', mobile: '9876543212', email: 'different@example.com', password: 'correct-password-123' }),
+    ).rejects.toThrow(/already exists/i);
+    expect(h.state.users).toHaveLength(1);
+  });
 });
 
 describe('login', () => {

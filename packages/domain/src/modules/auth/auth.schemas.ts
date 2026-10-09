@@ -52,6 +52,21 @@ const newPasswordField = z
   .min(12, 'Password must be at least 12 characters')
   .max(256, 'Password is too long');
 
+// Self-service registration (user's explicit requirement, 2026-10-09):
+// unlike requestOtpSchema/loginSchema's "mobile OR email" login pattern,
+// registration requires BOTH — the account must be reachable both ways
+// from day one, not grow an email later. Role is never accepted from the
+// request body: register() always creates PATIENT, matching the brief's
+// own "public registration must never allow users to assign themselves
+// privileged roles." Admin/staff accounts are provisioned a different way
+// (see docs/password-auth-backend.md), not through this endpoint.
+export const registerSchema = z.object({
+  name: z.string().trim().min(1, 'Enter your name').max(200),
+  mobile: z.string().min(1, 'Enter your mobile number'),
+  email: z.string().trim().email('Enter a valid email address'),
+  password: newPasswordField,
+});
+
 export const completePasswordSetupSchema = z.object({
   requestId: z.string().min(1),
   otp: z.string().min(4).max(8),

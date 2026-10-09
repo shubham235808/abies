@@ -278,6 +278,55 @@ async function recordLoginFailure(
   throw new UnauthorizedError('Invalid credentials');
 }
 
+export interface RegisterResult {
+  token: string;
+  session: Awaited<ReturnType<typeof createSession>>['session'];
+}
+
+// Self-service registration — create the account with a password set
+// immediately (no OTP step, per the user's explicit spec: fill the form,
+// click create account, log in). Always role: PATIENT — see
+// registerSchema's own comment for why the role is never accepted from
+// the caller. Mobile/email uniqueness is enforced by the DB's existing
+// @unique constraints; a race between two concurrent registrations for
+// the same mobile/email is caught below (Prisma P2002), not prevented by
+// a check-then-create gap.
+export async function register(input: {
+  name: string;
+  mobile: string;
+  email: string;
+  password: string;
+  meta?: { ip?: string; userAgent?: string };
+}): Promise<RegisterResult> {
+  const mobile = normalizeMobile(input.mobile);
+  const email = input.email.trim().toLowerCase();
+  const passwordHash = await hashPassword(input.password);
+
+  let user: Awaited<ReturnType<typeof prisma.user.create>>;
+  try {
+    user = await prisma.user.create({
+      data: { name: input.name.trim(), mobile, email, passwordHash, role: 'PATIENT', status: 'ACTIVE' },
+    });
+  } catch (err: unknown) {
+    // Prisma's unique-constraint violation — same shape for either
+    // mobile or email already existing. Message doesn't say which field,
+    // since this form collects both together; the caller already knows
+    // what they typed.
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
+      throw new BadRequestError('An account with this mobile number or email already exists');
+    }
+    throw err;
+  }
+
+  const { token, session } = await createSession({ userId: user.id, role: user.role, ...input.meta });
+  await recordAuditEvent(
+    { userId: user.id, sessionId: session.id, ...input.meta },
+    { eventType: 'AUTH', action: 'REGISTER', resourceType: 'User', resourceId: user.id },
+  );
+
+  return { token, session };
+}
+
 export async function login(
   identifier: { mobile?: string; email?: string },
   password: string,
