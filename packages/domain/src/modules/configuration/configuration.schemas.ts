@@ -41,17 +41,10 @@ export const updateCourierProviderSchema = z.object({
   active: z.boolean().optional(),
 });
 
-export const notificationTemplateSchema = z.object({
-  templateKey: z.string().min(1).max(80),
-  channel: z.enum(['EMAIL', 'WHATSAPP', 'IN_APP', 'PUSH']),
-  subject: z.string().max(200).optional(),
-  body: z.string().min(1).max(2000),
-});
-export const updateNotificationTemplateSchema = z.object({
-  subject: z.string().max(200).optional(),
-  body: z.string().min(1).max(2000).optional(),
-  active: z.boolean().optional(),
-});
+// ENTERPRISE-15 — notificationTemplateSchema / updateNotificationTemplateSchema
+// removed. They backed an admin-editable NotificationTemplate table that no
+// send path ever read; see configuration.service.ts's listNotificationTemplates()
+// for the real, read-only, code-registered catalogue that replaced it.
 
 // ENTERPRISE-7 — admin-configurable GST rate table (backs the Pharmacy
 // POS). Indian GST slabs are always whole-number percentages (0/5/12/18/28).

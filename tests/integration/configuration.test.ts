@@ -8,27 +8,24 @@ import {
   createCourierProvider,
   createDocumentRequirement,
   createGstRate,
-  createNotificationTemplate,
   createServiceLocation,
   listConfigCategories,
   listGstRates,
+  listNotificationTemplates,
   removeConfigCategory,
   removeCourierProvider,
   removeDocumentRequirement,
   removeGstRate,
-  removeNotificationTemplate,
   removeServiceLocation,
   updateConfigCategory,
   updateGstRate,
 } from '@abies/domain/modules/configuration/configuration.service';
 import { listAuditEvents, listDistinctEventTypes } from '@abies/domain/modules/audit/audit.service';
-import { notificationTemplateSchema } from '@abies/domain/modules/configuration/configuration.schemas';
 
 const createdCategoryIds: string[] = [];
 const createdLocationIds: string[] = [];
 const createdRequirementIds: string[] = [];
 const createdCourierIds: string[] = [];
-const createdTemplateIds: string[] = [];
 const createdGstRateIds: string[] = [];
 const domainTag = `TEST_DOMAIN_${randomInt(100000, 999999)}`;
 
@@ -37,7 +34,6 @@ afterAll(async () => {
   await prisma.serviceLocation.deleteMany({ where: { id: { in: createdLocationIds } } });
   await prisma.documentRequirement.deleteMany({ where: { id: { in: createdRequirementIds } } });
   await prisma.courierProvider.deleteMany({ where: { id: { in: createdCourierIds } } });
-  await prisma.notificationTemplate.deleteMany({ where: { id: { in: createdTemplateIds } } });
   await prisma.gstRateConfig.deleteMany({ where: { id: { in: createdGstRateIds } } });
   await prisma.$disconnect();
 });
@@ -127,20 +123,31 @@ describe('courier providers', () => {
   });
 });
 
-describe('notification templates', () => {
-  it('creates and removes a template, refusing a duplicate templateKey', async () => {
-    const templateKey = `test.template.${randomInt(100000, 999999)}`;
-    const created = await createNotificationTemplate(
-      { templateKey, channel: 'IN_APP', body: 'Hello {{name}}' },
-      {},
-    );
-    createdTemplateIds.push(created.id);
+describe('notification templates (ENTERPRISE-15 — read-only catalogue)', () => {
+  it('returns the real code-registered catalogue, not a database table', () => {
+    const rows = listNotificationTemplates();
+    expect(rows.length).toBeGreaterThan(0);
 
-    await expect(createNotificationTemplate({ templateKey, channel: 'EMAIL', body: 'x' }, {})).rejects.toThrow(ConflictError);
-    expect(notificationTemplateSchema.safeParse({ templateKey, channel: 'SMS', body: 'x' }).success).toBe(false);
+    const otpEmail = rows.find((r) => r.templateKey === 'auth.otp_code' && r.channel === 'EMAIL');
+    expect(otpEmail).toBeDefined();
+    // Real, code-controlled subject/body — the SMTP/mailer91 path.
+    expect(otpEmail?.control).toBe('CODE');
+    expect(otpEmail?.subject).toBeTruthy();
+    expect(otpEmail?.body).toBeTruthy();
 
-    await removeNotificationTemplate(created.id, {});
-    createdTemplateIds.splice(createdTemplateIds.indexOf(created.id), 1);
+    const otpWhatsapp = rows.find((r) => r.templateKey === 'auth.otp_code' && r.channel === 'WHATSAPP');
+    expect(otpWhatsapp).toBeDefined();
+    // Provider-managed — no body of ours is ever actually sent.
+    expect(otpWhatsapp?.control).toBe('PROVIDER');
+    expect(otpWhatsapp?.body).toBeUndefined();
+    expect(otpWhatsapp?.controlNote).toContain('WHATSAPP_MSG91_TEMPLATE_MAP');
+
+    // A template key with no matching entry in email-templates.ts is
+    // reported honestly as provider-managed for EMAIL too, not papered over.
+    const contactEmail = rows.find((r) => r.templateKey === 'contact.enquiry.internal' && r.channel === 'EMAIL');
+    expect(contactEmail).toBeDefined();
+    expect(contactEmail?.control).toBe('PROVIDER');
+    expect(contactEmail?.controlNote).toContain('EMAIL_MSG91_TEMPLATE_ID');
   });
 });
 

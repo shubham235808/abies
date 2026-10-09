@@ -11,11 +11,17 @@ import type {
   updateDocumentRequirementSchema,
   courierProviderSchema,
   updateCourierProviderSchema,
-  notificationTemplateSchema,
-  updateNotificationTemplateSchema,
   gstRateConfigSchema,
   updateGstRateConfigSchema,
 } from './configuration.schemas';
+import { getEmailTemplate } from '../notifications/email-templates';
+import {
+  TEMPLATE_CATALOGUE,
+  type RoutingPolicy,
+  type TemplateCategory,
+  type TemplateChannel,
+  type TemplatePriority,
+} from '../notifications/templates';
 
 // ENTERPRISE-2 — generalizes AssessmentTemplateField's existing "admin-
 // editable lookup table, no migration to add an entry" shape (Phase 5)
@@ -155,33 +161,111 @@ export async function removeCourierProvider(id: string, auditCtx: AuditContext) 
   await recordAuditEvent(auditCtx, { eventType: 'CONFIGURATION', action: 'DELETED', resourceType: 'CourierProvider', resourceId: id, metadata: { code: existing.code } });
 }
 
-// ---- Notification templates ----
+// ---- Notification templates (ENTERPRISE-15 — read-only) ----
+//
+// There used to be an admin-editable NotificationTemplate table here, with
+// create/update/remove functions backing a management-web form. That form
+// let an admin edit templateKey/channel/subject/body rows that NOTHING at
+// send time ever read: every real notify()/notifyMailbox() call resolves
+// through the code-registered catalogue in
+// ../notifications/templates.ts, which has zero references to
+// prisma.notificationTemplate. Editing a row through the old UI changed
+// nothing about what actually got sent.
+//
+// This isn't a wiring gap to close by pointing the UI at the real table,
+// either. Two of the three real send paths are structurally not editable
+// from this codebase at all:
+//   - WhatsApp (lib/notifications/msg91-whatsapp.ts) always sends a
+//     provider-approved template: the real body text and variable count
+//     live on MSG91/Meta's side as the template named in
+//     WHATSAPP_MSG91_TEMPLATE_MAP, not as a body string we own.
+//   - Email when EMAIL_PROVIDER=msg91 (the current default in abies-dev
+//     and abies-uat) is the same shape: one provider-hosted template,
+//     EMAIL_MSG91_TEMPLATE_ID, not a per-notification body.
+// The one channel where a body we genuinely author and send exists is SMTP
+// email (EMAIL_PROVIDER=smtp/mailer91), rendered by
+// ../notifications/email-templates.ts's renderEmailTemplate() — real
+// {{variable}} substitution over real HTML/text we control. That one is
+// surfaced below with its actual subject/body.
+//
+// So: no writes, no Postgres NotificationTemplate row is read, and the
+// response names the real control point for every row — the actual env
+// var — instead of inviting an edit that silently does nothing.
 
-export async function listNotificationTemplates() {
-  return prisma.notificationTemplate.findMany({ orderBy: { templateKey: 'asc' } });
+export interface NotificationTemplateCatalogueRow {
+  // Synthetic, stable, not a database id — "key:channel" (unique per row).
+  id: string;
+  templateKey: string;
+  channel: TemplateChannel;
+  category: TemplateCategory;
+  priority: TemplatePriority;
+  routingPolicy: RoutingPolicy;
+  // CODE: a body we author and that is genuinely sent, shown below.
+  // PROVIDER: the real body lives outside this codebase; controlNote names
+  // the env var that actually drives it.
+  control: 'CODE' | 'PROVIDER';
+  controlNote: string;
+  subject?: string;
+  body?: string;
 }
 
-export async function createNotificationTemplate(dto: z.infer<typeof notificationTemplateSchema>, auditCtx: AuditContext) {
-  const existing = await prisma.notificationTemplate.findUnique({ where: { templateKey: dto.templateKey } });
-  if (existing) throw new ConflictError('A template with this key already exists');
-  const row = await prisma.notificationTemplate.create({ data: dto });
-  await recordAuditEvent(auditCtx, { eventType: 'CONFIGURATION', action: 'CREATED', resourceType: 'NotificationTemplate', resourceId: row.id, metadata: { templateKey: row.templateKey } });
-  return row;
+const WHATSAPP_NOTE =
+  'Provider-managed. WhatsApp only ever sends a provider-approved template — the real body text and variable ' +
+  'layout live on MSG91/Meta\'s side as the template named for this key in WHATSAPP_MSG91_TEMPLATE_MAP, not in ' +
+  'this database. Edit the approved template on MSG91/Meta, not from this screen.';
+
+function emailNoteFor(templateKey: string, hasSmtpBody: boolean): string {
+  const msg91 =
+    'When EMAIL_PROVIDER=msg91 (the current default in abies-dev and abies-uat), this sends through the single ' +
+    'provider-hosted template configured by EMAIL_MSG91_TEMPLATE_ID, not the text below.';
+  if (hasSmtpBody) {
+    return `The subject/body below is real and is what actually sends, but only when EMAIL_PROVIDER=smtp or mailer91. ${msg91}`;
+  }
+  return (
+    `No SMTP-rendered body is registered for "${templateKey}" in notifications/email-templates.ts, so ` +
+    `EMAIL_PROVIDER=smtp/mailer91 has nothing to render for it. ${msg91}`
+  );
 }
 
-export async function updateNotificationTemplate(id: string, dto: z.infer<typeof updateNotificationTemplateSchema>, auditCtx: AuditContext) {
-  const existing = await prisma.notificationTemplate.findUnique({ where: { id } });
-  if (!existing) throw new NotFoundError('Notification template not found');
-  const row = await prisma.notificationTemplate.update({ where: { id }, data: dto });
-  await recordAuditEvent(auditCtx, { eventType: 'CONFIGURATION', action: 'UPDATED', resourceType: 'NotificationTemplate', resourceId: id, metadata: { fields: Object.keys(dto) } });
-  return row;
-}
-
-export async function removeNotificationTemplate(id: string, auditCtx: AuditContext) {
-  const existing = await prisma.notificationTemplate.findUnique({ where: { id } });
-  if (!existing) throw new NotFoundError('Notification template not found');
-  await prisma.notificationTemplate.delete({ where: { id } });
-  await recordAuditEvent(auditCtx, { eventType: 'CONFIGURATION', action: 'DELETED', resourceType: 'NotificationTemplate', resourceId: id, metadata: { templateKey: existing.templateKey } });
+// Synchronous and DB-free: this is a static, code-registered catalogue, not
+// a query. Call sites that previously awaited the old Postgres-backed
+// version still work unchanged (await on a non-promise resolves immediately).
+export function listNotificationTemplates(): NotificationTemplateCatalogueRow[] {
+  const rows: NotificationTemplateCatalogueRow[] = [];
+  for (const def of TEMPLATE_CATALOGUE) {
+    for (const channel of Object.keys(def.bodies) as TemplateChannel[]) {
+      const base = {
+        id: `${def.key}:${channel}`,
+        templateKey: def.key,
+        channel,
+        category: def.category,
+        priority: def.priority,
+        routingPolicy: def.defaultPolicy,
+      };
+      if (channel === 'IN_APP') {
+        rows.push({
+          ...base,
+          control: 'CODE',
+          controlNote: 'Rendered in-app directly from this catalogue entry. There is no external provider for IN_APP.',
+          body: def.bodies.IN_APP?.en,
+        });
+        continue;
+      }
+      if (channel === 'WHATSAPP') {
+        rows.push({ ...base, control: 'PROVIDER', controlNote: WHATSAPP_NOTE });
+        continue;
+      }
+      // EMAIL
+      const emailDef = getEmailTemplate(def.key);
+      rows.push({
+        ...base,
+        control: emailDef ? 'CODE' : 'PROVIDER',
+        controlNote: emailNoteFor(def.key, Boolean(emailDef)),
+        ...(emailDef ? { subject: emailDef.subject, body: emailDef.paragraphs.join('\n\n') } : {}),
+      });
+    }
+  }
+  return rows;
 }
 
 // ---- GST rates (ENTERPRISE-7) ----

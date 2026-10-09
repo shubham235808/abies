@@ -1,28 +1,20 @@
 import { NextResponse } from 'next/server';
 import { errorResponse } from '@abies/domain/lib/errors';
-import { notificationTemplateSchema } from '@abies/domain/modules/configuration/configuration.schemas';
-import { createNotificationTemplate, listNotificationTemplates } from '@abies/domain/modules/configuration/configuration.service';
-import { applyRotatedCookie, requireAdminMfa, requirePermission, requireSession } from '@abies/domain/server/rbac';
+import { listNotificationTemplates } from '@abies/domain/modules/configuration/configuration.service';
+import { applyRotatedCookie, requireAdminMfa, requireSession } from '@abies/domain/server/rbac';
 
+// Read-only (ENTERPRISE-15). POST used to create a row in a Postgres
+// NotificationTemplate table that no send path ever read — editing it
+// through the old admin form changed nothing about what actually sent.
+// GET now returns the real, code-registered template catalogue instead of
+// those dead rows. See configuration.service.ts's listNotificationTemplates()
+// for the full reasoning.
 export async function GET(req: Request) {
   try {
     const ctx = await requireSession(req);
     requireAdminMfa(ctx);
-    const templates = await listNotificationTemplates();
+    const templates = listNotificationTemplates();
     return applyRotatedCookie(NextResponse.json({ templates }), ctx);
-  } catch (error) {
-    return errorResponse(error, req);
-  }
-}
-
-export async function POST(req: Request) {
-  try {
-    const ctx = await requireSession(req);
-    requireAdminMfa(ctx);
-    requirePermission(ctx, 'configuration.manage');
-    const dto = notificationTemplateSchema.parse(await req.json());
-    const template = await createNotificationTemplate(dto, { userId: ctx.session.userId, ...ctx });
-    return applyRotatedCookie(NextResponse.json({ template }, { status: 201 }), ctx);
   } catch (error) {
     return errorResponse(error, req);
   }

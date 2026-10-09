@@ -1,104 +1,86 @@
-'use client';
+import { Badge, type Tone } from '@abies/design-system/components/ui/badge';
+import { DataTable, type DataTableColumn } from '@abies/design-system/components/ui/data-table';
 
-import { useState } from 'react';
-import { Alert } from '@abies/design-system/components/ui/alert';
-import { Badge } from '@abies/design-system/components/ui/badge';
-import { Button } from '@abies/design-system/components/ui/button';
-import { Input, Label, Select, Textarea } from '@abies/design-system/components/ui/input';
-import type { DataTableColumn } from '@abies/design-system/components/ui/data-table';
-import { api, ApiError } from '@abies/design-system/api-client';
-import { ConfigManagerShell } from './config-manager-shell';
-
+// ENTERPRISE-15 — read-only. This used to be a create/edit form over a
+// Postgres NotificationTemplate table that no send path ever read: editing
+// a row here changed nothing about what notify()/notifyMailbox() actually
+// sent. There is nothing honest left to write, so the form is gone.
+//
+// What's shown instead is the real, code-registered catalogue
+// (packages/domain/src/modules/notifications/templates.ts) that every send
+// resolves through, plus — for the one channel where a body we genuinely
+// author exists (SMTP/mailer91 email) — its real subject/body. WhatsApp and
+// msg91-hosted email are provider-managed: the approved body lives on
+// MSG91/Meta's side, named in WHATSAPP_MSG91_TEMPLATE_MAP /
+// EMAIL_MSG91_TEMPLATE_ID, not in this database — that's stated plainly
+// per row rather than hidden behind a disabled edit button.
 export interface NotificationTemplateRow {
   id: string;
   templateKey: string;
   channel: string;
-  subject: string | null;
-  body: string;
-  active: boolean;
+  category: string;
+  priority: string;
+  routingPolicy: string;
+  control: 'CODE' | 'PROVIDER';
+  controlNote: string;
+  subject?: string;
+  body?: string;
 }
 
-const CHANNELS = ['IN_APP', 'EMAIL', 'WHATSAPP', 'PUSH'];
+const CHANNEL_TONE: Record<string, Tone> = {
+  EMAIL: 'blue',
+  WHATSAPP: 'success',
+  IN_APP: 'purple',
+};
 
 const COLUMNS: DataTableColumn<NotificationTemplateRow>[] = [
-  { key: 'templateKey', label: 'Template key', render: (r) => r.templateKey },
-  { key: 'channel', label: 'Channel', render: (r) => <Badge tone="blue">{r.channel}</Badge> },
-  { key: 'subject', label: 'Subject', render: (r) => r.subject ?? '—' },
+  { key: 'templateKey', label: 'Template key', render: (r) => <span className="font-medium">{r.templateKey}</span> },
+  { key: 'channel', label: 'Channel', render: (r) => <Badge tone={CHANNEL_TONE[r.channel] ?? 'neutral'}>{r.channel}</Badge> },
+  { key: 'category', label: 'Category', render: (r) => r.category },
+  { key: 'priority', label: 'Priority', render: (r) => r.priority },
+  { key: 'routingPolicy', label: 'Routing policy', render: (r) => r.routingPolicy.replace(/_/g, ' ') },
+  {
+    key: 'control',
+    label: 'Editable here?',
+    render: (r) =>
+      r.control === 'CODE' ? (
+        <Badge tone="success">Code-controlled</Badge>
+      ) : (
+        <Badge tone="orange">Provider-managed</Badge>
+      ),
+  },
+  {
+    key: 'content',
+    label: 'Subject / body',
+    render: (r) =>
+      r.control === 'CODE' ? (
+        <div className="max-w-md space-y-1 text-sm">
+          {r.subject && <p className="font-medium text-brand-neutral-800">{r.subject}</p>}
+          {r.body && <p className="whitespace-pre-wrap text-brand-neutral-600">{r.body}</p>}
+        </div>
+      ) : (
+        <p className="max-w-md text-sm text-brand-neutral-500">{r.controlNote}</p>
+      ),
+  },
 ];
 
 export function NotificationTemplatesManager({ initial }: { initial: NotificationTemplateRow[] }) {
   return (
-    <ConfigManagerShell
-      columns={COLUMNS}
-      initialRows={initial}
-      apiBase="/api/v1/admin/configuration/notification-templates"
-      addModalTitle="Add a notification template"
-      entityLabel="Template"
-      deleteConfirmDescription="Any notification already queued or sent using this template is unaffected — this only removes it from future use."
-      renderAddForm={({ onCreated, onCancel }) => <AddForm onCreated={onCreated} onCancel={onCancel} />}
-    />
-  );
-}
-
-function AddForm({ onCreated, onCancel }: { onCreated: (row: NotificationTemplateRow) => void; onCancel: () => void }) {
-  const [templateKey, setTemplateKey] = useState('');
-  const [channel, setChannel] = useState(CHANNELS[0]!);
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function handleSubmit() {
-    setBusy(true);
-    setError(null);
-    try {
-      const { template } = await api.post<{ template: NotificationTemplateRow }>('/api/v1/admin/configuration/notification-templates', {
-        templateKey,
-        channel,
-        subject: subject || undefined,
-        body,
-      });
-      onCreated(template);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not add this template.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="space-y-3">
-      {error && <Alert tone="error">{error}</Alert>}
-      <div>
-        <Label htmlFor="nt-key">Template key</Label>
-        <Input id="nt-key" value={templateKey} onChange={(e) => setTemplateKey(e.target.value)} placeholder="appointment.reminder" />
-      </div>
-      <div>
-        <Label htmlFor="nt-channel">Channel</Label>
-        <Select id="nt-channel" value={channel} onChange={(e) => setChannel(e.target.value)}>
-          {CHANNELS.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div>
-        <Label htmlFor="nt-subject">Subject (optional)</Label>
-        <Input id="nt-subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
-      </div>
-      <div>
-        <Label htmlFor="nt-body">Body</Label>
-        <Textarea id="nt-body" rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={onCancel} disabled={busy}>
-          Cancel
-        </Button>
-        <Button loading={busy} disabled={!templateKey || !body} onClick={handleSubmit}>
-          Add
-        </Button>
-      </div>
+    <div>
+      <p className="text-sm text-brand-neutral-600">
+        This is the real notification template catalogue — the one every send actually resolves through. It is
+        read-only here: for WhatsApp and for email sent via MSG91 (<code>EMAIL_PROVIDER=msg91</code>, the current
+        default in abies-dev and abies-uat), the real body lives on the provider&apos;s side
+        (<code>WHATSAPP_MSG91_TEMPLATE_MAP</code> / <code>EMAIL_MSG91_TEMPLATE_ID</code>), not in this app, so there
+        is nothing truthful for this screen to let you edit. The only genuinely code-controlled body shown below is
+        the SMTP/mailer91 email path.
+      </p>
+      <DataTable
+        columns={COLUMNS}
+        rows={initial}
+        rowKey={(r) => r.id}
+        emptyMessage="No notification templates registered."
+      />
     </div>
   );
 }
