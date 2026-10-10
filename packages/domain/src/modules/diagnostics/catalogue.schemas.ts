@@ -13,12 +13,22 @@ export const createTestSchema = z.object({
 
 export const updateTestSchema = createTestSchema.partial();
 
+// Admin-authored test: same shape, plus the lab the admin is creating it
+// for (a lab partner's own route infers this from their session instead).
+export const adminCreateTestSchema = createTestSchema.extend({
+  labId: z.string().min(1),
+});
+
 export const createPackageSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
   price: z.number().int().min(0).max(1_000_000),
   testIds: z.array(z.string().min(1)).min(1).max(30),
   active: z.boolean().optional(),
+});
+
+export const adminCreatePackageSchema = createPackageSchema.extend({
+  labId: z.string().min(1),
 });
 
 export const updatePackageSchema = z.object({

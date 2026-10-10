@@ -21,7 +21,18 @@ vi.mock('@abies/domain/lib/payments/razorpay', () => razorpayMock);
 
 import { holdSlot, verifyPayment } from '@abies/domain/modules/appointments/appointments.service';
 import { approve as approveLab } from '@abies/domain/modules/diagnostics/admin-labs.service';
-import { createPackage, createTest, searchPackagesPublic, searchPublic } from '@abies/domain/modules/diagnostics/catalogue.service';
+import {
+  adminCreatePackage,
+  adminCreateTest,
+  adminListPackages,
+  adminListTests,
+  adminRemoveTest,
+  adminUpdateTest,
+  createPackage,
+  createTest,
+  searchPackagesPublic,
+  searchPublic,
+} from '@abies/domain/modules/diagnostics/catalogue.service';
 import { bookOrderSchema } from '@abies/domain/modules/diagnostics/orders.schemas';
 import { ensureLabProfile, submitLab, updateMyLab } from '@abies/domain/modules/diagnostics/labs.service';
 import { createRecommendation } from '@abies/domain/modules/diagnostics/recommendations.service';
@@ -52,8 +63,8 @@ const createdUserIds: string[] = [];
 async function registerUser(role: 'PATIENT' | 'DOCTOR' | 'ADMIN' | 'LAB') {
   const mobile = freshMobile();
   if (role === 'ADMIN') await prisma.user.create({ data: { mobile: `+91${mobile}`, role: 'ADMIN' } });
-  const { requestId } = await requestOtp(mobile, role);
-  const { session } = await verifyOtp(requestId, '123456', true, {});
+  const { requestId } = await requestOtp({ mobile }, role);
+  const { session } = await verifyOtp(requestId, '123456', true, {}, 'Test User');
   createdUserIds.push(session.userId);
   return session.userId;
 }
@@ -429,5 +440,86 @@ describe('diagnostic packages (ENTERPRISE-6)', () => {
 
     const fullOrder = await getOrder(patientId, 'PATIENT', order.id);
     expect(fullOrder.items[0]?.package?.name).toBeDefined();
+  });
+});
+
+describe('admin diagnostics catalogue management (docs/admin-portal-status-report.md §D)', () => {
+  async function approvedLab() {
+    const labUserId = await registerUser('LAB');
+    await updateMyLab(
+      labUserId,
+      { name: 'Admin-Managed Lab', licenseNumbers: [`LIC-${randomInt(100000, 999999)}`], serviceCities: ['Pune'] },
+      { userId: labUserId },
+    );
+    await submitLab(labUserId, true, { userId: labUserId });
+    const adminUserId = await registerUser('ADMIN');
+    const lab = await ensureLabProfile(labUserId);
+    await approveLab(lab.id, { userId: adminUserId });
+    return { labUserId, labId: lab.id, adminUserId };
+  }
+
+  it('lets an admin create a test for a lab the admin does not own, with an audit trail', async () => {
+    const { labId, adminUserId } = await approvedLab();
+
+    const test = await adminCreateTest(
+      { labId, code: `ADM-${randomInt(1000, 9999)}`, name: 'Admin-Added Test', price: 199 },
+      { userId: adminUserId },
+    );
+    expect(test.labId).toBe(labId);
+
+    const auditRow = await prisma.auditEvent.findFirst({ where: { action: 'DIAGNOSTIC_TEST_CREATED', resourceId: test.id } });
+    expect(auditRow).not.toBeNull();
+
+    const listed = await adminListTests(labId);
+    expect(listed.some((t) => t.id === test.id)).toBe(true);
+  });
+
+  it('refuses to create a test for a lab that is not approved', async () => {
+    const labUserId = await registerUser('LAB');
+    const lab = await ensureLabProfile(labUserId);
+    const adminUserId = await registerUser('ADMIN');
+
+    await expect(
+      adminCreateTest({ labId: lab.id, code: 'DRAFT-1', name: 'Should not be created', price: 100 }, { userId: adminUserId }),
+    ).rejects.toThrow(BadRequestError);
+  });
+
+  it('updates and removes a test the admin did not create, reusing the same primitives as the lab-partner path', async () => {
+    const { testId } = await approvedLabWithTest(300);
+    const adminUserId = await registerUser('ADMIN');
+
+    const updated = await adminUpdateTest(testId, { price: 450 }, { userId: adminUserId });
+    expect(updated.price).toBe(450);
+
+    await adminRemoveTest(testId, { userId: adminUserId });
+    const remaining = await prisma.diagnosticTest.findUnique({ where: { id: testId } });
+    expect(remaining).toBeNull();
+  });
+
+  it('creates a package for an admin-chosen lab, validating testIds against that lab only', async () => {
+    const { labId, testId } = await approvedLabWithTest(300);
+    const adminUserId = await registerUser('ADMIN');
+
+    const pkg = await adminCreatePackage(
+      { labId, name: 'Admin Bundle', price: 500, testIds: [testId] },
+      { userId: adminUserId },
+    );
+    expect(pkg.labId).toBe(labId);
+
+    const auditRow = await prisma.auditEvent.findFirst({ where: { action: 'DIAGNOSTIC_PACKAGE_CREATED', resourceId: pkg.id } });
+    expect(auditRow).not.toBeNull();
+
+    const listed = await adminListPackages(labId);
+    expect(listed.some((p) => p.id === pkg.id)).toBe(true);
+  });
+
+  it('refuses to bundle a test that belongs to a different lab', async () => {
+    const { labId } = await approvedLab();
+    const { testId: otherLabsTestId } = await approvedLabWithTest(300);
+    const adminUserId = await registerUser('ADMIN');
+
+    await expect(
+      adminCreatePackage({ labId, name: 'Cross-lab bundle', price: 500, testIds: [otherLabsTestId] }, { userId: adminUserId }),
+    ).rejects.toThrow(BadRequestError);
   });
 });
