@@ -1,22 +1,8 @@
-import { LoginFlow } from '@abies/design-system/components/auth/login-flow';
+import { PasswordAuthFlow } from '@abies/design-system/components/auth/password-auth-flow';
 
-// Ops portal sign-in. Accounts are created by an administrator.
+// Ops portal sign-in. Accounts are always created by an administrator —
+// there is no self-onboarding path here, so unlike partner-web this never
+// links out to an OTP sign-up page.
 export default function OpsLoginPage() {
-  return (
-    <LoginFlow
-      heading="Operations sign-in"
-      subheading="Staff and administrators. We'll send a one-time code."
-      roles={[
-        { value: 'CUSTOMER_SUPPORT', label: 'Customer Support' },
-        { value: 'TECH_SUPPORT', label: 'Technical Support' },
-        { value: 'SALES', label: 'Sales / Partner Ops' },
-        { value: 'CARE_COORDINATOR', label: 'Care Coordinator' },
-        { value: 'ADMIN', label: 'Administrator' },
-        { value: 'CRM_ADMIN', label: 'CRM Administrator' },
-        { value: 'SALES_MANAGER', label: 'Sales Manager' },
-        { value: 'MARKETING', label: 'Marketing' },
-        { value: 'AUDITOR', label: 'Auditor' },
-      ]}
-    />
-  );
+  return <PasswordAuthFlow heading="Operations sign-in" subheading="Staff and administrators." />;
 }
