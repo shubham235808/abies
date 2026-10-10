@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { errorResponse, ForbiddenError, UnauthorizedError } from '@abies/domain/lib/errors';
+import { errorResponse, UnauthorizedError } from '@abies/domain/lib/errors';
+import { assertSameOrigin } from '@abies/domain/server/origin';
 import { callDbService, sessionTokenFromCookies } from '@abies/domain/server/db-service';
 
 async function forward(req: Request, dbPath: string, method: string, withBody: boolean) {
   if (method !== 'GET') {
-    const expected = new URL(process.env.APP_BASE_URL ?? 'https://dev.abies.in').origin;
-    if (req.headers.get('origin') !== expected) throw new ForbiddenError('Cross-site request blocked');
+    assertSameOrigin(req);
   }
   const token = await sessionTokenFromCookies();
   if (!token) throw new UnauthorizedError();

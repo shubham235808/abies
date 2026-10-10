@@ -28,6 +28,10 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
   OTP_PEPPER: z.string().min(32, 'OTP_PEPPER must be at least 32 characters'),
+  // Admin TOTP secret-at-rest encryption (lib/crypto.ts, lib/mfa.ts).
+  // Optional like the other provider secrets: only required once MFA
+  // enrollment is actually used, not by every deployment.
+  MFA_ENCRYPTION_KEY: z.string().min(32, 'MFA_ENCRYPTION_KEY must be at least 32 characters').optional(),
   OTP_TTL_SECONDS: z.coerce.number().default(300),
   OTP_COOLDOWN_SECONDS: z.coerce.number().default(30),
   OTP_MAX_ATTEMPTS: z.coerce.number().default(5),
@@ -77,6 +81,12 @@ const envSchema = z.object({
   ALLOW_PHARMACY_SELF_ONBOARDING: strictBool('false'),
   ALLOW_PANCHAKARMA_CENTRE_SELF_ONBOARDING: strictBool('false'),
   APP_BASE_URL: z.string().url(),
+  // Extra origins the same-origin check (server/origin.ts) accepts besides
+  // APP_BASE_URL — comma-separated. UAT answers on both its public
+  // (abies.in) and internal-gateway (uat.abies.in) hostnames for the same
+  // backend; without this, a form submitted from the second one is refused
+  // as cross-site even though it genuinely isn't.
+  ADDITIONAL_ALLOWED_ORIGINS: z.string().optional(),
   UPLOAD_MAX_BYTES: z.coerce.number().default(10 * 1024 * 1024),
 
   // Payments (Razorpay). Left blank in dev/test until real (even test-mode)
@@ -126,6 +136,12 @@ const envSchema = z.object({
   EMAIL_MSG91_TEMPLATE_ID: z.string().optional(),
   EMAIL_MSG91_OTP_VARIABLE: z.string().optional(),
   EMAIL_MSG91_EXPIRY_VARIABLE: z.string().optional(),
+  // Separate MSG91 email template for Contact Us's internal notification
+  // (abies_enquiry_form) — its own template_id, not a second OTP template.
+  // Its body uses MSG91's numbered {{VAR1}}..{{VAR9}} placeholders, fixed to
+  // a specific field order hardcoded in msg91-adapter.ts, not configurable
+  // per-variable the way the OTP template's named placeholder is.
+  EMAIL_MSG91_CONTACT_TEMPLATE_ID: z.string().optional(),
 
   // Which channel requestOtp() (modules/auth/auth.service.ts) dispatches the
   // code through, once a user+matching contact method exists. ABIES does not

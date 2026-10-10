@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { errorResponse, ForbiddenError } from '@abies/domain/lib/errors';
+import { errorResponse } from '@abies/domain/lib/errors';
+import { assertSameOrigin } from '@abies/domain/server/origin';
 import { contactSchema } from '@abies/domain/modules/contact/contact.schemas';
 import { submitContactEnquiry } from '@abies/domain/modules/contact/contact.service';
 
@@ -7,8 +8,7 @@ import { submitContactEnquiry } from '@abies/domain/modules/contact/contact.serv
 // Browsers send Origin on a POST, so a form posted from another site is refused.
 export async function POST(req: Request) {
   try {
-    const expected = new URL(process.env.APP_BASE_URL ?? 'https://dev.abies.in').origin;
-    if (req.headers.get('origin') !== expected) throw new ForbiddenError('Cross-site request blocked');
+    assertSameOrigin(req);
 
     const input = contactSchema.parse(await req.json());
     const forwarded = req.headers.get('x-forwarded-for');
