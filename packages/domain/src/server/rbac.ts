@@ -72,10 +72,20 @@ export function requirePermission(ctx: RequestContext, permission: Permission): 
 
 // Gate for privileged admin actions (docs/SECURITY-MODEL.md: doctor
 // approval/suspension, refunds, role changes, audit access, ...). Implies
-// requireRole(ctx, 'ADMIN') — an MFA-verified session is meaningless for a
-// non-admin.
+// requireRole(ctx, 'ADMIN', 'SUPER_ADMIN') — SUPER_ADMIN is ADMIN-equivalent
+// by decision — and an MFA-verified session is meaningless for a non-admin.
 export function requireAdminMfa(ctx: RequestContext): void {
-  requireRole(ctx, 'ADMIN');
+  requireRole(ctx, 'ADMIN', 'SUPER_ADMIN');
+  if (!ctx.session.mfaVerified) {
+    throw new ForbiddenError('MFA verification required');
+  }
+}
+
+// Gate for sub-admin roles scoped to a single permission (e.g. FINANCE on
+// settlement.manage) that still need MFA for the same reason ADMIN does —
+// requireAdminMfa can't be reused here since it hardcodes the admin roles.
+export function requireMfaPermission(ctx: RequestContext, permission: Permission): void {
+  requirePermission(ctx, permission);
   if (!ctx.session.mfaVerified) {
     throw new ForbiddenError('MFA verification required');
   }

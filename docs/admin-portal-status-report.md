@@ -117,37 +117,71 @@ Legend: ✅ exists & works · 🟡 partial / incomplete / stubbed · ❌ missing
 
 ---
 
-## D. Diagnostics Management — ❌ Confirmed missing (for tests/packages)
+## D. Diagnostics Management — ✅ Admin can now author tests/packages for any approved lab
 
-Checked thoroughly rather than assumed from the name:
+Previously confirmed fully missing; closed as follows:
 
 - `admin/labs` (`apps/platform-api/src/app/api/v1/admin/labs/*`,
-  `packages/domain/src/modules/diagnostics/admin-labs.service.ts`) is, like
-  doctors/pharmacies/centres, **lab-partner verification only**
-  (approve/reject/suspend of the `DiagnosticLab` application).
-- `DiagnosticTest` and `DiagnosticPackage` models exist in the schema
-  (`schema.prisma:1064`, `1094`), and CRUD for them exists —
-  `createTest`/`updateTest`/`removeTest`/`createPackage`/`updatePackage`/`removePackage`
-  in `packages/domain/src/modules/diagnostics/catalogue.service.ts:26-104`.
-  But every caller is a **lab partner's own route**:
-  `apps/platform-api/src/app/api/v1/labs/me/{tests,packages}/route.ts`, and
-  the UI is `apps/partner-web/src/app/partner/lab/tests/tests-manager.tsx`.
-- There is **no `admin/diagnostics` route or page of any kind**, and no admin
-  route anywhere calls `createTest`/`createPackage`. An admin cannot create,
-  edit, or price a diagnostic test or package — only the lab partner can,
-  and admin's only lever over diagnostics is approving/suspending the lab
-  itself.
+  `packages/domain/src/modules/diagnostics/admin-labs.service.ts`) remains
+  lab-partner **verification only** (approve/reject/suspend of the
+  `DiagnosticLab` application) — unchanged, and still the only place to
+  approve a lab before it can be picked here.
+- `DiagnosticTest` and `DiagnosticPackage` CRUD
+  (`packages/domain/src/modules/diagnostics/catalogue.service.ts`) was
+  refactored so the lab-scoped core logic (`createTestForLab`,
+  `updateTestById`, `removeTestById`, `createPackageForLab`,
+  `updatePackageById`, `removePackageById`, and their `listXForLab`
+  counterparts) no longer assumes the caller's own session — the
+  lab-partner's `createTest`/`updateTest`/`removeTest`/`createPackage`/
+  `updatePackage`/`removePackage` now resolve their own `labId` from the
+  session and delegate to the same primitives. New `adminCreateTest` /
+  `adminUpdateTest` / `adminRemoveTest` / `adminListTests` and the package
+  equivalents (`adminCreatePackage`/`adminUpdatePackage`/`adminRemovePackage`/
+  `adminListPackages`) wrap those primitives with an admin-chosen `labId`
+  (validated APPROVED before create) and `recordAuditEvent` calls
+  (`DIAGNOSTIC_TEST_CREATED/UPDATED/REMOVED`,
+  `DIAGNOSTIC_PACKAGE_CREATED/UPDATED/REMOVED`) — no duplicated business
+  logic, same validation (duplicate-code check, package test-ownership
+  check) as the lab-partner path.
+- New admin routes, all gated by `requireAdminMfa` (role ADMIN is already
+  sufficient — no new `Permission` value was needed):
+  `apps/platform-api/src/app/api/v1/admin/diagnostics/tests/route.ts`
+  (GET list across all labs / optional `?labId=`, POST create),
+  `.../tests/[id]/route.ts` (PATCH, DELETE), and the mirrored
+  `.../packages/route.ts` + `.../packages/[id]/route.ts`.
+- New admin UI at `apps/management-web/src/app/ops/admin/diagnostics/`
+  (`page.tsx`, `tests-manager.tsx`, `packages-manager.tsx`), linked from the
+  admin nav (`apps/management-web/src/app/ops/admin/layout.tsx`). A lab
+  picker (populated from the existing `queue('APPROVED')` in
+  `admin-labs.service.ts` — no new "list approved labs" function needed)
+  is required on create; a package's test checklist is filtered to the
+  selected lab's own tests, mirroring the lab-partner UI's own package form.
 
-**Verdict: this module is genuinely, fully missing** on the admin side,
-exactly as the user suspected.
+**What's still missing/out of scope (left out deliberately):**
+- An admin cannot move an existing test or package to a different lab —
+  `labId` is set once at creation; the edit forms show the owning lab as
+  fixed text. Reassignment wasn't asked for and doesn't map cleanly onto
+  the existing package test-ownership validation.
+- No photo/image support for a test or package — the schema has none and
+  none was added; this mirrors the lab-partner's own tests/packages UI,
+  which also has no image field.
+- No bulk import/export of tests or packages.
+- The admin `GET` list routes cap at 500 rows (`take: 500`), with no
+  pagination UI yet — acceptable for the current catalogue size, but would
+  need revisiting if any one lab's catalogue grows large.
 
 ---
 
-## E. Website & Mobile App Content Management — 🟡 Partial (one real piece, rest absent)
+## E. Website & Mobile App Content Management — ✅ Website CMS complete for what was asked (pages, nav, SEO, FAQ, testimonials, banners); blog/i18n/video still absent
 
 A repo-wide search for banners/About-Us/FAQ/blog/testimonials/navigation
-config/SEO metadata/multilingual content/promotional video turned up
-**one real, working system** and nothing else:
+config/SEO metadata/multilingual content/promotional video originally turned
+up **one real, working system** and nothing else. An EXPANSION-5 content
+pass closed the About Us/FAQ/Testimonials part of that gap, modeled
+directly on the Promotion system below. A follow-up pass (this update)
+closed the three things that pass deliberately deferred: admin-editable
+navigation menus, per-page SEO metadata, and multi-page ContentPage
+management.
 
 **What works — Promotion/Banner manager (real CMS-lite):**
 - Prisma model `Promotion` — `packages/domain/prisma/schema.prisma:2585-2610` —
@@ -174,21 +208,164 @@ config/SEO metadata/multilingual content/promotional video turned up
   targets which language-users *see* a banner — it is not a translation/i18n
   system for the banner's own text.
 
-**What's missing (confirmed absent by repo-wide search, no false negatives):**
-- ❌ No About Us / FAQ / blog / static-page content model or admin UI at all.
-- ❌ No testimonials model/UI.
-- ❌ No navigation-menu configuration (nav is still hardcoded in each app's
-  layout/header components).
-- ❌ No SEO metadata management (title/description/OG tags per page) —
-  nothing in the schema or admin routes addresses this.
-- ❌ No general multilingual *content* management (copy/translations) —
-  only the above banner-targeting flag.
-- ❌ No promotional video/creative library beyond the two image slots on
-  `Promotion`.
+**What works now — About Us, FAQ and Testimonials (added, EXPANSION-5):**
+Modeled directly on Promotion's admin-CRUD + public-read pattern, not a
+new shape invented from scratch.
 
-**Verdict:** the single biggest real gap in the brief, confirmed — except
-the one carve-out above, which is a legitimately working banner system and
-should not be mischaracterized as "nothing exists."
+- Three new Prisma models, additive-only migration
+  `packages/domain/prisma/migrations/20261010100000_content_management/`:
+  - `ContentPage` — generic slug-keyed static page (`slug` unique, `title`,
+    `body` plain text, `active`, timestamps). Originally only `about-us`
+    was exposed in the admin UI; see the follow-up section below for the
+    generic pages manager.
+  - `FaqEntry` — one row per question/answer pair (`question`, `answer`,
+    `priority`, `active`, timestamps), kept deliberately separate from
+    `ContentPage` since FAQ is an admin-reorderable list, not one page
+    body.
+  - `Testimonial` — `authorName`, `authorRole` (optional), `quote`,
+    `photoKey` (optional, same `putObject`/signed-URL pattern as
+    Promotion's images), `rating` (optional, 1–5), `priority`, `active`,
+    `createdByUserId`, timestamps.
+  - Verified by applying the full migration chain to a throwaway
+    `abies_shadow_check` database on the same Postgres container (same
+    method documented in `docs/password-auth-backend.md`), then confirmed
+    against the real dev database and covered by
+    `tests/integration/content.test.ts` (7 passing cases).
+- Services: `packages/domain/src/modules/content/{about,faq,testimonials}.service.ts`
+  + matching `.schemas.ts`, each with the Promotion-style
+  `recordAuditEvent` call on every create/update/delete
+  (`eventType: 'CONTENT'`).
+- Admin routes (gated by `requireAdminMfa` + `requirePermission(ctx,
+  'configuration.manage')` — reusing the existing configuration-domain
+  permission rather than adding a new `Permission` value, consistent with
+  how GST rates/categories/locations are gated):
+  `apps/platform-api/src/app/api/v1/admin/content/about/route.ts` (GET +
+  singleton `PUT`/upsert — there is exactly one About Us page, so no
+  create/list/delete verbs), `.../content/faq/route.ts` + `[id]/route.ts`
+  (full list/create/update/remove), `.../content/testimonials/route.ts` +
+  `[id]/route.ts` (full CRUD, multipart photo upload mirroring the
+  Promotion routes' `FormData` handling).
+- Admin UI at `apps/management-web/src/app/ops/admin/content/` (`page.tsx`
+  with the same `Tabs`-over-one-route shape as `/ops/admin/configuration`;
+  the original single-page `about-manager.tsx` has since been replaced by
+  the generic `pages-manager.tsx` — see below; `faq-manager.tsx`
+  and `testimonials-manager.tsx` are card-list managers with add/edit/
+  activate/remove, FAQ additionally with move-up/move-down reordering
+  since no drag-and-drop library exists in this repo). Linked from the
+  admin nav as "Content" (`apps/management-web/src/app/ops/admin/layout.tsx`).
+- Genuinely consumed on the **public** site, reading the DB on every
+  request (no caching/static generation, same rule the Promotion system
+  was praised for): `apps/client-web/src/app/(public)/about/page.tsx`
+  reads `activeAboutPage()` (falls back to the previous hardcoded copy
+  when no page has been published yet — never a blank screen);
+  `apps/client-web/src/app/(public)/faq/page.tsx` (new route, linked from
+  the site footer) reads `activeFaqEntries()` into a reusable
+  `FaqAccordion`; the homepage
+  (`apps/client-web/src/app/(public)/page.tsx`) now also renders
+  `activeTestimonials()` via `components/content/testimonials-section.tsx`,
+  right after the "Why ABIES" section. Each renders nothing (not a
+  placeholder) when there's no active content yet — the same empty-state
+  rule `PromotionBanner` already follows.
+
+**What works now — Navigation menus, SEO metadata, multi-page content (added, EXPANSION-5 follow-up):**
+Same pattern again: domain service + zod schemas + `recordAuditEvent`
+(`eventType: 'CONTENT'`) on every create/update/delete, admin routes gated
+by `requireAdminMfa` + `requirePermission(ctx, 'configuration.manage')`,
+and public pages that read the DB on every request with no caching.
+
+- Additive-only migration
+  `packages/domain/prisma/migrations/20261010150000_nav_menu_and_seo/`
+  (new enum `NavMenuLocation`, new tables `NavMenuItem` and
+  `PageSeoMetadata`, one FK `NavMenuItem.contentPageId → ContentPage.id`
+  `ON DELETE CASCADE`; no existing table or column altered). Verified by
+  applying the full 41-migration chain to a throwaway `abies_shadow_check`
+  database (then `prisma migrate diff` against `schema.prisma`: no
+  difference) and dropping it, then applied to the shared dev database
+  with `prisma migrate deploy`; `prisma migrate status` reports up to date.
+- **Multi-page ContentPage.**
+  `packages/domain/src/modules/content/pages.{schemas,service}.ts` —
+  list/get/create/update/remove plus public `activeContentPageBySlug()`.
+  Slugs are validated (`lowercase-with-hyphens`), unique (409 on clash), and
+  immutable after creation since nav links and SEO keys depend on them.
+  `about-us`, `terms` and `privacy` map to their existing routes
+  (`publicPathForContentPage()`); every other slug is served by the new
+  generic route `apps/client-web/src/app/(public)/pages/[slug]/page.tsx`
+  (404 when missing/unpublished; a dedicated slug there permanently
+  redirects to its canonical route). `/terms` and `/privacy` now render
+  admin-published policy text when a `terms`/`privacy` page is active,
+  replacing the "pending legal review" notice while still listing the live
+  consent artifacts. Admin routes:
+  `apps/platform-api/src/app/api/v1/admin/content/pages/route.ts` +
+  `[id]/route.ts`. Admin UI: `pages-manager.tsx` (list, create with
+  slug, edit, publish/unpublish, remove, one-click "write /terms copy"
+  shortcuts for any dedicated slug not created yet). The old
+  `/admin/content/about` PUT endpoint is kept for API compatibility but the
+  UI no longer uses it.
+- **Navigation menus.** Model `NavMenuItem` (`location`, `label`, exactly
+  one of `href` or `contentPageId`, `priority`, `active`). Five locations,
+  one per link list the public site actually draws: `PUBLIC_HEADER`
+  (main nav + mobile drawer), `PUBLIC_TOP_BAR` (support links strip),
+  `PUBLIC_FOOTER_CARE`/`_HELP`/`_COMPANY` (footer columns). Deliberately
+  flat — no parent/child — since none of those lists has a dropdown.
+  `href` must be a site path or `https://` URL (`javascript:`, `data:`,
+  `http:` and protocol-relative `//host` rejected). A link to a content page
+  is hidden automatically while that page is unpublished and is removed with
+  it (cascade; the page's DELETED audit event records how many links went).
+  Service: `packages/domain/src/modules/content/nav.{schemas,service}.ts`.
+  Fallback rule: a location with **no rows at all** serves the previous
+  hardcoded links (`DEFAULT_NAV_MENUS`), so a fresh DB never has an empty
+  header; once a location has any row, only admin rows are served.
+  Admin routes: `.../admin/content/nav/route.ts` + `[id]/route.ts`. Admin UI:
+  `nav-manager.tsx` (per-location lists, add/edit/hide/remove, up/down
+  reorder, link-to-URL or link-to-content-page, and "Start from these
+  defaults" which copies the built-in links into editable rows). Public
+  consumption: `apps/client-web/src/components/layouts/site-header.tsx` and
+  `site-footer.tsx` now read `activeNavMenus()` on every request instead of
+  hardcoded arrays.
+- **SEO metadata.** Model `PageSeoMetadata` (`pageKey` unique, `title`,
+  `description`, `keywords[]`, `ogImageKey`, `active`, `createdByUserId`).
+  `pageKey` is one of the 12 public routes registered in
+  `packages/domain/src/modules/content/seo.pages.ts` (home, about, faq,
+  doctors, diagnostics, medicines, panchakarma, contact, support, partners,
+  terms, privacy — each with a built-in default title/description) or
+  `page:<slug>` for a `/pages/<slug>` content page (default derived from the
+  page's own title and body). Service:
+  `.../content/seo.{schemas,service}.ts`; `resolvePageSeo()` always returns
+  a complete title + description (active row → caller fallback → registry
+  default → site default) — never blank. OG image upload uses the same
+  `putObject`/magic-byte check as Testimonial photos, served via a 24-hour
+  signed URL (crawlers fetch `og:image` some time after the page).
+  Admin routes: `.../admin/content/seo/route.ts` + `[id]/route.ts`
+  (multipart, like Testimonials). Admin UI: `seo-manager.tsx` (one row per
+  public page showing what's live, Customise/Edit, Reset to default).
+  Public consumption: all 12 registered pages plus `/pages/[slug]` now
+  export `generateMetadata()` via `apps/client-web/src/lib/seo.ts`
+  (`pageMetadata()`), emitting title, description, keywords, Open Graph and
+  Twitter card tags. It calls `connection()` first so the lookup never runs
+  in a build-time prerender. Doctor profile pages (`/doctors/[slug]`) are
+  not covered — they're per-entity, not per-page, metadata.
+- Tests: `tests/integration/content-nav-seo.test.ts` (14 cases, against
+  the real dev DB, cleaning up after itself) — CRUD + audit rows for each
+  model, slug/href/pageKey validation, nav target switching, priority
+  ordering and hiding rules, page-delete cascade, default-fallback rule,
+  OG image upload/clear, never-blank SEO resolution.
+
+**What's still missing/deferred (not accidentally skipped):**
+- ❌ No blog — still absent; wasn't asked for.
+- ❌ No general multilingual *content* management (copy/translations) —
+  only Promotion's banner-targeting flag, unchanged.
+- ❌ No promotional video/creative library beyond the two image slots on
+  `Promotion` and the per-page OG image, unchanged.
+- Nav menus cover the public client-web site only. The portal sidebars
+  (patient/doctor/partner/admin) remain code-defined — they're permission-
+  driven app navigation, not marketing content.
+- ContentPage bodies are plain text (blank line = paragraph). No rich-text
+  editor, by design — no HTML injection surface.
+
+**Verdict:** About Us, FAQ, Testimonials, arbitrary static pages, header/
+footer navigation and per-page SEO metadata are now all real, admin-
+editable, end-to-end CMS features on the same proven Promotion pattern.
+What remains (blog, translations, video library) was never requested.
 
 ---
 
@@ -347,44 +524,88 @@ areas in D/E/H that have no admin write path to begin with.
 
 ---
 
-## RBAC — 🟡 Partial: role-gated, not sub-role-gated for the admin portal
+## RBAC — 🟡 Partial, improved: SUPER_ADMIN and FINANCE now have real grants; CRM roles still out of scope
 
-- `requireAdminMfa()` (`packages/domain/src/server/rbac.ts:77-82`) is the
-  gate on essentially every admin route in this report, and it is defined as
-  `requireRole(ctx, 'ADMIN')` **plus** MFA — a single, flat `ADMIN` role
-  check, not a spectrum.
+Updated after a scoped pass closing part of this gap (SUPER_ADMIN parity +
+narrow FINANCE access). The rest of the gap this section originally
+described — `CRM_ADMIN`/`SALES_MANAGER`/`MARKETING`/`AUDITOR` having no
+foothold in the main admin portal — is unchanged and was explicitly out of
+scope for that pass.
+
+- `requireAdminMfa()` (`packages/domain/src/server/rbac.ts`) is still the
+  gate on essentially every admin route in this report, but it now checks
+  `requireRole(ctx, 'ADMIN', 'SUPER_ADMIN')` **plus** MFA. `SUPER_ADMIN` has
+  the identical permission array to `ADMIN` in
+  `packages/domain/src/server/permissions.ts`'s `ROLE_PERMISSIONS`
+  (`['promotion.manage', 'configuration.manage', 'settlement.manage',
+  'hospital.manage']`), so it is ADMIN-equivalent everywhere `requireAdminMfa`
+  or `requirePermission` is checked — no route-by-route change was needed
+  for this to ripple, since `requireAdminMfa` is the single shared gate.
+- `FINANCE` now has a real, narrow grant: `['settlement.manage']` only — not
+  `promotion.manage`/`configuration.manage`/`hospital.manage`. A new helper,
+  `requireMfaPermission(ctx, permission)` (`rbac.ts`), checks the permission
+  and then MFA (mirroring `requireAdminMfa`'s shape) without requiring the
+  `ADMIN`/`SUPER_ADMIN` role. The following routes were switched from
+  `requireAdminMfa` (or `requireAdminMfa` + a redundant `requirePermission`)
+  to `requireMfaPermission(ctx, 'settlement.manage')`, which is how FINANCE
+  reaches them while every non-finance admin route stays
+  `ADMIN`/`SUPER_ADMIN`-only:
+  - `apps/platform-api/src/app/api/v1/admin/settlement/fee-terms/route.ts` (GET, POST)
+  - `apps/platform-api/src/app/api/v1/admin/settlement/fee-terms/[id]/route.ts` (PATCH, DELETE)
+  - `apps/platform-api/src/app/api/v1/admin/settlement/payouts/[id]/mark-paid/route.ts` (POST)
+  - `apps/platform-api/src/app/api/v1/admin/settlement/payouts/[id]/mark-failed/route.ts` (POST)
+  - `apps/platform-api/src/app/api/v1/admin/settlement/payouts/[id]/reconciliation/route.ts` (POST)
+  - `apps/platform-api/src/app/api/v1/admin/settlement/settlements/route.ts` (GET, POST)
+  - `apps/platform-api/src/app/api/v1/admin/settlement/settlements/[id]/complete/route.ts` (POST)
+  - `apps/platform-api/src/app/api/v1/admin/settlement/settlements/[id]/generate-payouts/route.ts` (POST)
+  - `apps/platform-api/src/app/api/v1/admin/settlement/settlements/[id]/lock/route.ts` (POST)
+  - `apps/platform-api/src/app/api/v1/admin/refunds/route.ts` (GET)
+  - `apps/platform-api/src/app/api/v1/admin/refunds/[id]/approve/route.ts` (POST)
+  - `apps/platform-api/src/app/api/v1/admin/refunds/[id]/reject/route.ts` (POST)
+
+  `admin/staff` (role/account creation, including minting other admins) was
+  deliberately **left on `requireAdminMfa`** — it's ADMIN/SUPER_ADMIN-only by
+  design, not finance-scoped work, even though it's adjacent to "who can do
+  what."
+- **Known pre-existing gap, surfaced but not fixed by this pass:** session
+  creation (`packages/domain/src/server/session.ts`, `createSession`) only
+  requires MFA when `input.role === 'ADMIN'` literally
+  (`needsMfa = input.role === 'ADMIN' && env.ADMIN_MFA_REQUIRED`). A
+  `SUPER_ADMIN` or `FINANCE` session is created with `mfaVerified: true`
+  from the start, regardless of whether MFA was actually completed — so
+  `requireAdminMfa`'s and `requireMfaPermission`'s MFA check passes
+  trivially for these two roles today. This predates this pass (the MFA
+  gate on the role check was already there; this pass only extended which
+  roles reach that gate) but is now more consequential, since SUPER_ADMIN
+  and FINANCE are real, reachable roles rather than empty-permission dead
+  ends. Session-creation MFA enrollment for these roles needs its own
+  decision and change — out of scope here since it's outside
+  `rbac.ts`/`permissions.ts`.
 - A `UserRole` enum does have many values —
   `PATIENT, DOCTOR, ADMIN, LAB, PHARMACY, PANCHAKARMA_CENTRE,
   CUSTOMER_SUPPORT, TECH_SUPPORT, SALES, CARE_COORDINATOR, CRM_ADMIN,
-  SALES_MANAGER, MARKETING, AUDITOR`
-  (`packages/domain/prisma/schema.prisma:23-38`) — but per
-  `packages/domain/src/server/permissions.ts:20-33`, every one of those
-  except `ADMIN`, `LAB`, `PHARMACY`, `PANCHAKARMA_CENTRE` has an **empty**
-  permission list, and none of them satisfy `requireAdminMfa`'s role check.
-  So `CRM_ADMIN`/`SALES_MANAGER`/`MARKETING`/`AUDITOR` exist as roles (and
-  are meaningful inside the separate CRM RBAC layer,
-  `modules/crm/rbac.ts`) but **cannot access any route in this report** —
-  they're not "Doctor Manager" or "Finance" sub-admins of the main admin
-  portal, they're a disjoint access system for the CRM module only.
-- `requirePermission()` is an additive finer-grained check
-  (`rbac.ts:60-71`, permissions.ts), but its own comment says it plainly:
-  *"Today this is a static, role-keyed vocabulary (one role == one
-  permission set); a DB-backed, admin-editable set is the named later
-  refinement."* And since `ADMIN` already holds all four permissions that
-  exist (`promotion.manage`, `configuration.manage`, `settlement.manage`,
-  `hospital.manage`), `requirePermission` currently adds no real
-  restriction for anyone who already has `ADMIN` — which is the only role
-  that can reach these routes in the first place.
-- `admin/staff` (`createStaffAccount`,
-  `packages/domain/src/modules/staff/staff.service.ts:24`) can create
-  accounts with these roles, but giving someone e.g. `MARKETING` does not
-  grant them access to Promotion Manager or anything else in this report —
-  only `ADMIN` does, and `ADMIN` is all-or-nothing.
+  SALES_MANAGER, MARKETING, AUDITOR, FINANCE, SUPER_ADMIN`
+  (`packages/domain/prisma/schema.prisma`) — but per
+  `packages/domain/src/server/permissions.ts`, `CRM_ADMIN`, `SALES_MANAGER`,
+  `MARKETING`, and `AUDITOR` are still **unchanged, empty-permission** roles
+  with respect to this vocabulary, and still don't satisfy
+  `requireAdminMfa`'s role check. They remain meaningful only inside the
+  separate CRM RBAC layer (`modules/crm/rbac.ts`) — this is by design, not
+  an oversight, and was explicitly out of scope for this pass.
+- `requirePermission()` (`rbac.ts`, `permissions.ts`) is still the additive
+  finer-grained check its own comment describes — a static, role-keyed
+  vocabulary, not yet DB-backed/admin-editable. `ADMIN` and `SUPER_ADMIN`
+  hold all four permissions that exist; `FINANCE` holds exactly one
+  (`settlement.manage`); everyone else in this vocabulary holds the same
+  set as before.
 
-**Verdict:** confirmed — there is no Super Admin / Product Manager / Doctor
-Manager / Finance / Marketing / Support admin-role separation for the admin
-portal today. It is effectively one flat `ADMIN` role, with a *parallel*
-unrelated RBAC system for CRM only.
+**Verdict:** improved but still partial. `SUPER_ADMIN` is now a genuine
+ADMIN-equivalent super-admin role, and `FINANCE` is now a genuine (if
+narrow) finance sub-admin role scoped to settlement/payout/refund routes —
+this is the first real sub-role separation in the main admin portal. There
+is still no Product Manager / Doctor Manager / Marketing / Support
+admin-role separation, and the CRM roles remain a *parallel* unrelated RBAC
+system by design.
 
 ---
 
@@ -428,6 +649,8 @@ Given everything above, my honest recommendation, in order:
    and the existing Promotion/Banner system already covers the
    highest-traffic piece of "content" (the homepage hero). I'd scope it as
    its own dedicated effort rather than folding it into this round.
+   *(Update: since done — About Us/FAQ/Testimonials, then nav menus, SEO
+   metadata and multi-page content; see §E. Blog is still not built.)*
 
 5. **RBAC sub-roles** (Super Admin/Product Manager/Finance/etc.) is real
    work the platform will eventually need, but every module above is

@@ -20,4 +20,9 @@ export const PORTAL_PATH: Record<string, string> = {
   SALES: '/ops/sales',
   CARE_COORDINATOR: '/ops/care-coordination',
   ADMIN: '/ops/admin',
+  // SUPER_ADMIN is ADMIN-equivalent (RBAC gap closure); FINANCE lands on
+  // its own settlement/refunds section — see that layout's doc comment for
+  // why those two pages were split out of /ops/admin.
+  SUPER_ADMIN: '/ops/admin',
+  FINANCE: '/ops/settlement',
 };

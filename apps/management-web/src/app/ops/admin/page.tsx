@@ -102,7 +102,7 @@ export default async function AdminOverviewPage() {
         </Card>
 
         <MetricCard title="Payments" rows={toRows(metrics.paymentsByStatus)} />
-        <MetricCard title="Refunds" rows={toRows(metrics.refundsByStatus)} href="/ops/admin/refunds" />
+        <MetricCard title="Refunds" rows={toRows(metrics.refundsByStatus)} href="/ops/refunds" />
         <MetricCard title="Appointments" rows={toRows(metrics.appointmentsByStatus)} />
         <MetricCard title="Diagnostic orders" rows={toRows(metrics.diagnosticOrdersByStatus)} />
         <MetricCard title="Medicine orders" rows={toRows(metrics.medicineOrdersByStatus)} />

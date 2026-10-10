@@ -33,13 +33,13 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   MARKETING: [],
   AUDITOR: [],
   ADMIN: ['promotion.manage', 'configuration.manage', 'settlement.manage', 'hospital.manage'],
-  // New additive roles (password-auth backend, docs/password-auth-backend.md
-  // §Open questions) — no permission grant decided yet; deliberately left
-  // empty rather than guessed, since this vocabulary already states it's
-  // not meant to be the real RBAC model. Needs an explicit product decision
-  // before either role's account can actually do anything beyond "log in".
-  FINANCE: [],
-  SUPER_ADMIN: [],
+  // SUPER_ADMIN is ADMIN-equivalent by decision (RBAC gap closure) — same
+  // grant as ADMIN, kept as a literal duplicate rather than a reference so
+  // either can be narrowed independently later without touching the other.
+  SUPER_ADMIN: ['promotion.manage', 'configuration.manage', 'settlement.manage', 'hospital.manage'],
+  // Narrow, real grant: finance-scoped settlement/payout/refund work only —
+  // not promotion/configuration/hospital, which stay ADMIN/SUPER_ADMIN-only.
+  FINANCE: ['settlement.manage'],
 };
 
 export function hasPermission(role: UserRole, permission: Permission): boolean {

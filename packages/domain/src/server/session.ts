@@ -59,7 +59,9 @@ export async function createSession(
 ): Promise<{ token: string; session: SessionInfo }> {
   const env = getEnv();
   const token = newToken();
-  const needsMfa = input.role === 'ADMIN' && env.ADMIN_MFA_REQUIRED;
+  // SUPER_ADMIN (ADMIN-equivalent) and FINANCE (settlement/refund approval)
+  // hold real, consequential access now — same MFA bar as ADMIN applies.
+  const needsMfa = (input.role === 'ADMIN' || input.role === 'SUPER_ADMIN' || input.role === 'FINANCE') && env.ADMIN_MFA_REQUIRED;
   const expiresAt = new Date(Date.now() + env.SESSION_TTL_DAYS * 86_400_000);
 
   const row = await prisma.session.create({
