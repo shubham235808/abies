@@ -4,6 +4,7 @@ import { prisma } from '../../lib/db';
 import { getEnv, isLockedDownDeployment } from '../../lib/env';
 import { BadRequestError, ForbiddenError, UnauthorizedError } from '../../lib/errors';
 import { hashPassword, verifyPassword } from '../../lib/password';
+import { confirmTotpEnrollment, startTotpEnrollment, totpEnrollmentStatus, verifyTotpCode } from './mfa.service';
 import { notify, notifyMailbox } from '../notifications/notifications.service';
 import { logger } from '../../lib/logger';
 import { recordAuditEvent } from '../../server/audit';
@@ -212,20 +213,71 @@ export async function verifyOtp(
   return { token, session, mfaRequired: !session.mfaVerified };
 }
 
+const MFA_CAPABLE_ROLES: UserRole[] = ['ADMIN', 'SUPER_ADMIN', 'FINANCE'];
+
+// The authenticator app's account label — whichever identifier the user
+// actually recognizes. Shared by every TOTP call site so a label built at
+// enroll time and one built later at verify time can never drift.
+function totpLabelFor(user: { email: string | null; mobile: string }): string {
+  return user.email ?? user.mobile;
+}
+
 export async function verifyAdminMfa(session: SessionInfo, code: string): Promise<void> {
-  if (session.user.role !== 'ADMIN') {
+  if (!MFA_CAPABLE_ROLES.includes(session.user.role)) {
     throw new ForbiddenError('MFA challenge is only required for administrators');
   }
   const env = getEnv();
-  if (isLockedDownDeployment(env)) {
-    // No production MFA provider wired up yet — hard fail rather than
-    // silently accept a code (docs/SECURITY-MODEL.md: "no admin path in
-    // production without a real MFA provider configured").
-    throw new ForbiddenError('Production MFA provider is not configured yet');
-  }
-  if (code !== (env.DEV_ADMIN_MFA_CODE ?? '654321')) {
+  const { enrolled } = await totpEnrollmentStatus(session.userId);
+
+  if (enrolled) {
+    const ok = await verifyTotpCode(session.userId, totpLabelFor(session.user), code);
+    if (!ok) throw new UnauthorizedError('Incorrect MFA code');
+  } else if (isLockedDownDeployment(env)) {
+    // No TOTP enrolled yet, and no dev fallback in a locked-down
+    // deployment (docs/SECURITY-MODEL.md: "no admin path in production
+    // without a real MFA provider configured") — the caller must enroll
+    // first (POST .../mfa/totp/enroll then .../confirm), which itself
+    // completes this same session's MFA step on success.
+    throw new ForbiddenError('TOTP is not set up for this account yet — enroll first');
+  } else if (code !== (env.DEV_ADMIN_MFA_CODE ?? '654321')) {
     throw new UnauthorizedError('Incorrect MFA code');
   }
+
+  await markMfaVerified(session.id);
+  await recordAuditEvent(
+    { userId: session.userId, sessionId: session.id },
+    { eventType: 'AUTH', action: 'MFA_VERIFIED', resourceType: 'Session', resourceId: session.id },
+  );
+}
+
+export interface StartMfaEnrollmentResult {
+  secret: string;
+  otpauthUrl: string;
+  qrCodeDataUrl: string;
+}
+
+export async function startAdminMfaEnrollment(session: SessionInfo): Promise<StartMfaEnrollmentResult> {
+  if (!MFA_CAPABLE_ROLES.includes(session.user.role)) {
+    throw new ForbiddenError('MFA enrollment is only for administrators');
+  }
+  return startTotpEnrollment(session.userId, totpLabelFor(session.user));
+}
+
+export async function adminMfaEnrollmentStatus(session: SessionInfo): Promise<{ enrolled: boolean }> {
+  if (!MFA_CAPABLE_ROLES.includes(session.user.role)) {
+    throw new ForbiddenError('MFA is only for administrators');
+  }
+  return totpEnrollmentStatus(session.userId);
+}
+
+// Confirming enrollment also completes the current session's MFA step —
+// the caller just proved they control a real code, asking for a second one
+// immediately after would be pure friction.
+export async function confirmAdminMfaEnrollment(session: SessionInfo, code: string): Promise<void> {
+  if (!MFA_CAPABLE_ROLES.includes(session.user.role)) {
+    throw new ForbiddenError('MFA enrollment is only for administrators');
+  }
+  await confirmTotpEnrollment(session.userId, totpLabelFor(session.user), code);
   await markMfaVerified(session.id);
   await recordAuditEvent(
     { userId: session.userId, sessionId: session.id },

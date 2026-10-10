@@ -66,7 +66,15 @@ model User {
   name                       String?
   role                       UserRole                    @default(PATIENT)
   status                     UserStatus                  @default(ACTIVE)
+  // True once a TOTP code has been confirmed (lib/mfa.ts) — this field
+  // existed unused before; it's now the real "has this account completed
+  // enrollment" flag, not a separate one.
   mfaEnabled                 Boolean                     @default(false)
+  // AES-256-GCM ciphertext (lib/crypto.ts), never the plaintext Base32
+  // secret. Set as soon as enrollment starts (mfaEnabled stays false until
+  // the first code is confirmed), so a abandoned enrollment just leaves an
+  // unused, harmless pending secret rather than needing separate state.
+  mfaTotpSecret              String?
   // Password-auth backend (docs/password-auth-backend.md). Null means this
   // account has never set a password — the OTP-only "legacy" state. This IS
   // the migration marker (no separate migration-status field): null forces
