@@ -1,0 +1,12 @@
+// iOS side of the "dev" flavor. Mirrors android/app/build.gradle.kts
+// productFlavors.dev (applicationIdSuffix ".dev", resValue app_name "Abies Dev") so every flavor
+// installs side by side on one device with its own home-screen name, the
+// same way it does on Android. The API base URL is NOT set here: that is
+// the ABIES_ENV dart-define read by lib/core/env/app_env.dart, passed on the
+// flutter command line exactly as for Android (see docs/mobile/APP-STORE-RELEASE.md).
+//
+// iOS bundle identifiers cannot contain "_", so the base id is
+// in.abies.abiesMobile (Android's applicationId is in.abies.abies_mobile).
+ABIES_FLAVOR = dev
+PRODUCT_BUNDLE_IDENTIFIER = in.abies.abiesMobile.dev
+APP_DISPLAY_NAME = Abies Dev

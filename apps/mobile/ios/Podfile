@@ -4,10 +4,20 @@ platform :ios, '15.0'
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
+# One Debug/Profile/Release triple per flavor (dev/uat/prod), matching the
+# Xcode build configurations in Runner.xcodeproj and the Android
+# productFlavors in android/app/build.gradle.kts. Profile builds link pods
+# in release mode, exactly as the stock single-flavor template does.
 project 'Runner', {
-  'Debug' => :debug,
-  'Profile' => :release,
-  'Release' => :release,
+  'Debug-dev' => :debug,
+  'Profile-dev' => :release,
+  'Release-dev' => :release,
+  'Debug-uat' => :debug,
+  'Profile-uat' => :release,
+  'Release-uat' => :release,
+  'Debug-prod' => :debug,
+  'Profile-prod' => :release,
+  'Release-prod' => :release,
 }
 
 def flutter_root

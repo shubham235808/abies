@@ -18,6 +18,58 @@ audit). No other Info.plist key was touched — there's no App Transport Securit
 default, matching `SECURITY-DESIGN.md` §1), and nothing else in this app's current dependency set needs a
 usage-description string to function.
 
+### Third pass (2026-10-10): flavors, bundle IDs, branding — still never built
+
+Still Linux-only: `flutter build -h` here doesn't even list an `ios` subcommand, and `xcodebuild`/`pod`
+are absent. Everything below is config prepared and structurally checked, not built.
+
+- **Flavors mirror Android exactly.** Android uses `--flavor` (Gradle `productFlavors`) plus the
+  independent `--dart-define=ABIES_ENV=<flavor>` and `-t lib/main_<flavor>.dart`. iOS now accepts the
+  same three flags: `Runner.xcodeproj` has nine build configurations (`Debug-dev`, `Profile-dev`,
+  `Release-dev`, and the same for `uat` and `prod`) on the project, `Runner` and `RunnerTests`, plus
+  shared schemes `dev`, `uat` and `prod`. That is the naming `flutter_tools`
+  (`ios/xcodeproj.dart`, `schemeFor`/`buildConfigurationFor`) looks up for `--flavor`. The stock
+  `Runner` scheme and the plain `Debug`/`Release`/`Profile` configurations were removed, so iOS needs
+  `--flavor`, the same as Android. `Podfile` maps all nine configurations (Debug → `:debug`,
+  Profile/Release → `:release`).
+- **Per-flavor values** live in `ios/Flutter/Flavor-<flavor>.xcconfig`. Each of the nine Runner
+  configurations uses `ios/Flutter/<Mode>-<flavor>.xcconfig` as its base configuration, which includes
+  the optional CocoaPods xcconfig, `Generated.xcconfig`, and the flavor file. The old
+  `Flutter/Debug.xcconfig`/`Release.xcconfig` are kept because `flutter_tools` still writes to them,
+  but no build configuration references them any more.
+
+  | Flavor | Bundle ID | Home-screen name | Android equivalent |
+  |---|---|---|---|
+  | dev | `in.abies.abiesMobile.dev` | Abies Dev | `in.abies.abies_mobile.dev` |
+  | uat | `in.abies.abiesMobile.uat` | Abies UAT | `in.abies.abies_mobile.uat` |
+  | prod | `in.abies.abiesMobile` | Abies | `in.abies.abies_mobile` |
+
+  iOS bundle IDs can't contain `_`, which is why `flutter create` generated `abiesMobile`. (Earlier
+  versions of this doc said `in.abies.abies_mobile`, which was wrong.)
+- **Branding:** every `AppIcon.appiconset` slot and the `LaunchImage` set (160/320/480 px, centred on the
+  white launch screen) now use `assets/images/abies-mark.png`, the same mark the app and website use.
+  That source is only 512×512, so the 1024×1024 App Store icon is an upscale. Get a native 1024 export
+  from the brand source before you submit. Note that Android's `mipmap-*/ic_launcher.png` is **still
+  the default Flutter icon**. Only the in-app UI uses the ABIES mark on Android.
+- **Info.plist:** `CFBundleDisplayName`/`CFBundleName` = `$(APP_DISPLAY_NAME)` (per flavor). No new
+  permission strings were added, because `lib/` uses no camera, photo library, location or microphone.
+  `url_launcher` only opens `https` URLs externally, so no `LSApplicationQueriesSchemes` entry is
+  needed. There is no ATS exception: every flavor uses `https://`.
+- **Signing:** untouched. It is Xcode's automatic style with no team set. Choose a team per target in
+  Xcode, or pass `DEVELOPMENT_TEAM`, before any device or archive build.
+
+Exact commands on a Mac (from `apps/mobile/`):
+
+```sh
+flutter pub get
+(cd ios && pod install)
+flutter build ios --simulator --debug --flavor dev --dart-define=ABIES_ENV=dev -t lib/main_dev.dart
+flutter build ios --no-codesign --release --flavor prod --dart-define=ABIES_ENV=prod -t lib/main_prod.dart
+open -a Simulator && flutter run --flavor dev --dart-define=ABIES_ENV=dev -t lib/main_dev.dart
+# signed archive, once an Apple Developer team exists:
+flutter build ipa --flavor prod --dart-define=ABIES_ENV=prod -t lib/main_prod.dart
+```
+
 ### This pass: a Podfile now exists, root cause confirmed, no guessing
 
 `ios/Podfile` was missing entirely until this pass — verified absent before by `find apps/mobile/ios
@@ -170,15 +222,15 @@ real edit, and this note should be revisited then rather than assumed still true
 
 - **An Apple Developer Program membership** (paid, annual) — required for a real provisioning profile,
   code signing identity, and App Store Connect access at all.
-- **A bundle identifier decision**: generated as `in.abies.abies_mobile` (matching the Android
-  `applicationId`'s org, `--org in.abies` used for both platforms) — confirm this is the identifier you
+- **A bundle identifier decision**: `in.abies.abiesMobile` for prod (plus `.dev`/`.uat` suffixes, see the
+  third-pass section above; iOS forbids the `_` in Android's `in.abies.abies_mobile`). Confirm this is the identifier you
   want registered in App Store Connect before first upload; it's awkward to change later.
 - **App Store Connect app record**: name, primary category, age rating, and the same data-safety-style
   questionnaire Android's Play Console asks for (see `docs/mobile/PLAY-STORE-RELEASE.md` for what this
   app actually collects — the same facts apply here, Apple just calls the form something else: "App
   Privacy" / nutrition labels).
-- **Store assets**: screenshots (per required device size class), an app icon (the generated
-  `Assets.xcassets` has only placeholder icon slots, not real artwork), and a support URL.
+- **Store assets**: screenshots (per required device size class), a native 1024×1024 app icon (the current one is
+  the 512 px ABIES mark upscaled, see above), and a support URL.
 - **Push notification capability**: not relevant yet — Phase 9 (push) is blocked on a Firebase project
   regardless of platform; nothing iOS-specific to prepare for that until Phase 9 itself unblocks.
 - **TestFlight** before a public release — the normal, recommended path once a signed build exists; not
