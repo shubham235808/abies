@@ -50,8 +50,8 @@ const createdUserIds: string[] = [];
 async function registerUser(role: 'PATIENT' | 'DOCTOR' | 'ADMIN' | 'PANCHAKARMA_CENTRE') {
   const mobile = freshMobile();
   if (role === 'ADMIN') await prisma.user.create({ data: { mobile: `+91${mobile}`, role: 'ADMIN' } });
-  const { requestId } = await requestOtp(mobile, role);
-  const { session } = await verifyOtp(requestId, '123456', true, {});
+  const { requestId } = await requestOtp({ mobile }, role);
+  const { session } = await verifyOtp(requestId, '123456', true, {}, 'Test User');
   createdUserIds.push(session.userId);
   return session.userId;
 }

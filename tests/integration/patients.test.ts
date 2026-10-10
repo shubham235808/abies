@@ -21,8 +21,8 @@ const createdUserIds: string[] = [];
 
 async function registerPatient() {
   const mobile = freshMobile();
-  const { requestId } = await requestOtp(mobile, 'PATIENT');
-  const { session } = await verifyOtp(requestId, '123456', true, {});
+  const { requestId } = await requestOtp({ mobile }, 'PATIENT');
+  const { session } = await verifyOtp(requestId, '123456', true, {}, 'Test User');
   createdUserIds.push(session.userId);
   return session.userId;
 }

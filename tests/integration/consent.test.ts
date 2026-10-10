@@ -27,8 +27,8 @@ describe('consent', () => {
 
   it('lets a user explicitly accept and withdraw an opt-in artifact without touching required ones', async () => {
     const mobile = freshMobile();
-    const { requestId } = await requestOtp(mobile, 'PATIENT');
-    const { session } = await verifyOtp(requestId, '123456', true, {});
+    const { requestId } = await requestOtp({ mobile }, 'PATIENT');
+    const { session } = await verifyOtp(requestId, '123456', true, {}, 'Test User');
     createdUserIds.push(session.userId);
 
     const marketing = await prisma.consentArtifact.findFirstOrThrow({ where: { key: 'marketing', active: true } });

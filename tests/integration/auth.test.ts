@@ -36,12 +36,15 @@ beforeAll(() => {
 describe('OTP login', () => {
   it('registers a new patient, auto-accepts required consent, and issues an mfa-free session', async () => {
     const mobile = freshMobile();
-    const { requestId } = await requestOtp(mobile, 'PATIENT');
+    const { requestId } = await requestOtp({ mobile }, 'PATIENT');
 
-    const { token, session, mfaRequired } = await verifyOtp(requestId, '123456', true, {
-      ip: '127.0.0.1',
-      userAgent: 'vitest',
-    });
+    const { token, session, mfaRequired } = await verifyOtp(
+      requestId,
+      '123456',
+      true,
+      { ip: '127.0.0.1', userAgent: 'vitest' },
+      'Test User',
+    );
     createdUserIds.push(session.userId);
 
     expect(mfaRequired).toBe(false);
@@ -58,13 +61,13 @@ describe('OTP login', () => {
 
   it('rejects OTP verification without accepting terms', async () => {
     const mobile = freshMobile();
-    const { requestId } = await requestOtp(mobile, 'PATIENT');
+    const { requestId } = await requestOtp({ mobile }, 'PATIENT');
     await expect(verifyOtp(requestId, '123456', false, {})).rejects.toThrow(AppError);
   });
 
   it('increments attempts on a wrong code and eventually locks the challenge', async () => {
     const mobile = freshMobile();
-    const { requestId } = await requestOtp(mobile, 'PATIENT');
+    const { requestId } = await requestOtp({ mobile }, 'PATIENT');
 
     for (let i = 0; i < getEnv().OTP_MAX_ATTEMPTS; i++) {
       await expect(verifyOtp(requestId, '000000', true, {})).rejects.toThrow();
@@ -75,24 +78,24 @@ describe('OTP login', () => {
 
   it('enforces the resend cooldown for the same mobile', async () => {
     const mobile = freshMobile();
-    await requestOtp(mobile, 'PATIENT');
-    await expect(requestOtp(mobile, 'PATIENT')).rejects.toThrow(/wait/i);
+    await requestOtp({ mobile }, 'PATIENT');
+    await expect(requestOtp({ mobile }, 'PATIENT')).rejects.toThrow(/wait/i);
   });
 
   it('refuses to provision a non-patient role without admin provisioning or the self-onboarding flag', async () => {
     const mobile = freshMobile();
-    await expect(requestOtp(mobile, 'CUSTOMER_SUPPORT')).rejects.toThrow(/not enabled/i);
+    await expect(requestOtp({ mobile }, 'CUSTOMER_SUPPORT')).rejects.toThrow(/not enabled/i);
   });
 
   it('rejects verifying against a role that does not match the existing account', async () => {
     const mobile = freshMobile();
-    const { requestId } = await requestOtp(mobile, 'PATIENT');
-    const { session } = await verifyOtp(requestId, '123456', true, {});
+    const { requestId } = await requestOtp({ mobile }, 'PATIENT');
+    const { session } = await verifyOtp(requestId, '123456', true, {}, 'Test User');
     createdUserIds.push(session.userId);
 
     // Same mobile, now requesting a DOCTOR OTP — should fail up front
     // because the mobile is already a PATIENT account.
-    await expect(requestOtp(mobile, 'DOCTOR')).rejects.toThrow(/not enabled/i);
+    await expect(requestOtp({ mobile }, 'DOCTOR')).rejects.toThrow(/not enabled/i);
   });
 });
 
@@ -101,7 +104,7 @@ describe('Admin MFA', () => {
     const mobile = freshMobile();
     await prisma.user.create({ data: { mobile: `+91${mobile}`, role: 'ADMIN' } });
 
-    const { requestId } = await requestOtp(mobile, 'ADMIN');
+    const { requestId } = await requestOtp({ mobile }, 'ADMIN');
     const { session, mfaRequired } = await verifyOtp(requestId, '123456', true, {});
     createdUserIds.push(session.userId);
 
@@ -119,8 +122,8 @@ describe('Admin MFA', () => {
 describe('logout', () => {
   it('revokes the session so the token no longer resolves', async () => {
     const mobile = freshMobile();
-    const { requestId } = await requestOtp(mobile, 'PATIENT');
-    const { token, session } = await verifyOtp(requestId, '123456', true, {});
+    const { requestId } = await requestOtp({ mobile }, 'PATIENT');
+    const { token, session } = await verifyOtp(requestId, '123456', true, {}, 'Test User');
     createdUserIds.push(session.userId);
 
     expect(await getSessionByToken(token)).not.toBeNull();

@@ -21,8 +21,8 @@ const createdUserIds: string[] = [];
 
 async function registerCentre() {
   const mobile = freshMobile();
-  const { requestId } = await requestOtp(mobile, 'PANCHAKARMA_CENTRE');
-  const { session } = await verifyOtp(requestId, '123456', true, {});
+  const { requestId } = await requestOtp({ mobile }, 'PANCHAKARMA_CENTRE');
+  const { session } = await verifyOtp(requestId, '123456', true, {}, 'Test User');
   createdUserIds.push(session.userId);
   await updateMyCentre(session.userId, { name: `Test Centre ${randomInt(1000, 9999)}`, city: 'Pune' }, { userId: session.userId });
   return session.userId;
