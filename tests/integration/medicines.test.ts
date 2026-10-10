@@ -21,6 +21,13 @@ vi.mock('@abies/domain/lib/payments/razorpay', () => razorpayMock);
 
 import { holdSlot, verifyPayment } from '@abies/domain/modules/appointments/appointments.service';
 import { createPrescription, finalizePrescription } from '@abies/domain/modules/consultations/prescriptions.service';
+import {
+  createAdminProduct,
+  createProductVariant,
+  removeProductVariant,
+  updateAdminProduct,
+  updateProductVariant,
+} from '@abies/domain/modules/medicines/admin-products.service';
 import { approve as approvePharmacy } from '@abies/domain/modules/medicines/admin-pharmacies.service';
 import { addInventory, searchPublic, updateInventory } from '@abies/domain/modules/medicines/catalogue.service';
 import { addToCart, checkoutCart, getCart, listMyCarts, removeCartItem, updateCartItem } from '@abies/domain/modules/medicines/cart.service';
@@ -57,8 +64,8 @@ const createdGstRateIds: string[] = [];
 async function registerUser(role: 'PATIENT' | 'DOCTOR' | 'ADMIN' | 'PHARMACY') {
   const mobile = freshMobile();
   if (role === 'ADMIN') await prisma.user.create({ data: { mobile: `+91${mobile}`, role: 'ADMIN' } });
-  const { requestId } = await requestOtp(mobile, role);
-  const { session } = await verifyOtp(requestId, '123456', true, {});
+  const { requestId } = await requestOtp({ mobile }, role);
+  const { session } = await verifyOtp(requestId, '123456', true, {}, 'Test User');
   createdUserIds.push(session.userId);
   return session.userId;
 }
@@ -665,6 +672,118 @@ describe('medicine variants (EXPANSION-1)', () => {
     const largeRow = await prisma.pharmacyInventory.findUniqueOrThrow({ where: { id: large.id } });
     expect(smallRow.quantityAvailable).toBe(5); // untouched
     expect(largeRow.quantityAvailable).toBe(4); // decremented
+  });
+});
+
+describe('admin product management (admin-portal-status-report.md §A gap-close)', () => {
+  async function adminAndProduct() {
+    const adminId = await registerUser('ADMIN');
+    const product = await createAdminProduct(
+      {
+        name: `Chyawanprash-${randomInt(100000, 999999)}`,
+        requiresPrescription: false,
+      },
+      null,
+      { userId: adminId },
+    );
+    return { adminId, product };
+  }
+
+  it('edits name/category/mrp/prescription and leaves omitted fields untouched', async () => {
+    const { adminId, product } = await adminAndProduct();
+
+    const updated = await updateAdminProduct(
+      product.id,
+      { category: 'Immunity', mrp: 450, requiresPrescription: true },
+      null,
+      { userId: adminId },
+    );
+
+    expect(updated.name).toBe(product.name); // not in the dto, so unchanged
+    expect(updated.category).toBe('Immunity');
+    expect(updated.mrp).toBe(450);
+    expect(updated.requiresPrescription).toBe(true);
+  });
+
+  it('toggles active/inactive (the publish control the audit flagged as missing)', async () => {
+    const { adminId, product } = await adminAndProduct();
+    expect(product.active).toBe(true);
+
+    const deactivated = await updateAdminProduct(product.id, { active: false }, null, { userId: adminId });
+    expect(deactivated.active).toBe(false);
+
+    const row = await prisma.medicine.findUniqueOrThrow({ where: { id: product.id } });
+    expect(row.active).toBe(false);
+  });
+
+  it('clears a nullable field when explicitly sent null, instead of being ignored', async () => {
+    const adminId = await registerUser('ADMIN');
+    const product = await createAdminProduct(
+      { name: `Triphala-${randomInt(100000, 999999)}`, category: 'Digestive', requiresPrescription: false },
+      null,
+      { userId: adminId },
+    );
+    expect(product.category).toBe('Digestive');
+
+    const cleared = await updateAdminProduct(product.id, { category: null }, null, { userId: adminId });
+    expect(cleared.category).toBeNull();
+  });
+
+  it('refuses to edit a product that does not exist', async () => {
+    const adminId = await registerUser('ADMIN');
+    await expect(updateAdminProduct('does-not-exist', { name: 'X' }, null, { userId: adminId })).rejects.toThrow(NotFoundError);
+  });
+
+  it('records a PRODUCT_UPDATED audit event on edit', async () => {
+    const { adminId, product } = await adminAndProduct();
+    await updateAdminProduct(product.id, { mrp: 100 }, null, { userId: adminId });
+
+    const event = await prisma.auditEvent.findFirst({
+      where: { action: 'PRODUCT_UPDATED', resourceId: product.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(event?.eventType).toBe('CATALOGUE');
+  });
+
+  it('creates, renames, and toggles a variant, each step audited', async () => {
+    const { adminId, product } = await adminAndProduct();
+
+    const variant = await createProductVariant(product.id, { label: '250gm' }, { userId: adminId });
+    expect(variant.label).toBe('250gm');
+    expect(variant.active).toBe(true);
+
+    const renamed = await updateProductVariant(product.id, variant.id, { label: '500gm' }, { userId: adminId });
+    expect(renamed.label).toBe('500gm');
+
+    const deactivated = await updateProductVariant(product.id, variant.id, { active: false }, { userId: adminId });
+    expect(deactivated.active).toBe(false);
+
+    const events = await prisma.auditEvent.findMany({ where: { resourceId: variant.id }, orderBy: { createdAt: 'asc' } });
+    expect(events.map((e) => e.action)).toEqual(['PRODUCT_VARIANT_CREATED', 'PRODUCT_VARIANT_UPDATED', 'PRODUCT_VARIANT_UPDATED']);
+  });
+
+  it('refuses two variants with the same label on one product', async () => {
+    const { adminId, product } = await adminAndProduct();
+    await createProductVariant(product.id, { label: '1kg' }, { userId: adminId });
+
+    await expect(createProductVariant(product.id, { label: '1kg' }, { userId: adminId })).rejects.toThrow(ConflictError);
+  });
+
+  it("scopes variant updates to the product they belong to — another product's variant id 404s", async () => {
+    const { adminId, product: productA } = await adminAndProduct();
+    const { product: productB } = await adminAndProduct();
+    const variantOfA = await createProductVariant(productA.id, { label: '250gm' }, { userId: adminId });
+
+    await expect(updateProductVariant(productB.id, variantOfA.id, { label: 'x' }, { userId: adminId })).rejects.toThrow(NotFoundError);
+  });
+
+  it('removes a variant', async () => {
+    const { adminId, product } = await adminAndProduct();
+    const variant = await createProductVariant(product.id, { label: '250gm' }, { userId: adminId });
+
+    await removeProductVariant(product.id, variant.id, { userId: adminId });
+
+    await expect(prisma.medicineVariant.findUniqueOrThrow({ where: { id: variant.id } })).rejects.toThrow();
   });
 });
 
