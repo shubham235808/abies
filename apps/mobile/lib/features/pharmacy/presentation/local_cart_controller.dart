@@ -74,7 +74,7 @@ class LocalCartController extends StateNotifier<List<LocalCartItem>> {
 
   void clear() => state = const [];
 
-  /// Called right after a successful sign-in (`OtpScreen`, immediately
+  /// Called right after a successful sign-in (`completeSignIn`, immediately
   /// after `AuthController.onVerified`) — pushes every local item into the
   /// real backend cart via the existing `POST /api/v1/patients/me/cart`
   /// (`PharmacyApi.addToCart`, the same call `CartController.addItem` makes
@@ -90,8 +90,8 @@ class LocalCartController extends StateNotifier<List<LocalCartItem>> {
   ///
   /// Takes the API and an invalidation callback directly, rather than a
   /// `Ref`, so this one method works from both `Ref` (the router/most
-  /// controllers) and `WidgetRef` (`OtpScreen`, a `ConsumerStatefulWidget`)
-  /// call sites — the two don't share a common `read`/`invalidate`
+  /// controllers) and `WidgetRef` (`completeSignIn`'s `ConsumerStatefulWidget`
+  /// call sites) — the two don't share a common `read`/`invalidate`
   /// interface in this riverpod version.
   Future<void> flushToBackend({required PharmacyApi api, required void Function() invalidateCart}) async {
     if (state.isEmpty) return;

@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../features/appointments/presentation/appointment_list_screen.dart';
 import '../../features/appointments/presentation/booking_screen.dart';
 import '../../features/auth/presentation/auth_controller.dart';
-import '../../features/auth/presentation/otp_screen.dart';
+import '../../features/auth/presentation/forgot_password_screen.dart';
+import '../../features/auth/presentation/password_setup_screen.dart';
 import '../../features/auth/presentation/pending_redirect.dart';
+import '../../features/auth/presentation/register_screen.dart';
 import '../../features/auth/presentation/sign_in_screen.dart';
 import '../../features/diagnostics/domain/diagnostic_booking_args.dart';
 import '../../features/diagnostics/domain/diagnostic_package_summary.dart';
@@ -88,7 +90,8 @@ import '../../features/profile/presentation/profile_screen.dart';
 /// protected was even touched).
 ///
 /// Public — reachable signed out:
-/// - `/`, `/sign-in`, `/otp`, `/connection-diagnostics` — entry points.
+/// - `/`, `/sign-in`, `/register`, `/forgot-password`, `/password-setup`,
+///   `/connection-diagnostics` — entry points.
 ///   `/` (`HomeController`) only attempts the four `/mine`-shaped
 ///   dashboard sections when actually signed in; signed out it shows the
 ///   public catalogue previews only (see that controller's own doc
@@ -117,7 +120,7 @@ import '../../features/profile/presentation/profile_screen.dart';
 ///   **local-only, on-device cart** instead (`LocalCartController`,
 ///   `lib/features/pharmacy/presentation/local_cart_controller.dart`),
 ///   flushed into the real backend cart the moment sign-in succeeds
-///   (`OtpScreen`).
+///   (`completeSignIn`).
 /// - `/panchakarma/book`, `/diagnostics/book` — **the ambiguous ones,
 ///   resolved by reading the controller, not guessed**:
 ///   `PanchakarmaBookingFlowController`/`DiagnosticBookingFlowController`
@@ -167,7 +170,9 @@ import '../../features/profile/presentation/profile_screen.dart';
 const _publicRoutePaths = <String>{
   '/',
   '/sign-in',
-  '/otp',
+  '/register',
+  '/forgot-password',
+  '/password-setup',
   '/connection-diagnostics',
   '/doctors',
   '/doctor/:slug',
@@ -191,6 +196,11 @@ const _publicRoutePaths = <String>{
 /// `test/unit/app_router_test.dart` can exercise it directly without
 /// standing up a real `GoRouter`/`WidgetTester`.
 bool isPublicRoute(String? fullPath) => fullPath != null && _publicRoutePaths.contains(fullPath);
+
+/// Signed in and on one of these: send home instead of rendering them
+/// (`AuthRedirectDecision.goHome`) — every one of them is a pre-auth screen
+/// that makes no sense for an already-signed-in visitor to be on.
+const _authFlowRoutePaths = <String>{'/sign-in', '/register', '/forgot-password', '/password-setup'};
 
 enum AuthRedirectDecision {
   /// Render whatever route was requested.
@@ -225,9 +235,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       case AuthRedirectDecision.goHome:
         return '/';
       case AuthRedirectDecision.goSignIn:
-        // Remember exactly where this visit was headed — `OtpScreen` reads
-        // and clears this right after a successful verify (brief: "return
-        // the customer to the exact action they were performing").
+        // Remember exactly where this visit was headed — `completeSignIn`
+        // reads and clears this right after a successful sign-in (brief:
+        // "return the customer to the exact action they were performing").
         ref.read(pendingRedirectProvider.notifier).state = PendingRedirect(location: state.uri.toString(), extra: state.extra);
         return '/sign-in';
     }
@@ -237,7 +247,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     refreshListenable: refreshNotifier,
     redirect: (context, state) {
-      final loggingIn = state.matchedLocation == '/sign-in' || state.matchedLocation == '/otp';
+      final loggingIn = _authFlowRoutePaths.contains(state.matchedLocation);
       final authAsync = ref.read(authControllerProvider);
       return authAsync.when(
         data: (auth) => applyDecision(
@@ -259,18 +269,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
       GoRoute(path: '/sign-in', builder: (context, state) => const SignInScreen()),
-      GoRoute(path: '/connection-diagnostics', builder: (context, state) => const ConnectionDiagnosticsScreen()),
+      GoRoute(path: '/register', builder: (context, state) => const RegisterScreen()),
+      GoRoute(path: '/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),
       GoRoute(
-        path: '/otp',
+        path: '/password-setup',
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>? ?? const {};
-          return OtpScreen(
+          return PasswordSetupScreen(
             requestId: extra['requestId'] as String,
-            isNewAccount: extra['isNewAccount'] as bool? ?? false,
-            devOtp: extra['devOtp'] as String?,
+            mobile: extra['mobile'] as String,
           );
         },
       ),
+      GoRoute(path: '/connection-diagnostics', builder: (context, state) => const ConnectionDiagnosticsScreen()),
       GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       GoRoute(path: '/doctors', builder: (context, state) => const DoctorSearchScreen()),
       GoRoute(

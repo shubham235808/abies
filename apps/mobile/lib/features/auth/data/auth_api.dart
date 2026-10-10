@@ -6,14 +6,34 @@ import '../domain/session_user.dart';
 /// Talks to the existing `/api/v1/auth/*` routes only — nothing here invents
 /// an endpoint (docs/mobile/CURRENT-BACKEND-API.md §3). Behind an interface
 /// so [AuthController] is unit-testable with a fake, with no real `ApiClient`.
+///
+/// Password-first (docs/password-auth-backend.md): [login]/[register] are
+/// the primary sign-in path. OTP survives only inside [requestPasswordReset]
+/// / [completePasswordSetup] / [resetPassword] — proving control of the
+/// account's mobile number before a password is set or changed — never as a
+/// user-facing "sign in with a code" option in this app any more.
 abstract class AuthApi {
-  Future<RequestOtpResult> requestOtp({String? mobile, String? email});
+  Future<LoginResult> login({String? mobile, String? email, required String password});
 
-  Future<VerifyOtpResult> verifyOtp({
+  Future<RegisterResult> register({
+    required String name,
+    required String mobile,
+    required String email,
+    required String password,
+  });
+
+  Future<RequestPasswordResetResult> requestPasswordReset({String? mobile, String? email});
+
+  Future<SetPasswordResult> completePasswordSetup({
     required String requestId,
     required String otp,
-    required bool acceptedTerms,
-    String? name,
+    required String newPassword,
+  });
+
+  Future<SetPasswordResult> resetPassword({
+    required String requestId,
+    required String otp,
+    required String newPassword,
   });
 
   /// Returns null on a 401 — "not signed in yet" is the expected outcome at
@@ -35,37 +55,66 @@ class AuthApiImpl implements AuthApi {
   final ApiClient _client;
 
   @override
-  Future<RequestOtpResult> requestOtp({String? mobile, String? email}) {
+  Future<LoginResult> login({String? mobile, String? email, required String password}) {
     assert((mobile == null) != (email == null), 'pass exactly one of mobile or email');
-    return _client.post<RequestOtpResult>(
-      '/api/v1/auth/otp/request',
+    return _client.post<LoginResult>(
+      '/api/v1/auth/login',
       body: {
         if (mobile != null) 'mobile': mobile,
         if (email != null) 'email': email,
-        // The mobile app only ever provisions PATIENT accounts — the other
-        // roles this endpoint accepts are for the staff/partner web portals.
-        'role': 'PATIENT',
+        'password': password,
       },
-      decode: (json) => RequestOtpResult.fromJson(json as Map<String, dynamic>),
+      decode: (json) => LoginResult.fromJson(json as Map<String, dynamic>),
     );
   }
 
   @override
-  Future<VerifyOtpResult> verifyOtp({
+  Future<RegisterResult> register({
+    required String name,
+    required String mobile,
+    required String email,
+    required String password,
+  }) {
+    return _client.post<RegisterResult>(
+      '/api/v1/auth/register',
+      body: {'name': name, 'mobile': mobile, 'email': email, 'password': password},
+      decode: (json) => RegisterResult.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
+  @override
+  Future<RequestPasswordResetResult> requestPasswordReset({String? mobile, String? email}) {
+    assert((mobile == null) != (email == null), 'pass exactly one of mobile or email');
+    return _client.post<RequestPasswordResetResult>(
+      '/api/v1/auth/password/forgot',
+      body: {if (mobile != null) 'mobile': mobile, if (email != null) 'email': email},
+      decode: (json) => RequestPasswordResetResult.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
+  @override
+  Future<SetPasswordResult> completePasswordSetup({
     required String requestId,
     required String otp,
-    required bool acceptedTerms,
-    String? name,
+    required String newPassword,
   }) {
-    return _client.post<VerifyOtpResult>(
-      '/api/v1/auth/otp/verify',
-      body: {
-        'requestId': requestId,
-        'otp': otp,
-        'acceptedTerms': acceptedTerms,
-        if (name != null) 'name': name,
-      },
-      decode: (json) => VerifyOtpResult.fromJson(json as Map<String, dynamic>),
+    return _client.post<SetPasswordResult>(
+      '/api/v1/auth/password/setup',
+      body: {'requestId': requestId, 'otp': otp, 'newPassword': newPassword},
+      decode: (json) => SetPasswordResult.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
+  @override
+  Future<SetPasswordResult> resetPassword({
+    required String requestId,
+    required String otp,
+    required String newPassword,
+  }) {
+    return _client.post<SetPasswordResult>(
+      '/api/v1/auth/password/reset',
+      body: {'requestId': requestId, 'otp': otp, 'newPassword': newPassword},
+      decode: (json) => SetPasswordResult.fromJson(json as Map<String, dynamic>),
     );
   }
 

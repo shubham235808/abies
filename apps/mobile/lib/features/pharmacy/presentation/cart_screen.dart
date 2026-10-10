@@ -71,8 +71,8 @@ class _SignedInCartBody extends ConsumerWidget {
 /// sends the visitor to sign in first (checkout always needs a real backend
 /// cart; see `app_router.dart`'s redirect doc comment), landing them right
 /// back on this same cart screen once signed in, by which point
-/// `OtpScreen`'s flush has already turned these local items into a real
-/// cart.
+/// `completeSignIn`'s flush has already turned these local items into a
+/// real cart.
 class _GuestCartBody extends ConsumerWidget {
   const _GuestCartBody();
 

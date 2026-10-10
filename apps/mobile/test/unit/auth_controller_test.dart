@@ -27,14 +27,18 @@ class FakeAuthApi implements AuthApi {
   }
 
   @override
-  Future<RequestOtpResult> requestOtp({String? mobile, String? email}) {
-    throw UnimplementedError('not used in these tests');
-  }
-
+  Future<LoginResult> login({String? mobile, String? email, required String password}) => throw UnimplementedError();
   @override
-  Future<VerifyOtpResult> verifyOtp({required String requestId, required String otp, required bool acceptedTerms, String? name}) {
-    throw UnimplementedError('not used in these tests');
-  }
+  Future<RegisterResult> register({required String name, required String mobile, required String email, required String password}) =>
+      throw UnimplementedError();
+  @override
+  Future<RequestPasswordResetResult> requestPasswordReset({String? mobile, String? email}) => throw UnimplementedError();
+  @override
+  Future<SetPasswordResult> completePasswordSetup({required String requestId, required String otp, required String newPassword}) =>
+      throw UnimplementedError();
+  @override
+  Future<SetPasswordResult> resetPassword({required String requestId, required String otp, required String newPassword}) =>
+      throw UnimplementedError();
 }
 
 const SessionUser testUser = SessionUser(id: 'u1', mobile: '+919876543210', email: 'asha@example.test', role: 'PATIENT');

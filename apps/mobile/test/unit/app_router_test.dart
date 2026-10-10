@@ -13,7 +13,9 @@ void main() {
       const publicPaths = [
         '/',
         '/sign-in',
-        '/otp',
+        '/register',
+        '/forgot-password',
+        '/password-setup',
         '/connection-diagnostics',
         '/doctors',
         '/doctor/:slug',
@@ -69,12 +71,14 @@ void main() {
       expect(decision, AuthRedirectDecision.allow);
     });
 
-    test('signed in, on /sign-in or /otp: go home', () {
+    test('signed in, on any auth-flow screen: go home', () {
       expect(decideAuthRedirect(isSignedIn: true, loggingIn: true, fullPath: '/sign-in'), AuthRedirectDecision.goHome);
-      expect(decideAuthRedirect(isSignedIn: true, loggingIn: true, fullPath: '/otp'), AuthRedirectDecision.goHome);
+      expect(decideAuthRedirect(isSignedIn: true, loggingIn: true, fullPath: '/register'), AuthRedirectDecision.goHome);
+      expect(decideAuthRedirect(isSignedIn: true, loggingIn: true, fullPath: '/forgot-password'), AuthRedirectDecision.goHome);
+      expect(decideAuthRedirect(isSignedIn: true, loggingIn: true, fullPath: '/password-setup'), AuthRedirectDecision.goHome);
     });
 
-    test('signed out, on /sign-in or /otp: allow (not a redirect loop)', () {
+    test('signed out, on /sign-in: allow (not a redirect loop)', () {
       expect(decideAuthRedirect(isSignedIn: false, loggingIn: true, fullPath: '/sign-in'), AuthRedirectDecision.allow);
     });
 

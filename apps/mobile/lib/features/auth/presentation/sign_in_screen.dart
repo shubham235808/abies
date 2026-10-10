@@ -4,16 +4,15 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exception.dart';
 import 'auth_controller.dart';
+import 'complete_sign_in.dart';
 import 'pending_redirect.dart';
 
-/// `POST /api/v1/auth/otp/request` with either a mobile number or an email —
-/// never both, matching the backend's own `.refine()` on the request schema.
-///
-/// Note (docs/mobile/API-GAP-ANALYSIS.md §3): OTP delivery by mobile-only
-/// sign-up has no live channel yet — WhatsApp is wired but switched off, and
-/// nothing goes to a phone number with no email on file until it's turned
-/// on. Build and test against this screen now; don't expect a real OTP on a
-/// phone-only new sign-up until that's live.
+/// `POST /api/v1/auth/login` with either a mobile number or an email — never
+/// both, matching the backend's own `.refine()` on `loginSchema`.
+/// Password-first (docs/password-auth-backend.md): a legacy OTP-only
+/// account (`requiresPasswordSetup: true`) is routed to `/password-setup`
+/// instead of failing, and "Create an account" / "Forgot password?" cover
+/// the other two cases this screen used to need a second route for.
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
 
@@ -23,16 +22,15 @@ class SignInScreen extends ConsumerStatefulWidget {
 
 class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _mobileController = TextEditingController();
-  final _emailController = TextEditingController();
-  bool _useEmail = false;
+  final _identifierController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _submitting = false;
   String? _error;
 
   @override
   void dispose() {
-    _mobileController.dispose();
-    _emailController.dispose();
+    _identifierController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -43,16 +41,29 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       _error = null;
     });
     try {
-      final result = await ref.read(authApiProvider).requestOtp(
-            mobile: _useEmail ? null : _mobileController.text.trim(),
-            email: _useEmail ? _emailController.text.trim() : null,
+      final identifier = _identifierController.text.trim();
+      final isEmail = identifier.contains('@');
+      final result = await ref.read(authApiProvider).login(
+            mobile: isEmail ? null : identifier,
+            email: isEmail ? identifier : null,
+            password: _passwordController.text,
           );
       if (!mounted) return;
-      context.push('/otp', extra: {
-        'requestId': result.requestId,
-        'isNewAccount': result.isNewAccount,
-        'devOtp': result.devOtp,
-      });
+      if (result.requiresPasswordSetup) {
+        // Prove control of the account's OTP channel first — same request
+        // the forgot-password flow uses — then move to the setup screen.
+        final reset = await ref.read(authApiProvider).requestPasswordReset(mobile: result.mobile);
+        if (!mounted) return;
+        if (!context.mounted) return;
+        context.push('/password-setup', extra: {'requestId': reset.requestId, 'mobile': result.mobile});
+        return;
+      }
+      if (result.mfaRequired) {
+        // Admin MFA only — a PATIENT account should never reach this.
+        setState(() => _error = 'This account requires additional verification not supported in this app.');
+        return;
+      }
+      await completeSignIn(ref, context, result.user!);
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } finally {
@@ -65,8 +76,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     // Set by the router's redirect (an unauthenticated visit to a protected
     // route) or by a screen's own "this one action needs auth" check (e.g.
     // `/pharmacy/cart`'s "Checkout", `/panchakarma/book`'s "Confirm
-    // booking") — null just means "signed in from here will go home",
-    // which is still the normal, unprompted way to reach this screen.
+    // booking") — null just means "signed in from here will go home", which
+    // is still the normal, unprompted way to reach this screen.
     final hasPendingAction = ref.watch(pendingRedirectProvider) != null;
     return Scaffold(
       appBar: AppBar(title: const Text('Sign in')),
@@ -95,30 +106,33 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 Text(
                   hasPendingAction
                       ? "Sign in to continue — we'll take you right back to what you were doing."
-                      : "We'll send you a one-time code to sign in.",
+                      : 'Sign in with your mobile number or email.',
                 ),
                 const SizedBox(height: 24),
-                if (!_useEmail)
-                  TextFormField(
-                    key: const ValueKey('mobile-field'),
-                    controller: _mobileController,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(labelText: 'Mobile number', hintText: '98765 43210'),
-                    validator: (v) => (v == null || v.trim().length < 10) ? 'Enter a valid mobile number' : null,
-                  )
-                else
-                  TextFormField(
-                    key: const ValueKey('email-field'),
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email address'),
-                    validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email address' : null,
-                  ),
+                TextFormField(
+                  key: const ValueKey('identifier-field'),
+                  controller: _identifierController,
+                  decoration: const InputDecoration(labelText: 'Mobile number or email', hintText: '98765 43210 or you@example.com'),
+                  validator: (v) {
+                    final value = v?.trim() ?? '';
+                    if (value.isEmpty) return 'Enter your mobile number or email';
+                    if (value.contains('@')) return null;
+                    return value.replaceAll(RegExp(r'\D'), '').length >= 10 ? null : 'Enter a 10-digit mobile number or a valid email';
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  key: const ValueKey('password-field'),
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Password'),
+                  validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
+                ),
                 Align(
-                  alignment: Alignment.centerLeft,
+                  alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () => setState(() => _useEmail = !_useEmail),
-                    child: Text(_useEmail ? 'Use mobile number instead' : 'Use email instead'),
+                    onPressed: () => context.push('/forgot-password'),
+                    child: const Text('Forgot password?'),
                   ),
                 ),
                 if (_error != null) ...[
@@ -130,9 +144,15 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   onPressed: _submitting ? null : _submit,
                   child: _submitting
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Send OTP'),
+                      : const Text('Sign in'),
                 ),
                 const SizedBox(height: 8),
+                Center(
+                  child: TextButton(
+                    onPressed: () => context.push('/register'),
+                    child: const Text('New here? Create an account'),
+                  ),
+                ),
                 Center(
                   child: TextButton(
                     onPressed: () => context.push('/connection-diagnostics'),

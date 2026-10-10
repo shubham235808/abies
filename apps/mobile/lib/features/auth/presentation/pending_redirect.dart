@@ -22,8 +22,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// (`PanchakarmaTherapy`, `DiagnosticBookingArgs`) aren't meaningfully
 /// representable as URL query text. This provider is the one place both
 /// triggers (the router's redirect, and a screen's own "this one action
-/// needs auth" check) write to, and `OtpScreen` is the one place that reads
-/// and clears it, right after a successful verify.
+/// needs auth" check) write to, and `completeSignIn` is the one place that
+/// reads and clears it, right after a successful sign-in.
 class PendingRedirect {
   const PendingRedirect({required this.location, this.extra});
 

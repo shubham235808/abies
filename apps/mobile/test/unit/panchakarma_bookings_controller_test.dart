@@ -27,9 +27,17 @@ class _FakeAuthApi implements AuthApi {
   @override
   Future<void> logout() async {}
   @override
-  Future<RequestOtpResult> requestOtp({String? mobile, String? email}) => throw UnimplementedError();
+  Future<LoginResult> login({String? mobile, String? email, required String password}) => throw UnimplementedError();
   @override
-  Future<VerifyOtpResult> verifyOtp({required String requestId, required String otp, required bool acceptedTerms, String? name}) =>
+  Future<RegisterResult> register({required String name, required String mobile, required String email, required String password}) =>
+      throw UnimplementedError();
+  @override
+  Future<RequestPasswordResetResult> requestPasswordReset({String? mobile, String? email}) => throw UnimplementedError();
+  @override
+  Future<SetPasswordResult> completePasswordSetup({required String requestId, required String otp, required String newPassword}) =>
+      throw UnimplementedError();
+  @override
+  Future<SetPasswordResult> resetPassword({required String requestId, required String otp, required String newPassword}) =>
       throw UnimplementedError();
 }
 
