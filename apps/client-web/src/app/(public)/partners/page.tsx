@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { Alert } from '@abies/design-system/components/ui/alert';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = { title: 'Partner with ABIES' };
+export function generateMetadata() {
+  return pageMetadata('partners');
+}
 
 // Each bullet names a real, already-built capability of that portal (not
 // marketing copy) — doctors get profile/documents/clinics/availability

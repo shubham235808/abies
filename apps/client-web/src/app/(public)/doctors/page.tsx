@@ -3,8 +3,11 @@ import { prisma } from '@abies/domain/lib/db';
 import { getCurrentSession } from '@abies/domain/server/current-user';
 import { DoctorCard } from './doctor-card';
 import { DoctorFilters } from './filters';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = { title: 'Find a verified Ayurveda doctor — ABIES' };
+export function generateMetadata() {
+  return pageMetadata('doctors');
+}
 // Live search results — must render per-request, never prerendered at
 // build time (the build stage has no DB to query).
 export const dynamic = 'force-dynamic';

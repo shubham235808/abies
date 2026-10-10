@@ -2,8 +2,11 @@ import Link from 'next/link';
 import { Alert } from '@abies/design-system/components/ui/alert';
 import { HoverCard } from '@abies/design-system/components/ui/card';
 import { FaqAccordion } from './faq-accordion';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = { title: 'Support — ABIES' };
+export function generateMetadata() {
+  return pageMetadata('support');
+}
 
 const AREAS = [
   { icon: '💬', title: 'Customer Support', body: 'Bookings, payments, refunds, delivery and general account help.' },

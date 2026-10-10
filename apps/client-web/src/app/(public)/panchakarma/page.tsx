@@ -2,8 +2,11 @@ import { facets, searchPublic } from '@abies/domain/modules/panchakarma/catalogu
 import { getCurrentSession } from '@abies/domain/server/current-user';
 import { PanchakarmaFilters } from './filters';
 import { TherapyCard } from './therapy-card';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = { title: 'Panchakarma — ABIES' };
+export function generateMetadata() {
+  return pageMetadata('panchakarma');
+}
 // Live search results — must render per-request, never prerendered at
 // build time (the build stage has no DB to query).
 export const dynamic = 'force-dynamic';

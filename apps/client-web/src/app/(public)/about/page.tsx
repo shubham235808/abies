@@ -1,6 +1,32 @@
-export const metadata = { title: 'About ABIES' };
+import { activeAboutPage } from '@abies/domain/modules/content/about.service';
+import { ContentPageBody } from '@/components/content/content-page-body';
+import { pageMetadata } from '@/lib/seo';
 
-export default function AboutPage() {
+export function generateMetadata() {
+  return pageMetadata('about');
+}
+
+// Reads the DB on every request, never prerendered — same rule already
+// applied to the homepage's promotion banner and to /diagnostics and
+// /doctors (the build stage has no DB to query against).
+export const dynamic = 'force-dynamic';
+
+export default async function AboutPage() {
+  const page = await activeAboutPage();
+
+  if (page) {
+    return (
+      <main className="mx-auto max-w-3xl px-6 py-16">
+        <p className="text-sm font-semibold uppercase tracking-wide text-brand-magenta-600">About ABIES</p>
+        <h1 className="mt-2 text-3xl font-semibold text-brand-neutral-900 sm:text-4xl">{page.title}</h1>
+        <ContentPageBody body={page.body} />
+      </main>
+    );
+  }
+
+  // No admin-published page yet — the built-in default, never a blank
+  // screen. Per docs/PORTAL-UX-SPEC.md's "no content -> honest fallback,
+  // never a placeholder" posture already applied to Promotion.
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
       <p className="text-sm font-semibold uppercase tracking-wide text-brand-magenta-600">About ABIES</p>

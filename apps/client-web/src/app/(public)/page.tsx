@@ -6,7 +6,14 @@
 // surfaced honestly on the doctor profile page, not hidden here.
 import Link from 'next/link';
 import { PromotionBanner } from '@/components/promotions/promotion-banner';
+import { TestimonialsSection } from '@/components/content/testimonials-section';
 import { activePromotionsForPlacement } from '@abies/domain/modules/promotions/promotions.service';
+import { activeTestimonials } from '@abies/domain/modules/content/testimonials.service';
+import { pageMetadata } from '@/lib/seo';
+
+export function generateMetadata() {
+  return pageMetadata('home');
+}
 
 // Promotions change over time and read from the database — never
 // prerendered at build time (the build stage has no DB to query), same
@@ -131,6 +138,7 @@ const CATEGORY_TILES: { title: string; href: string; accent: Accent }[] = [
 
 export default async function HomePage() {
   const [heroPromotion] = await activePromotionsForPlacement('PUBLIC_HOME_HERO', {}, 1);
+  const testimonials = await activeTestimonials();
 
   return (
     <main>
@@ -285,6 +293,10 @@ export default async function HomePage() {
             </div>
           ))}
         </dl>
+
+        <div className="mt-16">
+          <TestimonialsSection testimonials={testimonials} />
+        </div>
 
         <h2 className="mt-16 text-[clamp(30px,4vw,44px)] font-extrabold tracking-tight text-brand-neutral-900">Partner with ABIES</h2>
         <p className="mt-2 max-w-2xl text-sm text-brand-neutral-500">

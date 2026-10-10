@@ -1,24 +1,20 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { CartButton } from '@/components/cart/cart-button';
+import { activeNavMenus } from '@abies/domain/modules/content/nav.service';
 import { myCartItemCount } from '@abies/domain/modules/medicines/cart.service';
 import { getCurrentSession } from '@abies/domain/server/current-user';
 import { PORTAL_PATH } from '@abies/design-system/components/auth/portal-paths';
 import { MobileNav } from '@abies/design-system/layouts/mobile-nav';
 import { NavLinks } from './nav-links';
 
-const NAV = [
-  { href: '/doctors', label: 'Find a doctor' },
-  { href: '/diagnostics', label: 'Diagnostics' },
-  { href: '/medicines', label: 'Medicines' },
-  { href: '/panchakarma', label: 'Panchakarma' },
-  { href: '/about', label: 'About' },
-];
-
 export async function SiteHeader() {
   const session = await getCurrentSession();
   const isPatient = session?.user.role === 'PATIENT';
-  const cartCount = isPatient ? await myCartItemCount(session.userId) : 0;
+  const [cartCount, nav] = await Promise.all([
+    isPatient ? myCartItemCount(session.userId) : Promise.resolve(0),
+    activeNavMenus(['PUBLIC_HEADER', 'PUBLIC_TOP_BAR']),
+  ]);
 
   return (
     <header className="sticky top-0 z-30">
@@ -26,15 +22,11 @@ export async function SiteHeader() {
         <div className="mx-auto flex min-h-[34px] max-w-6xl items-center justify-between gap-4 px-6">
           <span>Verified practitioners · Coordinated Ayurveda care</span>
           <div className="hidden gap-4 sm:flex">
-            <Link href="/support" className="opacity-90 hover:opacity-100">
-              Customer Support
-            </Link>
-            <Link href="/support?type=sales" className="opacity-90 hover:opacity-100">
-              Sales
-            </Link>
-            <Link href="/support?type=tech" className="opacity-90 hover:opacity-100">
-              Tech Help
-            </Link>
+            {nav.PUBLIC_TOP_BAR.map((item) => (
+              <Link key={item.key} href={item.href} className="opacity-90 hover:opacity-100">
+                {item.label}
+              </Link>
+            ))}
           </div>
         </div>
       </div>
@@ -49,7 +41,7 @@ export async function SiteHeader() {
             </div>
           </Link>
 
-          <NavLinks items={NAV} />
+          <NavLinks items={nav.PUBLIC_HEADER} />
 
           <div className="flex shrink-0 items-center gap-2.5">
             <CartButton initialCount={cartCount} />
@@ -78,7 +70,7 @@ export async function SiteHeader() {
             )}
           </div>
         </div>
-        <MobileNav nav={NAV} />
+        <MobileNav nav={nav.PUBLIC_HEADER} />
       </div>
     </header>
   );

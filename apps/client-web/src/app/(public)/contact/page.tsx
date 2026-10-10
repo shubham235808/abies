@@ -1,8 +1,11 @@
 import { Card } from '@abies/design-system/components/ui/card';
 import { getOrganizationContact } from '@abies/domain/modules/contact/organization';
 import { ContactForm } from './contact-form';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = { title: 'Contact us — ABIES' };
+export function generateMetadata() {
+  return pageMetadata('contact');
+}
 // Read per request so a changed contact setting shows without a rebuild.
 export const dynamic = 'force-dynamic';
 

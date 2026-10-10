@@ -3,8 +3,11 @@ import { getCurrentSession } from '@abies/domain/server/current-user';
 import { DiagnosticsFilters } from './filters';
 import { PackageCard } from './package-card';
 import { TestCard } from './test-card';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = { title: 'Diagnostics — ABIES' };
+export function generateMetadata() {
+  return pageMetadata('diagnostics');
+}
 // Live search results — must render per-request, never prerendered at
 // build time (the build stage has no DB to query).
 export const dynamic = 'force-dynamic';

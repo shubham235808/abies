@@ -2861,3 +2861,105 @@ model IdempotencyRecord {
   @@unique([userId, route, key])
   @@index([createdAt])
 }
+
+// ---------------------------------------------------------------------------
+// EXPANSION-5 content pass — About Us / FAQ / Testimonials, modeled directly
+// on Promotion (ENTERPRISE-13) since that's the one proven admin-CRUD +
+// public-read pattern in this schema (active flag, createdByUserId where a
+// file upload is involved, AuditEvent for the rest). Nav-menu configuration
+// and SEO metadata were added in a follow-up pass (NavMenuItem /
+// PageSeoMetadata below) — see docs/admin-portal-status-report.md §E.
+//
+// ContentPage is a generic slug-keyed static page (About Us, Terms, Privacy,
+// and any admin-created slug served at /pages/<slug>). FAQ is NOT stored
+// as a ContentPage body — it's a list of discrete entries an admin reorders,
+// so it gets its own model rather than being conflated into one page blob.
+// ---------------------------------------------------------------------------
+
+model ContentPage {
+  id           String        @id @default(cuid())
+  slug         String        @unique
+  title        String
+  body         String
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  navMenuItems NavMenuItem[]
+}
+
+model FaqEntry {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  priority  Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, priority])
+}
+
+model Testimonial {
+  id              String   @id @default(cuid())
+  authorName      String
+  authorRole      String?
+  quote           String
+  photoKey        String?
+  rating          Int?
+  priority        Int      @default(0)
+  active          Boolean  @default(true)
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([active, priority])
+}
+
+// Fixed set of nav slots the public site actually renders — one per place
+// SiteHeader/SiteFooter draws a link list. Flat (no parent/child): none of
+// those slots has a dropdown, so a tree would be unused structure.
+enum NavMenuLocation {
+  PUBLIC_HEADER
+  PUBLIC_TOP_BAR
+  PUBLIC_FOOTER_CARE
+  PUBLIC_FOOTER_HELP
+  PUBLIC_FOOTER_COMPANY
+}
+
+// Exactly one of href / contentPageId is set (enforced in the service, not
+// a DB CHECK, which Prisma can't represent). Linking by contentPageId rather
+// than a copied "/pages/<slug>" string lets the public resolver hide the
+// link while its page is unpublished, and the cascade removes it with the
+// page instead of leaving a dead link in the header.
+model NavMenuItem {
+  id            String          @id @default(cuid())
+  location      NavMenuLocation
+  label         String
+  href          String?
+  contentPageId String?
+  contentPage   ContentPage?    @relation(fields: [contentPageId], references: [id], onDelete: Cascade)
+  priority      Int             @default(0)
+  active        Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([location, active, priority])
+  @@index([contentPageId])
+}
+
+// pageKey is either a fixed public-route key from SEO_PAGES
+// (modules/content/seo.pages.ts) or "page:<slug>" for a ContentPage served
+// at /pages/<slug>. A missing/inactive row means the page uses its built-in
+// default metadata — never blank.
+model PageSeoMetadata {
+  id              String   @id @default(cuid())
+  pageKey         String   @unique
+  title           String
+  description     String
+  keywords        String[] @default([])
+  ogImageKey      String?
+  active          Boolean  @default(true)
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

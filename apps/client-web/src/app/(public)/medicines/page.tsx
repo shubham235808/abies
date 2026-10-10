@@ -3,8 +3,11 @@ import { publicMedicineSearchSchema } from '@abies/domain/modules/medicines/cata
 import { getCurrentSession } from '@abies/domain/server/current-user';
 import { MedicinesFilters } from './filters';
 import { MedicineCard } from './medicine-card';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = { title: 'Medicines — ABIES' };
+export function generateMetadata() {
+  return pageMetadata('medicines');
+}
 // Live search results — must render per-request, never prerendered at
 // build time (the build stage has no DB to query).
 export const dynamic = 'force-dynamic';
