@@ -1,0 +1,45 @@
+name: abies_pharmacy
+description: ABIES Ayurveda Pharmacy & Vendor partner app (Android + iOS).
+publish_to: "none"
+version: 0.1.0+1
+
+# Same dependency set as apps/mobile (the patient app this one is structured
+# after), minus what this MVP doesn't use yet (connectivity_plus, local_auth,
+# path_provider, url_launcher — add them back when a feature needs them).
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management (docs/mobile/MOBILE-ARCHITECTURE.md §2).
+  flutter_riverpod: ^2.5.1
+
+  # Navigation + deep links (§4).
+  go_router: ^14.2.0
+
+  # API client: HTTP + cookie jar, since auth is the `abies_session` cookie,
+  # not a bearer token (docs/mobile/API-GAP-ANALYSIS.md §2, Option A).
+  dio: ^5.5.0
+  cookie_jar: ^4.0.8
+  dio_cookie_manager: ^3.1.1
+
+  # Encrypted-at-rest storage for the persisted cookie jar
+  # (docs/mobile/SECURITY-DESIGN.md §2) — Keystore/Keychain, never
+  # shared_preferences.
+  flutter_secure_storage: ^9.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Real ABIES brand mark, copied from apps/mobile/assets/images (itself from
+  # apps/client-web/public/abies-mark.png).
+  assets:
+    - assets/images/abies-mark.png

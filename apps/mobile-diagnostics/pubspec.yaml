@@ -1,0 +1,47 @@
+name: abies_diagnostics
+description: ABIES Ayurveda Diagnostics Partner app — for LAB-role partners (Android).
+publish_to: "none"
+version: 0.1.0+1
+
+# Same dependency set and caret ranges as apps/mobile/pubspec.yaml wherever
+# the dependency applies to a lab app; patient-only packages (connectivity,
+# biometrics, path_provider, url_launcher) are deliberately not carried over.
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management — same as apps/mobile (docs/mobile/MOBILE-ARCHITECTURE.md §2).
+  flutter_riverpod: ^2.5.1
+
+  # Navigation (§4).
+  go_router: ^14.2.0
+
+  # API client: HTTP + cookie jar, since auth is the `abies_session` cookie,
+  # not a bearer token (docs/mobile/API-GAP-ANALYSIS.md §2, Option A).
+  dio: ^5.5.0
+  cookie_jar: ^4.0.8
+  dio_cookie_manager: ^3.1.1
+
+  # Encrypted-at-rest storage for the persisted cookie jar
+  # (docs/mobile/SECURITY-DESIGN.md §2). Never shared_preferences.
+  flutter_secure_storage: ^9.2.2
+
+  # Lab-only: picks the report PDF/image a technician releases via
+  # POST /api/v1/labs/me/orders/:id/report (multipart `file` field).
+  file_picker: ^8.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Real ABIES brand mark, copied from apps/mobile/assets/images/abies-mark.png.
+  assets:
+    - assets/images/abies-mark.png
