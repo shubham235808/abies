@@ -32,6 +32,13 @@ const envSchema = z.object({
   // Optional like the other provider secrets: only required once MFA
   // enrollment is actually used, not by every deployment.
   MFA_ENCRYPTION_KEY: z.string().min(32, 'MFA_ENCRYPTION_KEY must be at least 32 characters').optional(),
+  // Signs short-lived download tokens (lib/download-token.ts) — the
+  // replacement for getSignedDownloadUrl() wherever a client fetches the
+  // file with no session cookie attached (url_launcher to the system
+  // browser, a bare Dio/fetch client) rather than through this app's own
+  // authenticated API client. A separate secret from OTP_PEPPER/
+  // SESSION_SECRET so rotating one never invalidates the others.
+  DOWNLOAD_TOKEN_SECRET: z.string().min(32, 'DOWNLOAD_TOKEN_SECRET must be at least 32 characters'),
   OTP_TTL_SECONDS: z.coerce.number().default(300),
   OTP_COOLDOWN_SECONDS: z.coerce.number().default(30),
   OTP_MAX_ATTEMPTS: z.coerce.number().default(5),

@@ -1,7 +1,7 @@
 import { DoctorDocumentStatus, DoctorVerificationStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/db';
 import { BadRequestError, NotFoundError } from '../../lib/errors';
-import { getSignedDownloadUrl } from '../../lib/storage';
+import { createDownloadToken } from '../../lib/download-token';
 import { recordAuditEvent } from '../../server/audit';
 import type { AuditContext } from '../../server/audit';
 
@@ -218,8 +218,11 @@ export async function reviewDocument(
   return { document: updated };
 }
 
+// Same-origin, token-authenticated URL (lib/download-token.ts) — not a
+// direct signed storage URL; STORAGE_ENDPOINT is in-cluster-only
+// (lib/storage.ts).
 export async function documentDownloadUrl(doctorId: string, documentId: string): Promise<string> {
   const document = await prisma.doctorDocument.findFirst({ where: { id: documentId, doctorProfileId: doctorId } });
   if (!document) throw new NotFoundError('Document not found');
-  return getSignedDownloadUrl(document.storagePath);
+  return `/api/v1/downloads/${createDownloadToken(document.storagePath)}`;
 }

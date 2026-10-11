@@ -8,6 +8,7 @@ import {
   activeTestimonials,
   createTestimonial,
   getTestimonial,
+  publicTestimonialPhoto,
   publicTestimonialVideo,
   removeTestimonial,
   updateTestimonial,
@@ -214,8 +215,11 @@ describe('Testimonials reusing media-library assets', () => {
     expect(testimonial.videoAssetId).toBe(video.id);
 
     const served = (await activeTestimonials(50)).find((t) => t.id === testimonial.id);
-    expect(served?.photoUrl).toContain(photo.storageKey);
+    // Same-origin proxy routes, never a direct signed storage URL —
+    // STORAGE_ENDPOINT is in-cluster-only (lib/storage.ts).
+    expect(served?.photoUrl).toBe(`/api/v1/public/testimonials/${testimonial.id}/photo`);
     expect(served?.videoUrl).toBe(`/api/v1/public/testimonials/${testimonial.id}/video`);
+    expect((await publicTestimonialPhoto(testimonial.id)).storageKey).toBe(photo.storageKey);
     expect((await publicTestimonialVideo(testimonial.id)).storageKey).toBe(video.storageKey);
 
     await expect(deleteMediaAsset(photo.id, {})).rejects.toThrow(ConflictError);

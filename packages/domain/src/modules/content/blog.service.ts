@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import type { z } from 'zod';
 import { prisma } from '../../lib/db';
 import { ConflictError, NotFoundError } from '../../lib/errors';
-import { assertUploadAllowed, deleteObject, getSignedDownloadUrl, putObject } from '../../lib/storage';
+import { assertUploadAllowed, deleteObject, putObject } from '../../lib/storage';
 import { recordAuditEvent, type AuditContext } from '../../server/audit';
 import type { createBlogPostSchema, updateBlogPostSchema } from './blog.schemas';
 import type { UploadedImage } from './testimonials.service';
@@ -11,10 +11,6 @@ type CreateBlogPostInput = z.infer<typeof createBlogPostSchema>;
 type UpdateBlogPostInput = z.infer<typeof updateBlogPostSchema>;
 
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png']);
-
-// Same reasoning as seo.service's OG image TTL: the detail page hands the
-// cover to crawlers as og:image, and they fetch it well after the page.
-const COVER_OG_URL_TTL_SECONDS = 24 * 60 * 60;
 
 function storeCoverImage(postId: string, file: UploadedImage): Promise<string> {
   assertUploadAllowed({ mimetype: file.mimeType, size: file.size, buffer: file.buffer }, { allowedMimeTypes: IMAGE_MIME_TYPES });
@@ -135,14 +131,15 @@ export async function publishedBlogPosts(): Promise<ServedBlogPost[]> {
       authorName: p.authorName,
       publishedAt: p.publishedAt as Date,
       updatedAt: p.updatedAt,
-      coverImageUrl: p.coverImageKey ? await getSignedDownloadUrl(p.coverImageKey) : null,
+      // Same-origin proxy route, not a direct signed URL — STORAGE_ENDPOINT
+      // is an in-cluster-only host no browser can reach (lib/storage.ts).
+      coverImageUrl: p.coverImageKey ? `/api/v1/public/blog/${p.slug}/cover` : null,
     })),
   );
 }
 
 // Public-facing. Draft, hidden, scheduled and missing are all the same thing
-// to a visitor: null. The cover URL is long-lived because it doubles as
-// og:image.
+// to a visitor: null.
 export async function publishedBlogPostBySlug(slug: string): Promise<(ServedBlogPost & { body: string }) | null> {
   const p = await prisma.blogPost.findFirst({ where: { slug, ...visibleWhere(new Date()) } });
   if (!p) return null;
@@ -155,6 +152,15 @@ export async function publishedBlogPostBySlug(slug: string): Promise<(ServedBlog
     authorName: p.authorName,
     publishedAt: p.publishedAt as Date,
     updatedAt: p.updatedAt,
-    coverImageUrl: p.coverImageKey ? await getSignedDownloadUrl(p.coverImageKey, COVER_OG_URL_TTL_SECONDS) : null,
+    coverImageUrl: p.coverImageKey ? `/api/v1/public/blog/${p.slug}/cover` : null,
   };
+}
+
+// The image behind a published post's coverImageUrl. Same visibleWhere gate
+// the two listings above use, keyed by slug since that's what the public
+// route already addresses the post by.
+export async function publishedBlogPostCover(slug: string): Promise<{ storageKey: string }> {
+  const p = await prisma.blogPost.findFirst({ where: { slug, ...visibleWhere(new Date()) }, select: { coverImageKey: true } });
+  if (!p?.coverImageKey) throw new NotFoundError('Cover image not found');
+  return { storageKey: p.coverImageKey };
 }

@@ -3,7 +3,7 @@ import { MediaKind } from '@prisma/client';
 import type { z } from 'zod';
 import { prisma } from '../../lib/db';
 import { BadRequestError, NotFoundError } from '../../lib/errors';
-import { assertUploadAllowed, deleteObject, getSignedDownloadUrl, putObject } from '../../lib/storage';
+import { assertUploadAllowed, deleteObject, putObject } from '../../lib/storage';
 import { recordAuditEvent, type AuditContext } from '../../server/audit';
 import { requireMediaAsset } from '../media/media.service';
 import { DEFAULT_CONTENT_LANGUAGE, localise, type ContentLanguage, type TranslationLanguage } from './languages';
@@ -199,15 +199,27 @@ export async function activeTestimonials(
         authorRole: served.authorRole ?? t.authorRole,
         quote: served.quote,
         rating: t.rating,
-        photoUrl: t.photoAsset
-          ? await getSignedDownloadUrl(t.photoAsset.storageKey)
-          : t.photoKey
-            ? await getSignedDownloadUrl(t.photoKey)
-            : null,
+        // Same-origin proxy route, not a direct signed URL — STORAGE_ENDPOINT
+        // is an in-cluster-only host no browser can reach (lib/storage.ts).
+        photoUrl: t.photoAsset || t.photoKey ? `/api/v1/public/testimonials/${t.id}/photo` : null,
         videoUrl: t.videoAssetId ? `/api/v1/public/testimonials/${t.id}/video` : null,
       };
     }),
   );
+}
+
+// The image behind a public testimonial's photoUrl — a library asset if one
+// was picked, otherwise the testimonial's own uploaded photoKey. Same
+// active-English-only gate as activeTestimonials, so the route can't be
+// used to read an arbitrary key or an unpublished testimonial's photo.
+export async function publicTestimonialPhoto(id: string): Promise<{ storageKey: string }> {
+  const testimonial = await prisma.testimonial.findFirst({
+    where: { id, active: true, translationOfId: null },
+    select: { photoKey: true, photoAsset: { select: { storageKey: true } } },
+  });
+  const storageKey = testimonial?.photoAsset?.storageKey ?? testimonial?.photoKey;
+  if (!storageKey) throw new NotFoundError('Photo not found');
+  return { storageKey };
 }
 
 // The library asset behind a public testimonial's videoUrl — same

@@ -115,7 +115,9 @@ describe('activePromotionsForPlacement (ENTERPRISE-13)', () => {
     const served = await activePromotionsForPlacement('PATIENT_HOME_HERO', {});
     expect(served.some((p) => p.id === active.id)).toBe(true);
     expect(served.some((p) => p.id === expired.id)).toBe(false);
-    expect(served.find((p) => p.id === active.id)?.desktopImageUrl).toContain('http');
+    // A same-origin proxy route, never a direct signed storage URL —
+    // STORAGE_ENDPOINT is in-cluster-only (lib/storage.ts).
+    expect(served.find((p) => p.id === active.id)?.desktopImageUrl).toBe(`/api/v1/public/promotions/${active.id}/image?variant=desktop`);
   });
 
   it('filters by target city when the promotion sets one', async () => {

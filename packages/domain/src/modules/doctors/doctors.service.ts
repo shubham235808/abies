@@ -2,7 +2,8 @@ import { randomUUID } from 'crypto';
 import { ConsultationMode, DoctorDocumentStatus, DoctorDocumentType, DoctorVerificationStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/db';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../lib/errors';
-import { assertUploadAllowed, deleteObject, getSignedDownloadUrl, putObject } from '../../lib/storage';
+import { assertUploadAllowed, deleteObject, putObject } from '../../lib/storage';
+import { createDownloadToken } from '../../lib/download-token';
 import { recordAuditEvent } from '../../server/audit';
 import type { AuditContext } from '../../server/audit';
 import type {
@@ -273,9 +274,14 @@ async function documentForOwner(userId: string, id: string) {
   return document;
 }
 
+// Same-origin, token-authenticated URL (lib/download-token.ts) — not a
+// direct signed storage URL; STORAGE_ENDPOINT is in-cluster-only
+// (lib/storage.ts). apps/mobile-doctor's View action opens this with
+// url_launcher, deliberately with no session cookie attached — the token
+// is what authorizes the fetch.
 export async function getDocumentDownloadUrl(userId: string, id: string): Promise<string> {
   const document = await documentForOwner(userId, id);
-  return getSignedDownloadUrl(document.storagePath);
+  return `/api/v1/downloads/${createDownloadToken(document.storagePath)}`;
 }
 
 export async function removeDocument(userId: string, id: string, auditCtx: AuditContext) {
@@ -594,17 +600,20 @@ export async function publicProfile(slug: string) {
   return { doctor: publicDoctor(doctor) };
 }
 
-// Resolves the actual signed download URL for a doctor's public photo, so
-// the redirect route can stay a thin two-line handler. Same VERIFIED-only
-// gate as publicDoctor()'s photoUrl flag.
-export async function publicPhotoDownloadUrl(slug: string): Promise<string> {
+// Resolves the storage key behind a doctor's public photo, so the route can
+// stay a thin handler streaming it through objectResponse. Same VERIFIED-
+// only gate as publicDoctor()'s photoUrl flag. Used to redirect to a
+// getSignedDownloadUrl() result — STORAGE_ENDPOINT is an in-cluster-only
+// host no browser can reach, so that redirect never actually worked for a
+// real external visitor (lib/storage.ts).
+export async function publicPhotoDownloadUrl(slug: string): Promise<{ storageKey: string }> {
   const doctor = await prisma.doctorProfile.findFirst({
     where: { slug, verificationStatus: DoctorVerificationStatus.APPROVED, isDiscoverable: true },
     select: { documents: PUBLIC_PHOTO_INCLUDE },
   });
   const photo = doctor?.documents[0];
   if (!photo) throw new NotFoundError('Photo not found');
-  return getSignedDownloadUrl(photo.storagePath);
+  return { storageKey: photo.storagePath };
 }
 
 export async function facets() {

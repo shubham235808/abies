@@ -3,8 +3,10 @@ import { errorResponse } from '@abies/domain/lib/errors';
 import { downloadUrl } from '@abies/domain/modules/diagnostics/reports.service';
 import { applyRotatedCookie, requireRole, requireSession } from '@abies/domain/server/rbac';
 
-// Returns a short-lived signed URL rather than proxying the file — never a
-// permanent public link (docs/SECURITY-MODEL.md).
+// Returns a same-origin, token-authenticated download URL (good for 300s) —
+// the session check here is what actually authorizes the download; the URL
+// itself is then safe to hand to an unauthenticated fetch (see downloadUrl's
+// own comment for why it has to work that way).
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireSession(req);

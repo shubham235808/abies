@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import type { z } from 'zod';
 import { prisma } from '../../lib/db';
 import { NotFoundError } from '../../lib/errors';
-import { assertUploadAllowed, deleteObject, getSignedDownloadUrl, putObject } from '../../lib/storage';
+import { assertUploadAllowed, deleteObject, putObject } from '../../lib/storage';
 import { recordAuditEvent, type AuditContext } from '../../server/audit';
 import type { PromotionPlacement } from '@prisma/client';
 import type { createPromotionSchema, updatePromotionSchema } from './promotions.schemas';
@@ -166,8 +166,27 @@ export async function activePromotionsForPlacement(
       description: p.description,
       ctaLabel: p.ctaLabel,
       ctaHref: p.ctaHref,
-      desktopImageUrl: await getSignedDownloadUrl(p.desktopImageKey),
-      mobileImageUrl: p.mobileImageKey ? await getSignedDownloadUrl(p.mobileImageKey) : null,
+      // Same-origin proxy routes, not direct signed URLs — STORAGE_ENDPOINT
+      // is an in-cluster-only host no browser can reach (lib/storage.ts).
+      desktopImageUrl: `/api/v1/public/promotions/${p.id}/image?variant=desktop`,
+      mobileImageUrl: p.mobileImageKey ? `/api/v1/public/promotions/${p.id}/image?variant=mobile` : null,
     })),
   );
+}
+
+// The image behind a public promotion's desktop/mobile image URL. Same
+// active-window gate activePromotionsForPlacement's own query applies
+// (active, within startAt/endAt), so the route can't be used to read an
+// expired or inactive promotion's image.
+export async function publicPromotionImage(id: string, variant: 'desktop' | 'mobile'): Promise<{ storageKey: string }> {
+  const now = new Date();
+  // Same where-clause as activePromotionsForPlacement's own query — never
+  // more permissive than what that listing would actually surface.
+  const promotion = await prisma.promotion.findFirst({
+    where: { id, active: true, startAt: { lte: now }, endAt: { gte: now } },
+    select: { desktopImageKey: true, mobileImageKey: true },
+  });
+  const storageKey = variant === 'mobile' ? promotion?.mobileImageKey : promotion?.desktopImageKey;
+  if (!storageKey) throw new NotFoundError('Image not found');
+  return { storageKey };
 }

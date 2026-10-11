@@ -1,7 +1,7 @@
 import { TherapistDocumentStatus } from '@prisma/client';
 import { prisma } from '../../lib/db';
 import { NotFoundError } from '../../lib/errors';
-import { getSignedDownloadUrl } from '../../lib/storage';
+import { createDownloadToken } from '../../lib/download-token';
 import { recordAuditEvent, type AuditContext } from '../../server/audit';
 
 // ENTERPRISE-8/13 — admin-side therapist document review, direct pattern
@@ -75,8 +75,11 @@ export async function reviewDocument(
   return { document: updated };
 }
 
+// Same-origin, token-authenticated URL (lib/download-token.ts) — not a
+// direct signed storage URL; STORAGE_ENDPOINT is in-cluster-only
+// (lib/storage.ts).
 export async function documentDownloadUrl(therapistId: string, documentId: string): Promise<string> {
   const document = await prisma.therapistDocument.findFirst({ where: { id: documentId, therapistId } });
   if (!document) throw new NotFoundError('Document not found');
-  return getSignedDownloadUrl(document.storagePath);
+  return `/api/v1/downloads/${createDownloadToken(document.storagePath)}`;
 }

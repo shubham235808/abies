@@ -208,7 +208,9 @@ describe('Page SEO metadata', () => {
 
     const live = await resolvePageSeo(pageKey);
     expect(live).toMatchObject({ title: `SEO ${n}`, description: 'Custom description', keywords: ['ayurveda'], customised: true });
-    expect(live.ogImageUrl).toMatch(/^https?:\/\//);
+    // A same-origin proxy route (server/origin.ts era fix), never a direct
+    // signed storage URL — STORAGE_ENDPOINT is in-cluster-only.
+    expect(live.ogImageUrl).toBe(`/api/v1/public/seo/${pageKey}/og-image`);
 
     await updatePageSeo(row.id, { active: false }, null, {});
     expect((await resolvePageSeo(pageKey, { title: 'Default', description: 'Default d' })).title).toBe('Default');

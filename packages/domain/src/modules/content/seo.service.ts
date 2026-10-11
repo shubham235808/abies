@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import type { z } from 'zod';
 import { prisma } from '../../lib/db';
 import { ConflictError, NotFoundError } from '../../lib/errors';
-import { assertUploadAllowed, deleteObject, getSignedDownloadUrl, putObject } from '../../lib/storage';
+import { assertUploadAllowed, deleteObject, putObject } from '../../lib/storage';
 import { recordAuditEvent, type AuditContext } from '../../server/audit';
 import { DEFAULT_CONTENT_LANGUAGE, localise, type ContentLanguage, type TranslationLanguage } from './languages';
 import { SITE_DEFAULT_TITLE, SITE_DESCRIPTION, seoPageDefinition } from './seo.pages';
@@ -16,10 +16,6 @@ type UpsertPageSeoTranslationInput = z.infer<typeof upsertPageSeoTranslationSche
 const WITH_TRANSLATIONS = { translations: { orderBy: { language: 'asc' } } } as const;
 
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png']);
-
-// Social crawlers fetch og:image some time after the page itself (often
-// queued), so the default 5-minute signed URL is too short to be reliable.
-const OG_IMAGE_URL_TTL_SECONDS = 24 * 60 * 60;
 
 function storeOgImage(seoId: string, file: UploadedImage): Promise<string> {
   assertUploadAllowed({ mimetype: file.mimeType, size: file.size, buffer: file.buffer }, { allowedMimeTypes: IMAGE_MIME_TYPES });
@@ -178,7 +174,10 @@ export async function resolvePageSeo(
       title: served.title,
       description: served.description,
       keywords: served.keywords.length > 0 ? served.keywords : row.keywords,
-      ogImageUrl: row.ogImageKey ? await getSignedDownloadUrl(row.ogImageKey, OG_IMAGE_URL_TTL_SECONDS) : null,
+      // Same-origin proxy route, not a direct signed URL — STORAGE_ENDPOINT
+      // is an in-cluster-only host no browser (or crawler) can reach
+      // (lib/storage.ts).
+      ogImageUrl: row.ogImageKey ? `/api/v1/public/seo/${pageKey}/og-image` : null,
       customised: true,
     };
   }
@@ -190,4 +189,17 @@ export async function resolvePageSeo(
     ogImageUrl: null,
     customised: false,
   };
+}
+
+// The image behind a page's ogImageUrl. Same active-row gate
+// resolvePageSeo's own lookup applies — a page with no customised,
+// active SEO row simply has no og:image to serve, same as resolvePageSeo
+// returning ogImageUrl: null for it.
+export async function publicPageSeoOgImage(pageKey: string): Promise<{ storageKey: string }> {
+  const row = await prisma.pageSeoMetadata.findUnique({
+    where: { pageKey_language: { pageKey, language: DEFAULT_CONTENT_LANGUAGE } },
+    select: { active: true, ogImageKey: true },
+  });
+  if (!row?.active || !row.ogImageKey) throw new NotFoundError('OG image not found');
+  return { storageKey: row.ogImageKey };
 }

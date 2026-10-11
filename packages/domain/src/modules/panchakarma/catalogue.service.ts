@@ -2,7 +2,8 @@ import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/db';
 import { BadRequestError, NotFoundError } from '../../lib/errors';
-import { assertUploadAllowed, deleteObject, getSignedDownloadUrl, putObject } from '../../lib/storage';
+import { assertUploadAllowed, deleteObject, putObject } from '../../lib/storage';
+import { createDownloadToken } from '../../lib/download-token';
 import { recordAuditEvent, type AuditContext } from '../../server/audit';
 import { ensureCentreProfile } from './centres.service';
 import type { createTherapistSchema, createTherapySchema, publicTherapySearchSchema, updateTherapistSchema, updateTherapySchema } from './catalogue.schemas';
@@ -126,9 +127,14 @@ async function therapistDocumentForOwner(userId: string, therapistId: string, do
   return document;
 }
 
+// Same-origin, token-authenticated URL (lib/download-token.ts) — not a
+// direct signed storage URL; STORAGE_ENDPOINT is in-cluster-only
+// (lib/storage.ts). apps/mobile-panchakarma's View action opens this with
+// url_launcher, deliberately with no session cookie attached — the token
+// is what authorizes the fetch.
 export async function getTherapistDocumentDownloadUrl(userId: string, therapistId: string, documentId: string): Promise<string> {
   const document = await therapistDocumentForOwner(userId, therapistId, documentId);
-  return getSignedDownloadUrl(document.storagePath);
+  return `/api/v1/downloads/${createDownloadToken(document.storagePath)}`;
 }
 
 export async function removeTherapistDocument(userId: string, therapistId: string, documentId: string, auditCtx: AuditContext) {

@@ -3,7 +3,8 @@ import { prisma } from '../../lib/db';
 import { getEnv } from '../../lib/env';
 import { logger } from '../../lib/logger';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, ServiceUnavailableError } from '../../lib/errors';
-import { assertUploadAllowed, getSignedDownloadUrl, putObject } from '../../lib/storage';
+import { assertUploadAllowed, putObject } from '../../lib/storage';
+import { createDownloadToken } from '../../lib/download-token';
 import { createOrder, isConfigured, verifySignature } from '../../lib/payments/razorpay';
 import { notify } from '../notifications/notifications.service';
 import { computeCommission } from '../settlement/commission.service';
@@ -386,6 +387,11 @@ export async function listMineAsLab(labUserId: string) {
   });
 }
 
+// Same-origin, token-authenticated URL (lib/download-token.ts) — not a
+// direct signed storage URL; STORAGE_ENDPOINT is in-cluster-only
+// (lib/storage.ts). The session check in the route is what actually
+// authorizes this; the token then lets the browser's window.open fetch it
+// in a new tab with no cookie dependency either way.
 export async function getReportDownloadUrlForDoctor(doctorUserId: string, orderId: string): Promise<string> {
   const order = await prisma.diagnosticOrder.findUnique({
     where: { id: orderId },
@@ -394,5 +400,6 @@ export async function getReportDownloadUrlForDoctor(doctorUserId: string, orderI
   if (!order || !order.report?.documentStorageKey || !order.recommendation || order.recommendation.doctorProfile.userId !== doctorUserId) {
     throw new NotFoundError('Report not found');
   }
-  return getSignedDownloadUrl(order.report.documentStorageKey);
+  const token = createDownloadToken(order.report.documentStorageKey);
+  return `/api/v1/downloads/${token}`;
 }

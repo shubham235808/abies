@@ -7,12 +7,20 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getEnv } from './env';
+import { BadRequestError } from './errors';
 
 // S3-compatible object storage adapter (MinIO for self-hosted dev/prod).
 // Every file in the system — doctor credentials, diagnostic reports,
-// prescriptions, partner documents — goes through this module. Nothing is
-// public by default: reads are always short-lived signed URLs, never a
-// permanent public link, per docs/TARGET-ARCHITECTURE.md's security posture.
+// prescriptions, partner documents — goes through this module.
+//
+// getSignedDownloadUrl() exists but its URL is signed against
+// STORAGE_ENDPOINT, an in-cluster-only host (e.g. "http://minio:9000") no
+// browser outside the cluster can reach — confirmed broken for every real
+// external user (2026-10-11). Every caller that serves a URL to a browser
+// must proxy bytes through this app instead, via getObjectStream/
+// objectResponse (route handlers streaming the response themselves) —
+// never hand a getSignedDownloadUrl() result to a client directly. The
+// function is kept only for any genuinely server-to-server use.
 
 let client: S3Client | undefined;
 
@@ -89,6 +97,24 @@ export async function getObjectStream(key: string, range?: string): Promise<Obje
   };
 }
 
+// Simple whole-object response for images/documents that don't need Range
+// support (that's `getObjectStream`'s job, for video/large-file seeking) —
+// most callers here are small images or PDFs a browser just loads once.
+// Content-Type comes from whatever was set on PutObject, not guessed.
+export async function objectResponse(
+  key: string,
+  opts: { cacheControl: string; contentDisposition?: string },
+): Promise<Response> {
+  const object = await getObjectStream(key);
+  const headers = new Headers({
+    'content-type': object.contentType ?? 'application/octet-stream',
+    'cache-control': opts.cacheControl,
+  });
+  if (object.contentLength !== undefined) headers.set('content-length', String(object.contentLength));
+  if (opts.contentDisposition) headers.set('content-disposition', opts.contentDisposition);
+  return new Response(object.body, { status: 200, headers });
+}
+
 export async function deleteObject(key: string): Promise<void> {
   const env = getEnv();
   await s3().send(new DeleteObjectCommand({ Bucket: env.STORAGE_BUCKET, Key: key }));
@@ -138,13 +164,13 @@ export function assertUploadAllowed(
   const allowed = opts.allowedMimeTypes ?? DEFAULT_ALLOWED_MIME_TYPES;
   const maxBytes = opts.maxBytes ?? getEnv().UPLOAD_MAX_BYTES;
   if (!allowed.has(file.mimetype)) {
-    throw new Error(`Unsupported file type: ${file.mimetype}`);
+    throw new BadRequestError(`Unsupported file type: ${file.mimetype}`);
   }
   if (file.size > maxBytes) {
-    throw new Error(`File exceeds maximum allowed size of ${maxBytes} bytes`);
+    throw new BadRequestError(`File exceeds maximum allowed size of ${maxBytes} bytes`);
   }
   const matchesContent = MAGIC_BYTE_CHECKS[file.mimetype];
   if (matchesContent && !matchesContent(file.buffer)) {
-    throw new Error(`File content does not match declared type: ${file.mimetype}`);
+    throw new BadRequestError(`File content does not match declared type: ${file.mimetype}`);
   }
 }
