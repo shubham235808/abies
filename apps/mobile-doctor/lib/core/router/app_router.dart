@@ -10,7 +10,10 @@ import '../../features/auth/presentation/sign_in_screen.dart';
 import '../../features/consultations/presentation/consultation_screen.dart';
 import '../../features/consultations/presentation/prescription_editor_screen.dart';
 import '../../features/practice/presentation/availability_screen.dart';
+import '../../features/practice/presentation/clinics_screen.dart';
 import '../../features/practice/presentation/dashboard_screen.dart';
+import '../../features/practice/presentation/documents_screen.dart';
+import '../../features/practice/presentation/edit_profile_screen.dart';
 import '../../features/practice/presentation/profile_screen.dart';
 
 /// Navigation, same pattern as apps/mobile's router (redirect driven by
@@ -18,7 +21,7 @@ import '../../features/practice/presentation/profile_screen.dart';
 /// with the opposite default: unlike the patient app there is nothing a
 /// signed-out doctor can browse, so **only the pre-auth screens are
 /// public**; everything else (dashboard, consultations, availability,
-/// profile) needs a DOCTOR session, since every backend route behind them is
+/// profile, documents, clinics) needs a DOCTOR session, since every backend route behind them is
 /// `requireRole(ctx, 'DOCTOR')`.
 const _authFlowRoutePaths = <String>{'/sign-in', '/apply', '/forgot-password', '/password-setup'};
 
@@ -72,6 +75,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/availability', builder: (context, state) => const AvailabilityScreen()),
       GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
+      GoRoute(path: '/profile/edit', builder: (context, state) => const EditProfileScreen()),
+      GoRoute(path: '/documents', builder: (context, state) => const DocumentsScreen()),
+      GoRoute(path: '/clinics', builder: (context, state) => const ClinicsScreen()),
       GoRoute(
         path: '/consultation/:id',
         builder: (context, state) => ConsultationScreen(consultationId: state.pathParameters['id']!),

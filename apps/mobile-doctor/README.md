@@ -32,7 +32,17 @@ go_router with a pure, unit-tested redirect decision.
   - Recommend diagnostics or Panchakarma, picking from the public catalogue search.
   - For VIDEO consultations, record the doctor's join.
 - **Availability**: add, pause and remove weekly windows.
-- **Profile**: a read-only view.
+- **Profile**: view, plus editing of every `updateDoctorProfileSchema` field the web form edits
+  (`PATCH /doctors/me`) and submit-for-verification (`POST /doctors/me/submit`). Editing is only
+  possible in DRAFT or REJECTED status, the same lock the backend applies; in any other status the
+  profile is read-only and shows the lock message.
+- **Documents**: list with the admin review status (Pending review, Verified, Rejected,
+  Resubmission required) and the reviewer's note. Upload PDF, JPG or PNG files up to 10 MB through
+  `file_picker`, view a document through its short-lived signed URL, and remove documents.
+  Credential documents are locked outside DRAFT/REJECTED unless a document has been flagged for
+  resubmission. The profile photo can be changed in any status.
+- **Clinics**: add, edit, mark active or inactive, and remove. Clinics are not locked by
+  verification status.
 
 ## Status
 

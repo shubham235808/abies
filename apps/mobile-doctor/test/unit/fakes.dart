@@ -11,6 +11,7 @@ import 'package:abies_doctor/features/consultations/domain/video_join_info.dart'
 import 'package:abies_doctor/features/practice/data/doctor_api.dart';
 import 'package:abies_doctor/features/practice/domain/doctor_appointment.dart';
 import 'package:abies_doctor/features/practice/domain/doctor_profile.dart';
+import 'package:abies_doctor/features/practice/domain/profile_inputs.dart';
 
 const doctorUser = SessionUser(id: 'd1', mobile: '+919800000001', email: 'vaidya@example.test', role: 'DOCTOR');
 const patientUser = SessionUser(id: 'p1', mobile: '+919800000002', email: null, role: 'PATIENT');
@@ -81,7 +82,24 @@ class FakeAuthApi implements AuthApi {
       throw UnimplementedError();
 }
 
-Map<String, dynamic> profileJson({String status = 'APPROVED', List<String> modes = const ['VIDEO', 'CLINIC'], List<Map<String, dynamic>>? availability}) => {
+Map<String, dynamic> documentJson({required String id, String type = 'OTHER', String status = 'PENDING', String? reviewNote}) => {
+      'id': id,
+      'type': type,
+      'status': status,
+      'originalName': '$id.pdf',
+      'mimeType': 'application/pdf',
+      'sizeBytes': 2048,
+      'reviewNote': reviewNote,
+      'createdAt': '2026-10-01T05:30:00.000Z',
+    };
+
+Map<String, dynamic> profileJson({
+  String status = 'APPROVED',
+  List<String> modes = const ['VIDEO', 'CLINIC'],
+  List<Map<String, dynamic>>? availability,
+  List<Map<String, dynamic>>? documents,
+}) =>
+    {
       'profile': {
         'id': 'dp1',
         'title': 'Dr.',
@@ -95,11 +113,12 @@ Map<String, dynamic> profileJson({String status = 'APPROVED', List<String> modes
         'videoFee': 500,
         'clinicFee': 800,
         'isAcceptingNewPatients': true,
-        'documents': [
-          {'id': 'doc1'}
-        ],
+        'documents': documents ??
+            [
+              documentJson(id: 'doc1', type: 'REGISTRATION_CERTIFICATE', status: 'VERIFIED'),
+            ],
         'clinics': [
-          {'id': 'c1', 'name': 'Rao Ayurveda', 'addressLine1': '1 MG Road', 'city': 'Pune', 'state': 'MH', 'active': true},
+          <String, dynamic>{'id': 'c1', 'name': 'Rao Ayurveda', 'addressLine1': '1 MG Road', 'city': 'Pune', 'state': 'MH', 'postalCode': '411001', 'active': true},
         ],
         'availability': availability ??
             [
@@ -186,6 +205,104 @@ class FakeDoctorApi implements DoctorApi {
     calls.add('remove:$id');
     if (throwOnWrite != null) throw throwOnWrite!;
     ((profile['profile'] as Map<String, dynamic>)['availability'] as List).removeWhere((r) => (r as Map)['id'] == id);
+  }
+
+  // --- Profile / documents / clinics: an in-memory backend applying the
+  // same status locks doctors.service.ts enforces, so a controller that
+  // forgot its own client-side check would still fail these tests the way
+  // the real API would.
+
+  Map<String, dynamic> get _p => profile['profile'] as Map<String, dynamic>;
+  List<Map<String, dynamic>> get _documents => (_p['documents'] as List).cast<Map<String, dynamic>>();
+  List<Map<String, dynamic>> get _clinics => (_p['clinics'] as List).cast<Map<String, dynamic>>();
+  bool get _editable => _p['verificationStatus'] == 'DRAFT' || _p['verificationStatus'] == 'REJECTED';
+  bool get _documentsEditable => _editable || _documents.any((d) => d['status'] == 'RESUBMISSION_REQUIRED');
+  int _seq = 0;
+  Map<String, dynamic>? lastPatch;
+  DocumentUpload? lastUpload;
+
+  void _throwIfSet() {
+    if (throwOnWrite != null) throw throwOnWrite!;
+  }
+
+  @override
+  Future<DoctorProfile> updateProfile(Map<String, dynamic> body) async {
+    calls.add('updateProfile');
+    _throwIfSet();
+    if (!_editable) {
+      throw const ApiException(message: 'Profile details are locked while verification is in progress or approved.', statusCode: 403);
+    }
+    lastPatch = body;
+    _p.addAll(body);
+    if (_p['verificationStatus'] == 'REJECTED') {
+      _p['verificationStatus'] = 'DRAFT';
+      _p['rejectionReason'] = null;
+    }
+    return DoctorProfile.fromMeJson(profile);
+  }
+
+  @override
+  Future<void> submitApplication({required bool declarationAccepted}) async {
+    calls.add('submit:$declarationAccepted');
+    _throwIfSet();
+    if (!_editable) throw const ApiException(message: 'Application is not in a submittable state', statusCode: 400);
+    _p['verificationStatus'] = 'SUBMITTED';
+  }
+
+  @override
+  Future<DoctorDocument> uploadDocument({required String type, required DocumentUpload file}) async {
+    calls.add('upload:$type:${file.filename}');
+    _throwIfSet();
+    if (type != 'PROFILE_PHOTO' && !_documentsEditable) {
+      throw const ApiException(message: 'Documents can be changed only while the application is in Draft or Rejected state', statusCode: 403);
+    }
+    lastUpload = file;
+    final row = documentJson(id: 'doc-new${++_seq}', type: type)..['originalName'] = file.filename;
+    _documents.insert(0, row);
+    return DoctorDocument.fromJson(row);
+  }
+
+  @override
+  Future<void> removeDocument(String id) async {
+    calls.add('removeDocument:$id');
+    _throwIfSet();
+    final row = _documents.firstWhere((d) => d['id'] == id);
+    if (row['type'] != 'PROFILE_PHOTO' && !_documentsEditable) {
+      throw const ApiException(message: 'Documents cannot be removed while verification is in progress or approved', statusCode: 403);
+    }
+    _documents.remove(row);
+  }
+
+  @override
+  Future<String> documentDownloadUrl(String id) async {
+    calls.add('download:$id');
+    _throwIfSet();
+    return 'https://storage.example.test/$id?sig=abc';
+  }
+
+  @override
+  Future<DoctorClinic> addClinic(ClinicInput input) async {
+    calls.add('addClinic:${input.name}');
+    _throwIfSet();
+    final row = {'id': 'c-new${++_seq}', ...input.toJson()};
+    _clinics.add(row);
+    return DoctorClinic.fromJson(row);
+  }
+
+  @override
+  Future<DoctorClinic> updateClinic(String id, Map<String, dynamic> body) async {
+    calls.add('updateClinic:$id:${body.keys.join(',')}');
+    _throwIfSet();
+    final row = _clinics.firstWhere((c) => c['id'] == id, orElse: () => throw const ApiException(message: 'Clinic not found', statusCode: 404));
+    row.addAll(body);
+    return DoctorClinic.fromJson(row);
+  }
+
+  @override
+  Future<void> removeClinic(String id) async {
+    calls.add('removeClinic:$id');
+    _throwIfSet();
+    _clinics.removeWhere((c) => c['id'] == id);
   }
 }
 

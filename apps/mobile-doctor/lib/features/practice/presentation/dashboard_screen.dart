@@ -132,16 +132,26 @@ class _VerificationCard extends StatelessWidget {
             Text('Your application', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(message),
+            if (!profile.isEditableApplication && profile.documents.any((d) => d.needsResubmission)) ...[
+              const SizedBox(height: 12),
+              const Text('The verification team has asked you to resubmit a document.'),
+              const SizedBox(height: 8),
+              FilledButton.tonal(onPressed: () => context.push('/documents'), child: const Text('Review documents')),
+            ],
             if (profile.isEditableApplication) ...[
               const SizedBox(height: 16),
               Text('Application completeness: ${profile.completion}%'),
               const SizedBox(height: 6),
               LinearProgressIndicator(value: profile.completion / 100),
               const SizedBox(height: 12),
-              Text(
-                'Profile details and document uploads are completed on the partner portal at abies.in/partner '
-                '(sign in with the same mobile number). You can set up availability here.',
-                style: Theme.of(context).textTheme.bodySmall,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.tonal(onPressed: () => context.push('/profile'), child: const Text('Profile & submit')),
+                  OutlinedButton(onPressed: () => context.push('/documents'), child: const Text('Documents')),
+                  OutlinedButton(onPressed: () => context.push('/clinics'), child: const Text('Clinics')),
+                ],
               ),
             ],
           ],

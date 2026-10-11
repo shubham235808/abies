@@ -191,7 +191,7 @@ class _AddWindowSheetState extends ConsumerState<_AddWindowSheet> {
           if (_mode == 'CLINIC') ...[
             const SizedBox(height: 12),
             if (clinics.isEmpty)
-              const Text('Add a clinic on the partner portal first — a clinic-mode window needs a clinic.')
+              const Text('Add an active clinic first (Profile → Clinics) — a clinic-mode window needs a clinic.')
             else
               DropdownButtonFormField<String>(
                 initialValue: _clinicId,

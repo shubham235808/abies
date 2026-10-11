@@ -5,8 +5,7 @@ version: 0.1.0+1
 
 # Same architecture and dependency set as apps/mobile (the patient app) —
 # see README.md. Only what this app actually uses is listed; the patient
-# app's connectivity/local_auth/path_provider/url_launcher deps have no
-# caller here yet.
+# app's connectivity/local_auth/path_provider deps have no caller here yet.
 environment:
   sdk: ">=3.4.0 <4.0.0"
   flutter: ">=3.22.0"
@@ -30,6 +29,14 @@ dependencies:
   # Encrypted-at-rest storage for the persisted cookie jar
   # (docs/mobile/SECURITY-DESIGN.md §2) — never shared_preferences.
   flutter_secure_storage: ^9.2.2
+
+  # Credential-document upload (POST /api/v1/doctors/me/documents) — same
+  # package and constraint as apps/mobile-diagnostics' report upload.
+  file_picker: ^8.1.2
+
+  # Opens a document's short-lived signed download URL in the system
+  # viewer — same constraint as apps/mobile.
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:
