@@ -32,6 +32,11 @@ dependencies:
   # (docs/mobile/SECURITY-DESIGN.md §2). Android Keystore / iOS Keychain.
   flutter_secure_storage: ^9.2.2
 
+  # Picks the file an agent attaches to a ticket reply via
+  # POST /api/v1/support/tickets/:id/attachments (multipart `file` field).
+  # Same package/range as apps/mobile-diagnostics' report upload.
+  file_picker: ^8.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

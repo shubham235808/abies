@@ -85,6 +85,15 @@ class ApiClient {
     return _send(path, () => _dio.delete(path), decode);
   }
 
+  /// `multipart/form-data` POST — the one route this app sends it to is
+  /// `POST /api/v1/support/tickets/:id/attachments` (it calls
+  /// `req.formData()`, not `req.json()`). Same shape as
+  /// apps/mobile-diagnostics' client: the form is built per call by
+  /// [buildForm] so a retry never re-sends an already-consumed [FormData].
+  Future<T> postMultipart<T>(String path, {required FormData Function() buildForm, required T Function(dynamic json) decode}) {
+    return _send(path, () => _dio.post(path, data: buildForm()), decode);
+  }
+
   Future<T> _send<T>(String path, Future<Response<dynamic>> Function() request, T Function(dynamic json) decode) async {
     try {
       final response = await request();

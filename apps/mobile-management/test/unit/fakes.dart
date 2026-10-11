@@ -84,7 +84,27 @@ Map<String, dynamic> queueJson({
   };
 }
 
-Map<String, dynamic> detailJson({String id = 't1', String status = 'OPEN', String? assignedAgentUserId, List<Map<String, dynamic>> messages = const []}) {
+/// One `refundablePayments` entry, shaped like `listRefundablePayments`.
+Map<String, dynamic> paymentJson({String id = 'pay-1', int amount = 1500, String status = 'SUCCESS', List<Map<String, dynamic>> refunds = const []}) {
+  return {
+    'id': id,
+    'purpose': 'CONSULTATION',
+    'amount': amount,
+    'status': status,
+    'createdAt': DateTime.utc(2026, 10, 1, 10).toIso8601String(),
+    'refunds': refunds,
+  };
+}
+
+const AttachmentUpload pdfUpload = AttachmentUpload(path: '/tmp/receipt.pdf', filename: 'receipt.pdf', mimeType: 'application/pdf', sizeBytes: 2048);
+
+Map<String, dynamic> detailJson({
+  String id = 't1',
+  String status = 'OPEN',
+  String? assignedAgentUserId,
+  List<Map<String, dynamic>> messages = const [],
+  List<Map<String, dynamic>> refundablePayments = const [],
+}) {
   return {
     ...queueJson(id: id, status: status, assignedAgentUserId: assignedAgentUserId),
     'requester': {'id': 'pat-1', 'mobile': '+919000000003', 'role': 'PATIENT'},
@@ -97,7 +117,7 @@ Map<String, dynamic> detailJson({String id = 't1', String status = 'OPEN', Strin
     'messages': messages,
     'attachments': <dynamic>[],
     'technicalIncidentDetail': null,
-    'refundablePayments': <dynamic>[],
+    'refundablePayments': refundablePayments,
   };
 }
 
@@ -112,6 +132,7 @@ class FakeSupportApi implements SupportApi {
   int ticketCalls = 0;
   Object? ticketError;
   Object? mutationError;
+  Object? attachError;
 
   final List<String> calls = [];
 
@@ -130,18 +151,61 @@ class FakeSupportApi implements SupportApi {
   }
 
   @override
-  Future<void> reply(String id, String body) async {
+  Future<String> reply(String id, String body) async {
     calls.add('reply:$id:$body');
     if (mutationError != null) throw mutationError!;
     final messages = [...(detail['messages'] as List<Map<String, dynamic>>)];
+    final messageId = 'm${messages.length + 1}';
     messages.add({
-      'id': 'm${messages.length + 1}',
+      'id': messageId,
       'body': body,
       'createdAt': DateTime.utc(2026, 10, 10, 9).toIso8601String(),
       'authorUserId': agentUser.id,
       'author': {'id': agentUser.id, 'mobile': agentUser.mobile, 'role': agentUser.role},
     });
     detail = {...detail, 'messages': messages, if (detail['status'] == 'OPEN') 'status': 'IN_PROGRESS'};
+    return messageId;
+  }
+
+  /// Mirrors addAttachment + detailInclude: the row shows up both on the
+  /// ticket and on its message.
+  @override
+  Future<void> attach(String id, AttachmentUpload file, {String? messageId}) async {
+    calls.add('attach:$id:${file.filename}:$messageId');
+    if (attachError != null) throw attachError!;
+    final row = {
+      'id': 'a${(detail['attachments'] as List).length + 1}',
+      'ticketId': id,
+      'messageId': messageId,
+      'originalName': file.filename,
+      'mimeType': file.mimeType,
+      'sizeBytes': file.sizeBytes,
+    };
+    final messages = [
+      for (final m in detail['messages'] as List<Map<String, dynamic>>)
+        m['id'] == messageId ? {...m, 'attachments': [...?(m['attachments'] as List?), row]} : m,
+    ];
+    detail = {...detail, 'messages': messages, 'attachments': [...(detail['attachments'] as List), row]};
+  }
+
+  /// Mirrors requestRefund: a new REQUESTED refund on that payment.
+  @override
+  Future<void> requestRefund({required String paymentId, required int amount, String? reason}) async {
+    calls.add('refund:$paymentId:$amount:$reason');
+    if (mutationError != null) throw mutationError!;
+    final payments = [
+      for (final p in detail['refundablePayments'] as List<Map<String, dynamic>>)
+        p['id'] == paymentId
+            ? {
+                ...p,
+                'refunds': [
+                  ...(p['refunds'] as List),
+                  {'id': 'r${(p['refunds'] as List).length + 1}', 'amount': amount, 'status': 'REQUESTED'},
+                ],
+              }
+            : p,
+    ];
+    detail = {...detail, 'refundablePayments': payments};
   }
 
   @override

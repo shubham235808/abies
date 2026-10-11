@@ -27,6 +27,16 @@ class SessionUser {
 /// it is turned away at sign-in instead.
 const supportQueueRoles = <String>{'CUSTOMER_SUPPORT', 'TECH_SUPPORT', 'SALES', 'CARE_COORDINATOR', 'ADMIN'};
 
+/// Roles that may raise a refund request from a ticket. Exactly the set
+/// `POST /api/v1/refunds` admits (`requireRole(ctx, 'CUSTOMER_SUPPORT',
+/// 'ADMIN')` in apps/platform-api/src/app/api/v1/refunds/route.ts) — same
+/// split as the web `TicketThread`'s `canHandleRefunds`. Deciding a refund
+/// (approve/reject) is a different gate entirely (`settlement.manage` + MFA:
+/// ADMIN, SUPER_ADMIN, FINANCE) and is not offered in this app.
+const refundRequestRoles = <String>{'CUSTOMER_SUPPORT', 'ADMIN'};
+
+bool canRequestRefunds(String? role) => role != null && refundRequestRoles.contains(role);
+
 /// Human label for the queue a role works (`departmentForRole` in
 /// packages/domain/src/modules/support/tickets.service.ts). ADMIN sees every
 /// department's tickets.

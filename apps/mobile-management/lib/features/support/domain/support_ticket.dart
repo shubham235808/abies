@@ -151,8 +151,156 @@ class QueueTicket {
   }
 }
 
+/// A `SupportAttachment` row (schema.prisma), as included on a ticket and on
+/// each of its messages by `detailInclude()`. Metadata only: the backend has
+/// no route that serves an attachment's bytes back (the object lives in
+/// storage under `storageKey`, which is deliberately not parsed here), so
+/// this app — like every other client today — can list files but not open
+/// them.
+class TicketAttachment {
+  const TicketAttachment({required this.id, required this.originalName, required this.mimeType, required this.sizeBytes, this.messageId});
+
+  final String id;
+  final String? messageId;
+  final String originalName;
+  final String mimeType;
+  final int sizeBytes;
+
+  factory TicketAttachment.fromJson(Map<String, dynamic> json) {
+    return TicketAttachment(
+      id: json['id'] as String,
+      messageId: json['messageId'] as String?,
+      originalName: json['originalName'] as String? ?? 'file',
+      mimeType: json['mimeType'] as String? ?? '',
+      sizeBytes: (json['sizeBytes'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+List<TicketAttachment> _attachments(Object? raw) =>
+    (raw as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>().map(TicketAttachment.fromJson).toList();
+
+/// "1.2 MB", "340 KB", "12 B".
+String formatBytes(int bytes) {
+  if (bytes >= 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  if (bytes >= 1024) return '${(bytes / 1024).round()} KB';
+  return '$bytes B';
+}
+
+/// A file an agent has picked to attach to a reply. The server-side rules it
+/// is checked against before upload are `assertUploadAllowed` in
+/// packages/domain/src/lib/storage.ts: PDF/JPEG/PNG only (magic-byte
+/// checked), at most `UPLOAD_MAX_BYTES` (env default 10 MiB). Those
+/// violations throw a plain `Error` server-side, which the route maps to a
+/// generic 500 "Something went wrong" — so checking here first is the only
+/// way the agent gets a useful message.
+class AttachmentUpload {
+  const AttachmentUpload({required this.path, required this.filename, required this.mimeType, required this.sizeBytes});
+
+  final String path;
+  final String filename;
+  final String mimeType;
+  final int sizeBytes;
+
+  static const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+
+  /// `UPLOAD_MAX_BYTES`' default (packages/domain/src/lib/env.ts). An
+  /// environment can lower it; the server stays the authority either way.
+  static const maxBytes = 10 * 1024 * 1024;
+
+  /// Null when the extension isn't one the server accepts.
+  static String? mimeTypeFor(String filename) {
+    final dot = filename.lastIndexOf('.');
+    if (dot < 0) return null;
+    switch (filename.substring(dot + 1).toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      default:
+        return null;
+    }
+  }
+
+  /// Null when acceptable, otherwise the user-facing reason it isn't.
+  String? get validationError {
+    if (!['application/pdf', 'image/jpeg', 'image/png'].contains(mimeType)) return 'Only PDF, JPG or PNG files can be attached.';
+    if (sizeBytes <= 0) return 'That file is empty.';
+    if (sizeBytes > maxBytes) return 'Attachments are limited to ${formatBytes(maxBytes)} (this one is ${formatBytes(sizeBytes)}).';
+    return null;
+  }
+}
+
+/// One refund already raised against a payment (`listRefundablePayments`'
+/// `refunds: { id, amount, status }` select).
+class PaymentRefund {
+  const PaymentRefund({required this.id, required this.amount, required this.status});
+
+  final String id;
+  final int amount;
+  final String status;
+
+  factory PaymentRefund.fromJson(Map<String, dynamic> json) {
+    return PaymentRefund(id: json['id'] as String, amount: (json['amount'] as num).toInt(), status: json['status'] as String);
+  }
+}
+
+/// One of `getTicket`'s `refundablePayments` — the linked patient's 10 most
+/// recent SUCCESS / PARTIALLY_REFUNDED payments (`listRefundablePayments` in
+/// packages/domain/src/modules/payments/refunds.service.ts). Amounts are
+/// whole rupees (`Payment.amount Int`, `requestRefundSchema.amount` int).
+class RefundablePayment {
+  const RefundablePayment({
+    required this.id,
+    required this.purpose,
+    required this.amount,
+    required this.status,
+    required this.createdAt,
+    required this.refunds,
+  });
+
+  final String id;
+  final String purpose;
+  final int amount;
+  final String status;
+  final DateTime createdAt;
+  final List<PaymentRefund> refunds;
+
+  /// Same arithmetic as the server's `refundableBalance`: every refund that
+  /// isn't REJECTED (REQUESTED/APPROVED/PROCESSING/COMPLETED) is already
+  /// spoken for. The server re-checks this on request — this only stops the
+  /// agent typing an amount that is bound to be refused.
+  int get remaining {
+    final committed = refunds.where((r) => r.status != 'REJECTED').fold<int>(0, (sum, r) => sum + r.amount);
+    final left = amount - committed;
+    return left < 0 ? 0 : left;
+  }
+
+  factory RefundablePayment.fromJson(Map<String, dynamic> json) {
+    return RefundablePayment(
+      id: json['id'] as String,
+      purpose: json['purpose'] as String,
+      amount: (json['amount'] as num).toInt(),
+      status: json['status'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      refunds: (json['refunds'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>().map(PaymentRefund.fromJson).toList(),
+    );
+  }
+}
+
 class TicketMessage {
-  const TicketMessage({required this.id, required this.body, required this.createdAt, this.authorId, this.authorMobile, this.authorRole});
+  const TicketMessage({
+    required this.id,
+    required this.body,
+    required this.createdAt,
+    this.authorId,
+    this.authorMobile,
+    this.authorRole,
+    this.attachments = const [],
+  });
 
   final String id;
   final String body;
@@ -160,6 +308,7 @@ class TicketMessage {
   final String? authorId;
   final String? authorMobile;
   final String? authorRole;
+  final List<TicketAttachment> attachments;
 
   /// Anyone who isn't the PATIENT side — same split `addMessage` uses
   /// (`isStaffAuthor = authorRole !== 'PATIENT'`). Author can be null
@@ -175,6 +324,7 @@ class TicketMessage {
       authorId: author?['id'] as String? ?? json['authorUserId'] as String?,
       authorMobile: author?['mobile'] as String?,
       authorRole: author?['role'] as String?,
+      attachments: _attachments(json['attachments']),
     );
   }
 }
@@ -201,8 +351,8 @@ class TechnicalIncidentDetail {
 }
 
 /// `GET /api/v1/support/tickets/{id}` → `{ ticket }` (getTicket +
-/// detailInclude). `refundablePayments` is deliberately not parsed — refund
-/// handling is out of this app's scope (see README).
+/// detailInclude). `refundablePayments` is only ever non-empty for a staff
+/// viewer of a ticket with a linked patient (getTicket's own guard).
 class TicketDetail {
   const TicketDetail({
     required this.id,
@@ -224,6 +374,8 @@ class TicketDetail {
     this.sla,
     this.resolvedAt,
     this.technicalIncidentDetail,
+    this.attachments = const [],
+    this.refundablePayments = const [],
   });
 
   final String id;
@@ -245,6 +397,18 @@ class TicketDetail {
   final DateTime? resolvedAt;
   final TechnicalIncidentDetail? technicalIncidentDetail;
   final List<TicketMessage> messages;
+
+  /// Every attachment on the ticket, message-bound or not. The ones with no
+  /// `messageId` (uploaded without one — the route allows it) aren't shown
+  /// in any message bubble, so the screen lists them separately via
+  /// [looseAttachments].
+  final List<TicketAttachment> attachments;
+  final List<RefundablePayment> refundablePayments;
+
+  List<TicketAttachment> get looseAttachments {
+    final inThread = {for (final m in messages) m.id};
+    return attachments.where((a) => a.messageId == null || !inThread.contains(a.messageId)).toList();
+  }
 
   bool get isClosed => status == 'CLOSED';
   bool get isAssigned => assignedAgentUserId != null;
@@ -274,6 +438,11 @@ class TicketDetail {
       sla: TicketSla.fromJson(json['sla']),
       resolvedAt: _date(json['resolvedAt']),
       technicalIncidentDetail: TechnicalIncidentDetail.fromJson(json['technicalIncidentDetail']),
+      attachments: _attachments(json['attachments']),
+      refundablePayments: (json['refundablePayments'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(RefundablePayment.fromJson)
+          .toList(),
       messages: (json['messages'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(TicketMessage.fromJson)
