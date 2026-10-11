@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/theme/app_theme.dart';
@@ -39,6 +40,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final async = ref.watch(inventoryControllerProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Inventory')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push('/inventory/add'),
+        icon: const Icon(Icons.add),
+        label: const Text('Add batch'),
+      ),
       body: Column(
         children: [
           Padding(
@@ -87,12 +93,13 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                           const SizedBox(height: 120),
                           EmptyStateView(
                             message: items.isEmpty
-                                ? 'No inventory yet. Add stock batches from the ABIES partner portal.'
+                                ? 'No inventory yet. Tap "Add batch" to add your first stock batch.'
                                 : 'No batches match.',
                           ),
                         ])
                       : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          // Bottom padding keeps the last row clear of the FAB.
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 88),
                           itemCount: shown.length,
                           itemBuilder: (context, i) => _InventoryTile(item: shown[i], onTap: () => _edit(shown[i])),
                         ),

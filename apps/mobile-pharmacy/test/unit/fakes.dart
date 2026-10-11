@@ -5,9 +5,16 @@ import 'package:abies_pharmacy/features/auth/data/auth_api.dart';
 import 'package:abies_pharmacy/features/auth/domain/auth_result.dart';
 import 'package:abies_pharmacy/features/auth/domain/session_user.dart';
 import 'package:abies_pharmacy/features/inventory/data/inventory_api.dart';
+import 'package:abies_pharmacy/features/home/data/pharmacy_profile_api.dart';
+import 'package:abies_pharmacy/features/home/domain/pharmacy_profile.dart';
 import 'package:abies_pharmacy/features/inventory/domain/inventory_item.dart';
+import 'package:abies_pharmacy/features/inventory/domain/new_batch.dart';
 import 'package:abies_pharmacy/features/orders/data/pharmacy_orders_api.dart';
 import 'package:abies_pharmacy/features/orders/domain/pharmacy_order.dart';
+import 'package:abies_pharmacy/features/pos/data/pos_api.dart';
+import 'package:abies_pharmacy/features/pos/domain/pos_sale.dart';
+import 'package:abies_pharmacy/features/tax/data/tax_settings_api.dart';
+import 'package:abies_pharmacy/features/tax/domain/tax_settings.dart';
 
 const pharmacyUser = SessionUser(id: 'u-ph', mobile: '+919000000003', email: 'pharmacy@example.test', role: 'PHARMACY');
 const patientUser = SessionUser(id: 'u-pt', mobile: '+919000000001', email: null, role: 'PATIENT');
@@ -193,6 +200,29 @@ class FakeInventoryApi implements InventoryApi {
   int listCalls = 0;
   Object? updateError;
   Map<String, Object?>? lastUpdate;
+  Object? addError;
+  Map<String, dynamic>? lastAddBody;
+
+  /// Mirrors addInventory: echoes the batch back as a created row.
+  @override
+  Future<InventoryItem> add(NewBatch batch) async {
+    lastAddBody = batch.toJson();
+    if (addError != null) throw addError!;
+    final body = lastAddBody!;
+    final created = InventoryItem.fromJson({
+      ...inventoryJson(
+        id: 'new-${items.length + 1}',
+        name: (body['name'] as String?) ?? 'Existing medicine',
+        qty: body['quantityAvailable'] as int,
+        price: body['price'] as int,
+        expiry: body['expiryDate'] as String,
+        hsn: body['hsnCode'] as String?,
+      ),
+      'batchNumber': body['batchNumber'],
+    });
+    items = [...items, created];
+    return created;
+  }
 
   @override
   Future<List<InventoryItem>> list() async {
@@ -215,3 +245,154 @@ class FakeInventoryApi implements InventoryApi {
 }
 
 const conflict = ApiException(message: 'This order has not been paid for yet', statusCode: 409);
+
+Map<String, dynamic> pharmacyJson({
+  String status = 'DRAFT',
+  String? name,
+  List<String> licenses = const [],
+  List<String> areas = const [],
+  String? rejectionReason,
+}) =>
+    {
+      'id': 'ph1',
+      'userId': 'u-ph',
+      'name': name,
+      'licenseNumbers': licenses,
+      'serviceAreas': areas,
+      'active': true,
+      'verificationStatus': status,
+      'rejectionReason': rejectionReason,
+    };
+
+class FakePharmacyProfileApi implements PharmacyProfileApi {
+  FakePharmacyProfileApi(this.profile);
+
+  PharmacyProfile profile;
+  Object? updateError;
+  Object? submitError;
+  Map<String, Object?>? lastUpdate;
+  int submitCalls = 0;
+
+  @override
+  Future<PharmacyProfile> me() async => profile;
+
+  @override
+  Future<PharmacyProfile> update({String? name, required List<String> licenseNumbers, required List<String> serviceAreas}) async {
+    lastUpdate = {'name': name, 'licenseNumbers': licenseNumbers, 'serviceAreas': serviceAreas};
+    if (updateError != null) throw updateError!;
+    profile = PharmacyProfile.fromJson(pharmacyJson(
+      status: profile.verificationStatus,
+      name: name ?? profile.name,
+      licenses: licenseNumbers,
+      areas: serviceAreas,
+    ));
+    return profile;
+  }
+
+  @override
+  Future<PharmacyProfile> submit({required bool declarationAccepted}) async {
+    submitCalls += 1;
+    if (submitError != null) throw submitError!;
+    profile = PharmacyProfile.fromJson(pharmacyJson(
+      status: 'SUBMITTED',
+      name: profile.name,
+      licenses: profile.licenseNumbers,
+      areas: profile.serviceAreas,
+    ));
+    return profile;
+  }
+}
+
+class FakeTaxSettingsApi implements TaxSettingsApi {
+  TaxSettings? settings;
+  Object? saveError;
+  Map<String, dynamic>? lastSaveBody;
+
+  @override
+  Future<TaxSettings?> get() async => settings;
+
+  @override
+  Future<TaxSettings> save(TaxSettings input) async {
+    lastSaveBody = input.toJson();
+    if (saveError != null) throw saveError!;
+    settings = TaxSettings.fromJson({...input.toJson(), 'id': 'ts1', 'active': true});
+    return settings!;
+  }
+}
+
+/// Computes the sale the way pos.service.ts `recordSale` does (batch price
+/// x qty, per-line round(subtotal x rate / 100), CGST = floor(tax / 2),
+/// SGST = remainder) and decrements the shared [FakeInventoryApi] — so a
+/// test can check the app shows the server's numbers and re-reads stock.
+class FakePosApi implements PosApi {
+  FakePosApi({required this.inventory, this.ratePercent = 12});
+
+  final FakeInventoryApi inventory;
+  final int ratePercent;
+  Object? saleError;
+  Map<String, dynamic>? lastSaleBody;
+  int saleCalls = 0;
+  List<PosSale> sales = [];
+
+  @override
+  Future<PosSale> recordSale(PosSaleRequest request) async {
+    saleCalls += 1;
+    lastSaleBody = request.toJson();
+    if (saleError != null) throw saleError!;
+    var subtotal = 0;
+    var tax = 0;
+    final items = <Map<String, dynamic>>[];
+    for (final line in request.items) {
+      final batch = inventory.items.firstWhere((i) => i.medicineId == line.medicineId && i.batchNumber == line.batchNumber);
+      final lineSubtotal = batch.price * line.quantity;
+      subtotal += lineSubtotal;
+      tax += (lineSubtotal * ratePercent / 100).round();
+      items.add({
+        'medicineId': line.medicineId,
+        'batchNumber': line.batchNumber,
+        'quantity': line.quantity,
+        'unitPrice': batch.price,
+        'taxRate': ratePercent,
+        'medicine': {'name': batch.medicineName},
+      });
+      inventory.items = [
+        for (final i in inventory.items)
+          i.id == batch.id
+              ? InventoryItem.fromJson({
+                  ...inventoryJson(id: i.id, name: i.medicineName, qty: i.quantityAvailable - line.quantity, price: i.price, hsn: i.hsnCode),
+                  'medicineId': i.medicineId,
+                  'batchNumber': i.batchNumber,
+                })
+              : i,
+      ];
+    }
+    final total = subtotal - request.discountAmount + tax;
+    final cgst = tax ~/ 2;
+    final sale = PosSale.fromJson({
+      'id': 'sale-$saleCalls',
+      'paymentMethod': request.paymentMethod,
+      'customerName': request.customerName,
+      'customerPhone': request.customerPhone,
+      'upiReference': request.upiReference,
+      'subtotal': subtotal,
+      'discountAmount': request.discountAmount,
+      'taxAmount': tax,
+      'totalAmount': total,
+      'createdAt': '2026-10-10T09:30:00.000Z',
+      'items': items,
+      'invoice': {'invoiceNumber': 'INV-${'$saleCalls'.padLeft(6, '0')}', 'cgst': cgst, 'sgst': tax - cgst, 'igst': 0, 'totalTax': tax, 'totalAmount': total},
+      'pharmacy': {
+        'name': 'Test Pharmacy',
+        'taxSettings': {'legalBusinessName': 'Test Pharmacy LLP', 'gstin': '27AAAAA0000A1Z5', 'registeredState': 'Maharashtra'},
+      },
+    });
+    sales = [sale, ...sales];
+    return sale;
+  }
+
+  @override
+  Future<List<PosSale>> listSales() async => sales;
+
+  @override
+  Future<PosSale> getSale(String id) async => sales.firstWhere((s) => s.id == id);
+}

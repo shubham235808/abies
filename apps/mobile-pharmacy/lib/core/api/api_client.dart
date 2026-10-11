@@ -81,6 +81,11 @@ class ApiClient {
     return _send(path, () => _dio.patch(path, data: body), decode);
   }
 
+  /// Full-replace upsert — e.g. `PUT /pharmacies/me/tax-settings`.
+  Future<T> put<T>(String path, {Object? body, required T Function(dynamic json) decode}) {
+    return _send(path, () => _dio.put(path, data: body), decode);
+  }
+
   Future<T> delete<T>(String path, {required T Function(dynamic json) decode}) {
     return _send(path, () => _dio.delete(path), decode);
   }

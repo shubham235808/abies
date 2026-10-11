@@ -1,5 +1,6 @@
 import '../../../core/api/api_client.dart';
 import '../domain/inventory_item.dart';
+import '../domain/new_batch.dart';
 
 /// - `GET   /api/v1/pharmacies/me/inventory`      -> `{inventory}` (`listMyInventory`)
 /// - `PATCH /api/v1/pharmacies/me/inventory/:id`  -> `{item}` (`updateInventory`),
@@ -8,8 +9,18 @@ import '../domain/inventory_item.dart';
 ///   Needs the `pharmacy.product.update` permission, which PHARMACY has
 ///   (packages/domain/src/server/permissions.ts line 24). A quantity change
 ///   writes a MANUAL_CORRECTION stock movement server-side.
+/// - `POST  /api/v1/pharmacies/me/inventory`      -> 201 `{item}` (`addInventory`),
+///   body `addInventorySchema` (catalogue.schemas.ts — see [NewBatch]).
+///   Needs `pharmacy.product.create` (PHARMACY has it). Writes a PURCHASE
+///   "Initial stock" movement; 409 on a duplicate batch number for the same
+///   medicine; 400 on a past expiry date.
+///
+/// There is deliberately no delete here — removing a batch is destructive
+/// and out of scope for this app.
 abstract class InventoryApi {
   Future<List<InventoryItem>> list();
+
+  Future<InventoryItem> add(NewBatch batch);
 
   Future<InventoryItem> update(String id, {int? quantityAvailable, int? price, DateTime? expiryDate});
 }
@@ -27,6 +38,15 @@ class InventoryApiImpl implements InventoryApi {
           .whereType<Map<String, dynamic>>()
           .map(InventoryItem.fromJson)
           .toList(),
+    );
+  }
+
+  @override
+  Future<InventoryItem> add(NewBatch batch) {
+    return _client.post<InventoryItem>(
+      '/api/v1/pharmacies/me/inventory',
+      body: batch.toJson(),
+      decode: (json) => InventoryItem.fromJson((json as Map<String, dynamic>)['item'] as Map<String, dynamic>),
     );
   }
 

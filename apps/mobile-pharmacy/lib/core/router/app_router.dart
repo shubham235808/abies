@@ -8,9 +8,15 @@ import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/password_setup_screen.dart';
 import '../../features/auth/presentation/sign_in_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
+import '../../features/home/presentation/profile_screen.dart';
+import '../../features/inventory/presentation/add_batch_screen.dart';
 import '../../features/inventory/presentation/inventory_screen.dart';
 import '../../features/orders/presentation/order_detail_screen.dart';
 import '../../features/orders/presentation/order_list_screen.dart';
+import '../../features/pos/presentation/pos_controller.dart';
+import '../../features/pos/presentation/pos_screen.dart';
+import '../../features/pos/presentation/sale_receipt_screen.dart';
+import '../../features/tax/presentation/tax_settings_screen.dart';
 
 /// Same go_router + pure-redirect-function pattern as apps/mobile. Unlike
 /// the patient app there is no public browsing here: everything except the
@@ -67,6 +73,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/orders', builder: (context, state) => const OrderListScreen()),
       GoRoute(path: '/orders/:id', builder: (context, state) => OrderDetailScreen(orderId: state.pathParameters['id']!)),
       GoRoute(path: '/inventory', builder: (context, state) => const InventoryScreen()),
+      GoRoute(path: '/inventory/add', builder: (context, state) => const AddBatchScreen()),
+      GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
+      GoRoute(path: '/tax-settings', builder: (context, state) => const TaxSettingsScreen()),
+      GoRoute(path: '/pos', builder: (context, state) => const PosScreen()),
+      GoRoute(path: '/pos/sales', builder: (context, state) => const SalesListScreen()),
+      GoRoute(
+        path: '/pos/sales/:id',
+        builder: (context, state) => SaleReceiptScreen(
+          saleId: state.pathParameters['id']!,
+          checkout: state.extra is PosCheckoutResult ? state.extra as PosCheckoutResult : null,
+        ),
+      ),
     ],
   );
 });

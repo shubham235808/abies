@@ -9,6 +9,7 @@ import '../../inventory/presentation/inventory_controller.dart';
 import '../../orders/domain/pharmacy_order.dart';
 import '../../orders/presentation/order_widgets.dart';
 import '../../orders/presentation/orders_controller.dart';
+import '../../tax/presentation/tax_settings_controller.dart';
 import '../domain/pharmacy_profile.dart';
 import 'home_controller.dart';
 
@@ -20,6 +21,7 @@ class HomeScreen extends ConsumerWidget {
 
   Future<void> _refresh(WidgetRef ref) async {
     ref.invalidate(pharmacyProfileProvider);
+    ref.invalidate(taxSettingsControllerProvider);
     ref.invalidate(inventoryControllerProvider);
     await ref.read(ordersControllerProvider.notifier).refresh();
   }
@@ -56,9 +58,20 @@ class HomeScreen extends ConsumerWidget {
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) {
-              if (v == 'signout') _signOut(context, ref);
+              switch (v) {
+                case 'signout':
+                  _signOut(context, ref);
+                case final route:
+                  context.push(route);
+              }
             },
-            itemBuilder: (_) => [const PopupMenuItem(value: 'signout', child: Text('Sign out'))],
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: '/profile', child: Text('Pharmacy profile')),
+              PopupMenuItem(value: '/tax-settings', child: Text('Tax settings')),
+              PopupMenuItem(value: '/pos/sales', child: Text('Counter sales')),
+              PopupMenuDivider(),
+              PopupMenuItem(value: 'signout', child: Text('Sign out')),
+            ],
           ),
         ],
       ),
@@ -67,11 +80,13 @@ class HomeScreen extends ConsumerWidget {
         onDestinationSelected: (i) {
           if (i == 1) context.push('/orders');
           if (i == 2) context.push('/inventory');
+          if (i == 3) context.push('/pos');
         },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Today'),
           NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: 'All orders'),
           NavigationDestination(icon: Icon(Icons.inventory_2_outlined), label: 'Inventory'),
+          NavigationDestination(icon: Icon(Icons.point_of_sale_outlined), label: 'POS'),
         ],
       ),
       body: RefreshIndicator(
@@ -198,20 +213,37 @@ class _VerificationBanner extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final String message = switch (profile.verificationStatus) {
       'DRAFT' =>
-        'Your pharmacy application is still a draft. Complete your profile (name, license numbers, service areas) and submit it for verification on the ABIES partner portal — you will start receiving orders once approved.',
+        'Your pharmacy application is still a draft. Complete your profile (name, license numbers, service areas) and submit it for verification — you will start receiving orders once approved.',
       'SUBMITTED' || 'UNDER_REVIEW' => "Your application is with the ABIES verification team. You'll be notified once it's reviewed.",
       'REJECTED' =>
-        'Your last application was rejected${profile.rejectionReason != null ? ': ${profile.rejectionReason}' : ''}. Update your details on the partner portal and resubmit.',
+        'Your last application was rejected${profile.rejectionReason != null ? ': ${profile.rejectionReason}' : ''}. Update your details and resubmit.',
       'SUSPENDED' => 'Your account has been suspended${profile.rejectionReason != null ? ': ${profile.rejectionReason}' : '.'} Contact ABIES support.',
       _ => 'Verification status: ${profile.verificationStatus}',
     };
     final bad = profile.verificationStatus == 'REJECTED' || profile.verificationStatus == 'SUSPENDED';
+    final fg = bad ? scheme.onErrorContainer : scheme.onTertiaryContainer;
     return Card(
       color: bad ? scheme.errorContainer : scheme.tertiaryContainer,
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Text(message, style: TextStyle(color: bad ? scheme.onErrorContainer : scheme.onTertiaryContainer)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push('/profile'),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message, style: TextStyle(color: fg)),
+              if (profile.isEditable) ...[
+                const SizedBox(height: 8),
+                Text(
+                  profile.verificationStatus == 'REJECTED' ? 'Update and resubmit →' : 'Complete profile →',
+                  style: TextStyle(color: fg, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
