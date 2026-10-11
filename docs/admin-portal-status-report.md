@@ -172,7 +172,7 @@ Previously confirmed fully missing; closed as follows:
 
 ---
 
-## E. Website & Mobile App Content Management — ✅ Website CMS complete for what was asked (pages, nav, SEO, FAQ, testimonials, banners); blog/i18n/video still absent
+## E. Website & Mobile App Content Management — ✅ Website CMS complete for what was asked (pages, blog, nav, SEO, FAQ, testimonials, banners); CMS content translatable to Hindi (UI chrome is not); video tracked separately
 
 A repo-wide search for banners/About-Us/FAQ/blog/testimonials/navigation
 config/SEO metadata/multilingual content/promotional video originally turned
@@ -324,10 +324,11 @@ and public pages that read the DB on every request with no caching.
   hardcoded arrays.
 - **SEO metadata.** Model `PageSeoMetadata` (`pageKey` unique, `title`,
   `description`, `keywords[]`, `ogImageKey`, `active`, `createdByUserId`).
-  `pageKey` is one of the 12 public routes registered in
+  `pageKey` is one of the 13 public routes registered in
   `packages/domain/src/modules/content/seo.pages.ts` (home, about, faq,
-  doctors, diagnostics, medicines, panchakarma, contact, support, partners,
-  terms, privacy — each with a built-in default title/description) or
+  doctors, diagnostics, medicines, panchakarma, blog (added by the blog
+  pass), contact, support, partners, terms, privacy — each with a built-in
+  default title/description) or
   `page:<slug>` for a `/pages/<slug>` content page (default derived from the
   page's own title and body). Service:
   `.../content/seo.{schemas,service}.ts`; `resolvePageSeo()` always returns
@@ -338,7 +339,7 @@ and public pages that read the DB on every request with no caching.
   Admin routes: `.../admin/content/seo/route.ts` + `[id]/route.ts`
   (multipart, like Testimonials). Admin UI: `seo-manager.tsx` (one row per
   public page showing what's live, Customise/Edit, Reset to default).
-  Public consumption: all 12 registered pages plus `/pages/[slug]` now
+  Public consumption: all 13 registered pages plus `/pages/[slug]` now
   export `generateMetadata()` via `apps/client-web/src/lib/seo.ts`
   (`pageMetadata()`), emitting title, description, keywords, Open Graph and
   Twitter card tags. It calls `connection()` first so the lookup never runs
@@ -350,12 +351,189 @@ and public pages that read the DB on every request with no caching.
   ordering and hiding rules, page-delete cascade, default-fallback rule,
   OG image upload/clear, never-blank SEO resolution.
 
+**What works now — Blog (added, EXPANSION-5 blog pass):**
+Same pattern as `ContentPage`, plus the fields a dated, bylined article
+needs.
+
+- Additive-only migration
+  `packages/domain/prisma/migrations/20261010170000_blog_post/` (one new
+  table `BlogPost`, unique index on `slug`, index on `(active,
+  publishedAt)`; nothing existing altered). Model fields: `slug` (unique,
+  same lowercase-with-hyphens rule as ContentPage, immutable after
+  creation), `title`, `excerpt` (list/summary + SEO description), `body`
+  (plain text, blank line = paragraph — no rich-text editor, same as
+  ContentPage), `coverImageKey` (optional), `authorName` (public byline),
+  `createdByUserId` (plain id of the admin who created it — the
+  `Testimonial` precedent), `publishedAt` (nullable — **null = draft**,
+  kept separate from `createdAt`; a future date = scheduled, goes live on
+  its own with no job), `active` (hide a published post without losing its
+  date), timestamps. Verified by applying the full 45-migration chain to a
+  throwaway `abies_shadow_check_blog` database (`prisma migrate diff`
+  against `schema.prisma`: no difference) and dropping it, then applied
+  **only this migration** to the shared dev database (`prisma db execute`
+  + `prisma migrate resolve --applied`, so another workstream's pending
+  migration wasn't swept in).
+- Service: `packages/domain/src/modules/content/blog.{schemas,service}.ts`
+  — list/get/create/update/remove plus public `publishedBlogPosts()`
+  (newest first, no body) and `publishedBlogPostBySlug()`. Visible to the
+  public only when `active` and `publishedAt <= now`; draft, scheduled,
+  hidden and missing all 404 identically. `recordAuditEvent`
+  (`eventType: 'CONTENT'`) on every write, with dedicated `PUBLISHED` /
+  `UNPUBLISHED` actions when `publishedAt` is set/cleared (otherwise
+  `UPDATED`). Cover image: same `putObject` + magic-byte
+  `assertUploadAllowed` + replace-then-delete flow as Testimonial photos,
+  stored under `blog/<id>/`, with a clear-image option like SEO's OG image.
+- Admin routes (`requireAdminMfa` + `requirePermission(ctx,
+  'configuration.manage')`, multipart `payload` + `coverImage`):
+  `apps/platform-api/src/app/api/v1/admin/content/blog/route.ts` +
+  `[id]/route.ts`. Admin UI: new "Blog" tab,
+  `apps/management-web/src/app/ops/admin/content/blog-manager.tsx` (list
+  with Draft/Scheduled/Published/Hidden status, create/edit with cover
+  upload/replace/remove, optional publish date, one-click Publish now /
+  Unpublish, Hide/Show, Remove).
+- Public, read live on every request (`force-dynamic`):
+  `apps/client-web/src/app/(public)/blog/page.tsx` (list) and
+  `.../blog/[slug]/page.tsx` (detail, plain-text body via the existing
+  `ContentPageBody`). SEO: `/blog` is a new `blog` entry in `SEO_PAGES`, so
+  its metadata is admin-editable in the existing SEO tab via
+  `pageMetadata('blog')`; each post's `generateMetadata()` uses
+  `blogPostMetadata()` in `apps/client-web/src/lib/seo.ts` — title,
+  excerpt as description, author, Open Graph `article` with
+  published/modified time, cover image as `og:image` (24-hour signed URL,
+  same reasoning as the OG image TTL).
+- Nav: "Blog" added to the built-in `PUBLIC_FOOTER_COMPANY` defaults in
+  `nav.schemas.ts` rather than as a DB row — a single admin row in an
+  unconfigured location would replace that location's entire default list
+  (the fallback rule above). Admins who already customised that column add
+  it with an ordinary `/blog` URL item.
+- Tests: `tests/integration/blog.test.ts` (8 cases, real dev DB, cleans up
+  after itself) — CRUD + audit rows, PUBLISHED/UNPUBLISHED audit actions,
+  duplicate/malformed/immutable slug, ISO `publishedAt` parsing, cover
+  upload/keep/replace/clear, public visibility (draft/scheduled/hidden
+  excluded, newest first), detail lookup with signed cover URL.
+
+**What works now — CMS content translations, English + Hindi (added, EXPANSION-5 translations pass):**
+
+> **Scope, stated plainly: this translates admin-managed CMS *content*
+> only — never the application's own UI.** What an admin can now publish
+> in Hindi: content-page title/body (About Us, Terms, Privacy, any
+> `/pages/<slug>` page), FAQ question/answer pairs, testimonial quote /
+> author name / role, header/footer nav link labels, and per-page SEO
+> title/description/keywords. Everything else on the public site — every
+> button, heading, form label, empty state, error message and hardcoded
+> marketing copy in client-web, plus all of partner-web and
+> management-web — is still English-only. A Hindi visitor sees Hindi CMS
+> text inside English page chrome. Translating the UI itself would be a
+> separate, much larger i18n-framework project (message catalogues, a
+> `[locale]` route segment or equivalent, hundreds of components) and has
+> **not** been started. The blog and the media library are also not
+> covered.
+
+- **Architecture — a `language` column on each model, one row per
+  language (option (a)), not a polymorphic `Translation` table.** Every
+  other model in `schema.prisma` is a typed, directly-queryable table with
+  real foreign keys; a generic `entityType/entityId/field/value` table
+  would have had no FK to its entity (no cascade, orphans possible),
+  stringly-typed field names, and every public read would have needed an
+  overlay merge. Refinement on (a): each translation row also carries
+  `translationOfId` → the English row it translates (self-relation,
+  `ON DELETE CASCADE`, `@@unique([translationOfId, language])`). Without
+  that link a list (FAQ, testimonials, a nav menu) could only fall back
+  *as a whole* — translating 2 of 10 FAQs would either show 2 Hindi
+  questions and drop 8, or show none. With it, fallback is **per item**,
+  order/priority stays the English list's, and deleting an English row
+  removes its translations.
+- **What a translation row owns vs. inherits.** It owns only its text
+  columns and its own `active` (draft) flag. Ordering, photo/video,
+  rating, link target (`href`/`contentPageId`), nav location, OG image,
+  and whether the item is published at all come from the English row —
+  unpublishing the English item hides it in every language; a draft
+  translation falls back to English.
+- Migration `packages/domain/prisma/migrations/20261010180000_content_translations/`:
+  adds `language TEXT NOT NULL DEFAULT 'en'` + `translationOfId` (FK,
+  cascade) + the per-language unique index to `ContentPage`, `FaqEntry`,
+  `Testimonial`, `NavMenuItem`, `PageSeoMetadata`. **Not purely
+  additive in one respect:** `ContentPage.slug` and
+  `PageSeoMetadata.pageKey` change from unique to unique-per-language
+  (`@@unique([slug, language])`, `@@unique([pageKey, language])`) so a
+  translation can share its English row's slug/key. That only relaxes a
+  constraint — all existing rows are `'en'` — and the composite index is
+  created before the old one is dropped. Verified by applying the full
+  migration chain to a throwaway `abies_shadow_i18n` database
+  (`prisma migrate diff` against `schema.prisma`: no difference), dropping
+  it, then applying **only this migration** to the shared dev database
+  (`prisma db execute` + `prisma migrate resolve --applied`).
+- Languages: `packages/domain/src/modules/content/languages.ts` —
+  `CONTENT_LANGUAGES = ['en', 'hi']` (the same pair the notification
+  templates already carry bodies for), labels in each language's own
+  script, the shared per-item fallback rule `localise()`, and the cookie
+  name. Adding a language later is a one-line change here (the column is
+  plain text, not an enum).
+- Services: each of `pages`, `faq`, `testimonials`, `nav`, `seo` gained
+  `upsert…Translation(sourceId, {language, …text})` (create-or-replace,
+  `CREATED`/`UPDATED` audit event with `translationOf` + `language`) and
+  `remove…Translation(sourceId, language)`. Admin `list…()` returns
+  English rows only, each with a nested `translations` array; the
+  ordinary update functions refuse a translation row's id (it can't be
+  given its own href/priority/photo). Public resolvers
+  (`activeContentPageBySlug`, `activeAboutPage`, `activeFaqEntries`,
+  `activeTestimonials`, `activeNavMenus`/`resolveNavItems`,
+  `resolvePageSeo`) take an optional `language` (default `'en'`, so every
+  existing caller is unchanged) and report the language actually served
+  per item. SEO falls back to the English keywords when a translation
+  leaves them blank; nav's built-in defaults (unconfigured location)
+  stay English.
+- Admin routes (same `requireAdminMfa` + `configuration.manage` gate):
+  `apps/platform-api/src/app/api/v1/admin/content/{pages,faq,testimonials,nav,seo}/[id]/translations/route.ts`
+  — `PUT` (body includes `language`) and `DELETE ?language=hi`, where
+  `[id]` is the English row.
+- Admin UI: one shared
+  `apps/management-web/src/app/ops/admin/content/translations-control.tsx`
+  used by all five managers — under each English item it shows the
+  Hindi status ("Translated" / "Draft — English shown" / "Not translated —
+  English shown") and a Translate/Edit button opening a form with a
+  Language selector, the translatable fields (each with the English text
+  shown for reference), a Published checkbox, and Remove translation. SEO
+  translations hang off a customised English row, so a page still on
+  built-in defaults says "Customise this page to add translated metadata."
+- Public site: a language dropdown (English / हिन्दी) in the header's top
+  bar, `apps/client-web/src/components/layouts/language-switcher.tsx`.
+  No existing visitor-preference mechanism existed to reuse (no
+  `[locale]` segment, no `Accept-Language` handling, no preference
+  cookie — only the session cookie and a sessionStorage error-correlation
+  id), so it sets a first-party `abies_content_lang` cookie (1 year,
+  `SameSite=Lax`) and calls `router.refresh()`; server components read it
+  via `apps/client-web/src/lib/content-language.ts` on every request.
+  A cookie rather than per-language URLs because only CMS text varies —
+  URLs, routing and UI chrome don't. Wired into `/about`, `/faq`,
+  `/terms`, `/privacy`, `/pages/[slug]`, the homepage testimonials, the
+  header/footer nav, and `pageMetadata()` SEO. Rendered CMS text carries
+  a `lang` attribute for the language actually served (so screen readers
+  pronounce Hindi correctly even when mixed with English fallbacks).
+  Crawlers send no cookie, so search engines index the English version.
+- Tests: `tests/integration/content-translations.test.ts` (11 cases, real
+  dev DB, cleans up after itself) — creating/updating a translation and
+  its audit rows, nested admin listing, translation-of-a-translation and
+  editing-a-translation-as-English refused, per-item English fallback
+  (untranslated and draft translations) with English ordering preserved,
+  English unpublish hiding all languages, cascade on delete for FAQ and
+  pages (audit records `translationsRemoved`), testimonial/nav/SEO
+  translation serving, and an end-to-end switcher test: render the real
+  `/faq` page, change the real `LanguageSwitcher` to हिन्दी, re-render —
+  the Hindi question replaces the English one and the untranslated entry
+  stays English.
+
 **What's still missing/deferred (not accidentally skipped):**
-- ❌ No blog — still absent; wasn't asked for.
-- ❌ No general multilingual *content* management (copy/translations) —
-  only Promotion's banner-targeting flag, unchanged.
-- ❌ No promotional video/creative library beyond the two image slots on
-  `Promotion` and the per-page OG image, unchanged.
+- **Application UI is not translated** — see the scope note above. Only
+  CMS content has a Hindi version; nothing in partner-web or
+  management-web, and no static client-web UI string, is translated.
+- Blog posts and media-library items are English-only (separate
+  workstreams; the same `language` + `translationOfId` pattern would
+  extend to `BlogPost` if wanted). Promotion banners keep their separate
+  `targetLanguages` audience-targeting flag, which is not a translation of
+  the banner's text.
+- The switcher does not read `Accept-Language` or a logged-in patient's
+  `preferredLanguage`; every visitor starts in English until they choose.
 - Nav menus cover the public client-web site only. The portal sidebars
   (patient/doctor/partner/admin) remain code-defined — they're permission-
   driven app navigation, not marketing content.
@@ -365,7 +543,12 @@ and public pages that read the DB on every request with no caching.
 **Verdict:** About Us, FAQ, Testimonials, arbitrary static pages, header/
 footer navigation and per-page SEO metadata are now all real, admin-
 editable, end-to-end CMS features on the same proven Promotion pattern.
-What remains (blog, translations, video library) was never requested.
+The blog is now real on the same pattern too (drafts, scheduled
+publishing, cover images, per-post SEO). Admins can now also publish a
+Hindi version of pages, FAQ, testimonials, nav labels and SEO metadata,
+with a public language switcher and per-item English fallback — **CMS
+content only; the site's UI itself remains English.** The video/media
+library is tracked as its own separate workstream.
 
 ---
 
@@ -477,26 +660,95 @@ real send logic.
 
 ---
 
-## Media Library — 🟡 Foundation exists, no admin-facing library
+## Media Library — ✅ Real admin library with image + video support (first integration: Testimonials)
 
-- A real, generic, reusable S3/MinIO-compatible object storage adapter
-  exists: `packages/domain/src/lib/storage.ts` —
-  `putObject`/`getSignedDownloadUrl`/`getObjectBytes`/`deleteObject`
-  (lines 34-70). Its own header comment (lines 11-14) states every file in
-  the system goes through it.
-- It is reused by multiple, independent modules — confirmed callers:
-  `diagnostics/orders.service.ts`, `doctors/doctors.service.ts`,
-  `medicines/admin-products.service.ts`, `panchakarma/catalogue.service.ts`,
-  `partners/leads.service.ts`, `promotions/promotions.service.ts`,
-  `support/tickets.service.ts`.
-- **But there is no generic admin media-library endpoint or UI.** Every
-  upload is bespoke and single-purpose: the products route only accepts one
-  product image on create, the promotions route only accepts its two banner
-  images, etc. There is no `/api/v1/admin/media` (or equivalent) that lists,
-  browses, or lets an admin re-use a previously uploaded asset across
-  modules. A real media library would be built *on top of* `storage.ts`
-  (the hard infrastructure part already exists and is proven), but the
-  library itself — browse/search/reuse — does not exist.
+The original finding still holds for the foundation: one generic
+S3/MinIO adapter (`packages/domain/src/lib/storage.ts`) that every module's
+files go through. What was missing — a library an admin can browse, search
+and reuse from, and any upload path that accepted video — now exists, built
+on top of that adapter rather than beside it.
+
+**What works now:**
+- **`MediaAsset` model** (migration `20261010190000_media_library`):
+  storage key, original filename, MIME type, `kind` (`IMAGE`/`VIDEO`),
+  byte size, width/height (images), `durationSeconds` (video, best-effort),
+  `uploadedByUserId`, `createdAt`. Flat library — no folders/tags; search is
+  filename (case-insensitive substring) + kind filter, newest first.
+- **Accepted types and limits.** Images: JPEG/PNG (what testimonial/
+  promotion photos already take) plus WebP (already accepted for product
+  images), capped at `UPLOAD_MAX_BYTES` (10 MB default) — same as the
+  bespoke photo paths. Video: **MP4 and WebM, capped at 50 MB**
+  (`MEDIA_VIDEO_MAX_BYTES`, `modules/media/media.schemas.ts`). Every type has
+  a magic-byte check in `storage.ts` (`assertUploadAllowed`) — WebP, MP4
+  (`ftyp`) and WebM (EBML header) signatures were added there, per that
+  file's own rule. Rejections come back as 400s, not 500s.
+- **Video-sized request bodies, end to end.** `putObject` itself has no size
+  assumption, but two layers in front of it did: Next's proxy body buffer
+  (`src/proxy.ts` matches every route, and Next **silently truncates** a
+  buffered body past 10 MB by default) and nginx's server-wide
+  `client_max_body_size 12m`. `apps/platform-api/next.config.mjs` now sets
+  `experimental.proxyClientMaxBodySize: '55mb'`, and `infra/nginx/abies.conf`
+  has an exact-match `location = /api/v1/admin/media` with
+  `client_max_body_size 55m`. Every other route keeps nginx's 12m cap.
+  **Not done:** the RKE2/Envoy Gateway path (UAT/prod gitops repo) isn't in
+  this repo — any body-size limit there needs the same 55 MB allowance for
+  that one route.
+- **Metadata extraction, no new dependency** (`modules/media/media-probe.ts`):
+  image width/height from the PNG/JPEG/WebP headers; MP4 duration from
+  `moov/mvhd`. **WebM duration is left null** — the element is optional
+  (browser MediaRecorder output usually omits it) and reading it means a
+  real EBML parser.
+- **Admin API** (all `requireAdminMfa` + `configuration.manage`):
+  `GET/POST /api/v1/admin/media` (list/search/paginate; multipart `file`
+  upload), `GET/DELETE /api/v1/admin/media/[id]`, and
+  `GET /api/v1/admin/media/[id]/file` (streams the object, Range-capable).
+- **Delete policy: hard delete, only when unreferenced.** Row and stored
+  object go together; an asset referenced by a testimonial returns 409 with
+  how many rows use it (FKs are `onDelete: Restrict` as the backstop).
+  "Remove from library but keep the object" was rejected — the library is
+  the only index of `media/...` keys, so that would just create orphans.
+- **Admin UI:** `/ops/admin/content?tab=media` — thumbnail grid (images
+  as images; videos as a first-frame poster via `#t=0.1` + play badge),
+  filename/size/dimensions/duration, search, type filter, upload, load-more
+  pagination, delete with confirmation. The same component doubles as a
+  picker (`media-picker-field.tsx`), and the picker can upload inline.
+- **Reuse, proven on Testimonials:** a testimonial's photo can be uploaded
+  fresh (existing path, unchanged) **or** chosen from the library
+  (`Testimonial.photoAssetId`), and a testimonial can carry a **video**
+  (`Testimonial.videoAssetId`, library-only). Modeled as FKs to
+  `MediaAsset`, not as a copied key, because the testimonial owns and
+  deletes its own `photoKey` upload but must never delete a shared library
+  object. Switching between an uploaded photo and a library photo deletes
+  only the old *upload*. The public homepage renders the video with
+  native `<video controls>`.
+- **Serving video:** public testimonial videos are served from
+  `/api/v1/public/testimonials/[id]/video` (active English testimonials
+  only, so the route can't read arbitrary library objects), streamed with
+  HTTP Range support via a new `getObjectStream()` in `storage.ts` —
+  Safari won't play a `<video>` whose source can't answer Range requests,
+  and `getObjectBytes()` would buffer the whole file in memory. No
+  transcoding/adaptive streaming: the original upload is what's served.
+- **Tests:** `tests/integration/media.test.ts` (11 cases, real dev DB +
+  MinIO) — image/MP4/WebM upload + metadata, type/content/size rejections,
+  search/kind filter/pagination, 206/416 range responses, delete
+  (object removed), testimonial created from library photo + video,
+  in-use delete → 409, testimonial removal leaves library objects intact,
+  upload↔library photo swap, wrong-kind/missing/contradictory refs.
+
+**Still not done:**
+- Only Testimonials is wired to the library. Promotions, product images,
+  SEO OG images and blog covers still use their own bespoke upload paths
+  (the picker component is reusable; each needs its own `*AssetId` FK).
+- No folders, tags, alt-text or rename. No "where is this used" view
+  beyond the 409 message.
+- **Pre-existing, not introduced here:** existing public images
+  (testimonial/promotion photos, SEO OG image) are served as signed URLs
+  pointing at `STORAGE_ENDPOINT` (`http://minio:9000` in compose), while
+  every app's CSP allows only `'self'` for images. Library *videos* and the
+  admin library previews avoid this by streaming same-origin; library
+  *photos* on testimonials deliberately kept the existing signed-URL
+  behaviour so both photo sources render the same way. Worth fixing for all
+  of them together (same-origin streaming or a public storage host + CSP).
 
 ---
 

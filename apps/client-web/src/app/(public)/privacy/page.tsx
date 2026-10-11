@@ -2,6 +2,7 @@ import { Alert } from '@abies/design-system/components/ui/alert';
 import { listActiveArtifacts } from '@abies/domain/modules/consent/consent.service';
 import { activeContentPageBySlug } from '@abies/domain/modules/content/pages.service';
 import { ContentPageBody } from '@/components/content/content-page-body';
+import { currentContentLanguage } from '@/lib/content-language';
 import { pageMetadata } from '@/lib/seo';
 
 export function generateMetadata() {
@@ -13,7 +14,8 @@ export function generateMetadata() {
 export const dynamic = 'force-dynamic';
 
 export default async function PrivacyPage() {
-  const [artifacts, cmsPage] = await Promise.all([listActiveArtifacts(), activeContentPageBySlug('privacy')]);
+  const language = await currentContentLanguage();
+  const [artifacts, cmsPage] = await Promise.all([listActiveArtifacts(), activeContentPageBySlug('privacy', language)]);
   const relevant = artifacts.filter((a) => ['privacy', 'health-data-processing', 'record-sharing'].includes(a.key));
 
   return (
@@ -22,10 +24,10 @@ export default async function PrivacyPage() {
           pending-review notice; the live consent artifacts stay listed below
           either way since they're what an account actually accepts. */}
       {cmsPage ? (
-        <>
+        <div lang={cmsPage.language}>
           <h1 className="text-3xl font-semibold text-brand-neutral-900">{cmsPage.title}</h1>
           <ContentPageBody body={cmsPage.body} />
-        </>
+        </div>
       ) : (
         <>
           <h1 className="text-3xl font-semibold text-brand-neutral-900">Privacy Notice</h1>

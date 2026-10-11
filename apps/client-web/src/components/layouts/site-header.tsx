@@ -1,19 +1,22 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { CartButton } from '@/components/cart/cart-button';
+import { currentContentLanguage } from '@/lib/content-language';
 import { activeNavMenus } from '@abies/domain/modules/content/nav.service';
 import { myCartItemCount } from '@abies/domain/modules/medicines/cart.service';
 import { getCurrentSession } from '@abies/domain/server/current-user';
 import { PORTAL_PATH } from '@abies/design-system/components/auth/portal-paths';
 import { MobileNav } from '@abies/design-system/layouts/mobile-nav';
+import { LanguageSwitcher } from './language-switcher';
 import { NavLinks } from './nav-links';
 
 export async function SiteHeader() {
   const session = await getCurrentSession();
   const isPatient = session?.user.role === 'PATIENT';
+  const language = await currentContentLanguage();
   const [cartCount, nav] = await Promise.all([
     isPatient ? myCartItemCount(session.userId) : Promise.resolve(0),
-    activeNavMenus(['PUBLIC_HEADER', 'PUBLIC_TOP_BAR']),
+    activeNavMenus(['PUBLIC_HEADER', 'PUBLIC_TOP_BAR'], language),
   ]);
 
   return (
@@ -21,12 +24,15 @@ export async function SiteHeader() {
       <div className="bg-gradient-to-r from-brand-purple-500 to-brand-magenta-500 text-xs text-white">
         <div className="mx-auto flex min-h-[34px] max-w-6xl items-center justify-between gap-4 px-6">
           <span>Verified practitioners · Coordinated Ayurveda care</span>
-          <div className="hidden gap-4 sm:flex">
-            {nav.PUBLIC_TOP_BAR.map((item) => (
-              <Link key={item.key} href={item.href} className="opacity-90 hover:opacity-100">
-                {item.label}
-              </Link>
-            ))}
+          <div className="flex items-center gap-4">
+            <div className="hidden gap-4 sm:flex">
+              {nav.PUBLIC_TOP_BAR.map((item) => (
+                <Link key={item.key} href={item.href} className="opacity-90 hover:opacity-100">
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+            <LanguageSwitcher current={language} />
           </div>
         </div>
       </div>

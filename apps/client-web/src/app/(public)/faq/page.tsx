@@ -1,5 +1,6 @@
 import { activeFaqEntries } from '@abies/domain/modules/content/faq.service';
 import { FaqAccordion } from '@/components/content/faq-accordion';
+import { currentContentLanguage } from '@/lib/content-language';
 import { pageMetadata } from '@/lib/seo';
 
 export function generateMetadata() {
@@ -11,7 +12,7 @@ export function generateMetadata() {
 export const dynamic = 'force-dynamic';
 
 export default async function FaqPage() {
-  const entries = await activeFaqEntries();
+  const entries = await activeFaqEntries(await currentContentLanguage());
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">

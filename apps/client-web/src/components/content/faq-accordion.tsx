@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 
-export function FaqAccordion({ items }: { items: { id: string; question: string; answer: string }[] }) {
+export function FaqAccordion({ items }: { items: { id: string; language?: string; question: string; answer: string }[] }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
     <div className="divide-y divide-brand-neutral-100 border-b border-brand-neutral-100">
       {items.map((item) => (
-        <div key={item.id} className="py-4">
+        <div key={item.id} lang={item.language} className="py-4">
           <button
             type="button"
             onClick={() => setOpenId(openId === item.id ? null : item.id)}

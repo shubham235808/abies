@@ -39,6 +39,15 @@ const nextConfig = {
   // @abies/design-system's TypeScript source directly (workspace
   // packages ship source, not a separate compiled build step).
   transpilePackages: ['@abies/domain', '@abies/design-system'],
+  experimental: {
+    // src/proxy.ts matches every route, so Next buffers each request body
+    // and silently truncates anything past this (default 10mb) — which
+    // would corrupt media-library video uploads (MEDIA_VIDEO_MAX_BYTES,
+    // 50 MB, in packages/domain/src/modules/media/media.schemas.ts) rather
+    // than reject them. 55mb leaves room for multipart framing. nginx's
+    // client_max_body_size stays the per-route cap in front of this.
+    proxyClientMaxBodySize: '55mb',
+  },
   async headers() {
     return [
       {

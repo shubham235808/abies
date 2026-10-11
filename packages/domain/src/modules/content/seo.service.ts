@@ -4,12 +4,16 @@ import { prisma } from '../../lib/db';
 import { ConflictError, NotFoundError } from '../../lib/errors';
 import { assertUploadAllowed, deleteObject, getSignedDownloadUrl, putObject } from '../../lib/storage';
 import { recordAuditEvent, type AuditContext } from '../../server/audit';
+import { DEFAULT_CONTENT_LANGUAGE, localise, type ContentLanguage, type TranslationLanguage } from './languages';
 import { SITE_DEFAULT_TITLE, SITE_DESCRIPTION, seoPageDefinition } from './seo.pages';
-import type { createPageSeoSchema, updatePageSeoSchema } from './seo.schemas';
+import type { createPageSeoSchema, updatePageSeoSchema, upsertPageSeoTranslationSchema } from './seo.schemas';
 import type { UploadedImage } from './testimonials.service';
 
 type CreatePageSeoInput = z.infer<typeof createPageSeoSchema>;
 type UpdatePageSeoInput = z.infer<typeof updatePageSeoSchema>;
+type UpsertPageSeoTranslationInput = z.infer<typeof upsertPageSeoTranslationSchema>;
+
+const WITH_TRANSLATIONS = { translations: { orderBy: { language: 'asc' } } } as const;
 
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png']);
 
@@ -24,12 +28,21 @@ function storeOgImage(seoId: string, file: UploadedImage): Promise<string> {
   return putObject({ key, body: file.buffer, contentType: file.mimeType }).then(() => key);
 }
 
+// English rows only, each carrying its translations.
 export async function listPageSeo() {
-  return prisma.pageSeoMetadata.findMany({ orderBy: { pageKey: 'asc' } });
+  return prisma.pageSeoMetadata.findMany({ where: { translationOfId: null }, include: WITH_TRANSLATIONS, orderBy: { pageKey: 'asc' } });
 }
 
 export async function getPageSeo(id: string) {
   const row = await prisma.pageSeoMetadata.findUnique({ where: { id } });
+  if (!row) throw new NotFoundError('SEO metadata not found');
+  return row;
+}
+
+// The OG image and publish state belong to the English row; a translation
+// row is only edited through upsertPageSeoTranslation.
+async function getEnglishPageSeo(id: string) {
+  const row = await prisma.pageSeoMetadata.findFirst({ where: { id, translationOfId: null } });
   if (!row) throw new NotFoundError('SEO metadata not found');
   return row;
 }
@@ -40,11 +53,13 @@ export async function createPageSeo(
   createdByUserId: string,
   auditCtx: AuditContext,
 ) {
-  const clash = await prisma.pageSeoMetadata.findUnique({ where: { pageKey: dto.pageKey } });
+  const clash = await prisma.pageSeoMetadata.findUnique({
+    where: { pageKey_language: { pageKey: dto.pageKey, language: DEFAULT_CONTENT_LANGUAGE } },
+  });
   if (clash) throw new ConflictError('This page already has SEO metadata — edit it instead');
   const id = randomUUID();
   const ogImageKey = ogImage ? await storeOgImage(id, ogImage) : null;
-  const row = await prisma.pageSeoMetadata.create({ data: { id, ...dto, ogImageKey, createdByUserId } });
+  const row = await prisma.pageSeoMetadata.create({ data: { id, ...dto, ogImageKey, createdByUserId }, include: WITH_TRANSLATIONS });
   await recordAuditEvent(auditCtx, {
     eventType: 'CONTENT',
     action: 'CREATED',
@@ -61,13 +76,14 @@ export async function updatePageSeo(
   ogImage: UploadedImage | null,
   auditCtx: AuditContext,
 ) {
-  const existing = await getPageSeo(id);
+  const existing = await getEnglishPageSeo(id);
   const { clearOgImage, ...fields } = dto;
   const newKey = ogImage ? await storeOgImage(id, ogImage) : undefined;
   const ogImageKey = newKey ?? (clearOgImage ? null : undefined);
   const row = await prisma.pageSeoMetadata.update({
     where: { id },
     data: { ...fields, ...(ogImageKey !== undefined ? { ogImageKey } : {}) },
+    include: WITH_TRANSLATIONS,
   });
 
   // Replace-then-delete, same ordering as updateTestimonial/updatePromotion.
@@ -96,6 +112,44 @@ export async function removePageSeo(id: string, auditCtx: AuditContext) {
   });
 }
 
+export async function upsertPageSeoTranslation(
+  sourceId: string,
+  dto: UpsertPageSeoTranslationInput,
+  createdByUserId: string,
+  auditCtx: AuditContext,
+) {
+  const source = await getEnglishPageSeo(sourceId);
+  const { language, ...fields } = dto;
+  const key = { translationOfId_language: { translationOfId: source.id, language } };
+  const existing = await prisma.pageSeoMetadata.findUnique({ where: key });
+  const translation = await prisma.pageSeoMetadata.upsert({
+    where: key,
+    create: { ...fields, pageKey: source.pageKey, language, translationOfId: source.id, createdByUserId },
+    update: fields,
+  });
+  await recordAuditEvent(auditCtx, {
+    eventType: 'CONTENT',
+    action: existing ? 'UPDATED' : 'CREATED',
+    resourceType: 'PageSeoMetadata',
+    resourceId: translation.id,
+    metadata: { pageKey: source.pageKey, translationOf: source.id, language },
+  });
+  return translation;
+}
+
+export async function removePageSeoTranslation(sourceId: string, language: TranslationLanguage, auditCtx: AuditContext) {
+  const translation = await prisma.pageSeoMetadata.findUnique({ where: { translationOfId_language: { translationOfId: sourceId, language } } });
+  if (!translation) throw new NotFoundError('Translation not found');
+  await prisma.pageSeoMetadata.delete({ where: { id: translation.id } });
+  await recordAuditEvent(auditCtx, {
+    eventType: 'CONTENT',
+    action: 'DELETED',
+    resourceType: 'PageSeoMetadata',
+    resourceId: translation.id,
+    metadata: { pageKey: translation.pageKey, translationOf: sourceId, language },
+  });
+}
+
 export interface ResolvedPageSeo {
   title: string;
   description: string;
@@ -105,19 +159,25 @@ export interface ResolvedPageSeo {
 }
 
 // Public-facing — no admin gate, read on every request. Always returns a
-// complete title/description: an active row wins, otherwise the caller's
+// complete title/description: an active English row wins (in the requested
+// language when it has a published translation), otherwise the caller's
 // fallback (for content pages, derived from the page itself), otherwise the
 // SEO_PAGES default. Never blank.
 export async function resolvePageSeo(
   pageKey: string,
   fallback?: { title: string; description: string },
+  language: ContentLanguage = DEFAULT_CONTENT_LANGUAGE,
 ): Promise<ResolvedPageSeo> {
-  const row = await prisma.pageSeoMetadata.findUnique({ where: { pageKey } });
+  const row = await prisma.pageSeoMetadata.findUnique({
+    where: { pageKey_language: { pageKey, language: DEFAULT_CONTENT_LANGUAGE } },
+    include: { translations: { where: { language } } },
+  });
   if (row && row.active) {
+    const served = localise(row, row.translations, language);
     return {
-      title: row.title,
-      description: row.description,
-      keywords: row.keywords,
+      title: served.title,
+      description: served.description,
+      keywords: served.keywords.length > 0 ? served.keywords : row.keywords,
       ogImageUrl: row.ogImageKey ? await getSignedDownloadUrl(row.ogImageKey, OG_IMAGE_URL_TTL_SECONDS) : null,
       customised: true,
     };

@@ -1,5 +1,6 @@
 import { activeAboutPage } from '@abies/domain/modules/content/about.service';
 import { ContentPageBody } from '@/components/content/content-page-body';
+import { currentContentLanguage } from '@/lib/content-language';
 import { pageMetadata } from '@/lib/seo';
 
 export function generateMetadata() {
@@ -12,14 +13,16 @@ export function generateMetadata() {
 export const dynamic = 'force-dynamic';
 
 export default async function AboutPage() {
-  const page = await activeAboutPage();
+  const page = await activeAboutPage(await currentContentLanguage());
 
   if (page) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-16">
         <p className="text-sm font-semibold uppercase tracking-wide text-brand-magenta-600">About ABIES</p>
-        <h1 className="mt-2 text-3xl font-semibold text-brand-neutral-900 sm:text-4xl">{page.title}</h1>
-        <ContentPageBody body={page.body} />
+        <div lang={page.language}>
+          <h1 className="mt-2 text-3xl font-semibold text-brand-neutral-900 sm:text-4xl">{page.title}</h1>
+          <ContentPageBody body={page.body} />
+        </div>
       </main>
     );
   }

@@ -9,6 +9,8 @@ import { ImageUploader } from '@abies/design-system/components/ui/file-uploader'
 import { Input, Label, Select, Textarea } from '@abies/design-system/components/ui/input';
 import { Modal } from '@abies/design-system/components/ui/modal';
 import { api, ApiError } from '@abies/design-system/api-client';
+import { MediaPickerField, type PickedMedia } from './media-picker-field';
+import { TranslationsControl, type TranslationField, type TranslationRow } from './translations-control';
 
 export interface TestimonialRow {
   id: string;
@@ -18,7 +20,16 @@ export interface TestimonialRow {
   rating: number | null;
   priority: number;
   active: boolean;
+  photoAssetId?: string | null;
+  videoAssetId?: string | null;
+  translations: TranslationRow[];
 }
+
+const TRANSLATED_FIELDS: TranslationField[] = [
+  { key: 'quote', label: 'Quote', kind: 'textarea', rows: 4 },
+  { key: 'authorName', label: 'Author name', optional: true, hint: 'Leave blank to keep the English name.' },
+  { key: 'authorRole', label: 'Role / city', optional: true },
+];
 
 export function TestimonialsManager({ initial }: { initial: TestimonialRow[] }) {
   const [testimonials, setTestimonials] = useState(initial);
@@ -69,7 +80,17 @@ export function TestimonialsManager({ initial }: { initial: TestimonialRow[] }) 
                 <p className="mt-1 text-xs text-brand-neutral-400">
                   priority {t.priority}
                   {t.rating ? ` · ${t.rating}/5` : ''}
+                  {t.videoAssetId ? ' · video' : ''}
                 </p>
+                <TranslationsControl
+                  endpoint={`/api/v1/admin/content/testimonials/${t.id}/translations`}
+                  source={t}
+                  fields={TRANSLATED_FIELDS}
+                  translations={t.translations}
+                  onChange={(translations) =>
+                    setTestimonials((prev) => prev.map((row) => (row.id === t.id ? { ...row, translations } : row)))
+                  }
+                />
               </div>
               <div className="flex gap-2">
                 <Button variant="ghost" size="sm" onClick={() => setModal({ edit: t })}>
@@ -123,6 +144,8 @@ function TestimonialForm({
   const [rating, setRating] = useState(existing?.rating ? String(existing.rating) : '');
   const [priority, setPriority] = useState(String(existing?.priority ?? 0));
   const [photo, setPhoto] = useState<File | null>(null);
+  const [libraryPhoto, setLibraryPhoto] = useState<PickedMedia | null>(existing?.photoAssetId ? { id: existing.photoAssetId } : null);
+  const [video, setVideo] = useState<PickedMedia | null>(existing?.videoAssetId ? { id: existing.videoAssetId } : null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -140,6 +163,10 @@ function TestimonialForm({
         quote,
         rating: rating ? Number(rating) : undefined,
         priority: Number(priority) || 0,
+        // Sent only when changed on edit: null clears a library reference.
+        // A freshly uploaded photo replaces a library one server-side.
+        ...(!photo && (libraryPhoto?.id ?? null) !== (existing?.photoAssetId ?? null) ? { photoAssetId: libraryPhoto?.id ?? null } : {}),
+        ...((video?.id ?? null) !== (existing?.videoAssetId ?? null) ? { videoAssetId: video?.id ?? null } : {}),
       };
       const formData = new FormData();
       formData.append('payload', JSON.stringify(payload));
@@ -191,12 +218,27 @@ function TestimonialForm({
         </div>
       </div>
       <ImageUploader
+        // Remounting drops the uploader's local preview once a library photo is picked instead.
+        key={libraryPhoto?.id ?? 'upload'}
         label={existing ? 'Replace photo (optional)' : 'Photo (optional)'}
         accept="image/jpeg,image/png"
         maxSizeBytes={5 * 1024 * 1024}
         selectedFileName={photo?.name}
-        onFileSelected={setPhoto}
+        onFileSelected={(file) => {
+          setPhoto(file);
+          if (file) setLibraryPhoto(null);
+        }}
       />
+      <MediaPickerField
+        label="…or use a photo from the media library"
+        kind="IMAGE"
+        value={libraryPhoto}
+        onChange={(picked) => {
+          setLibraryPhoto(picked);
+          if (picked) setPhoto(null);
+        }}
+      />
+      <MediaPickerField label="Video (optional)" kind="VIDEO" value={video} onChange={setVideo} />
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>
           Cancel

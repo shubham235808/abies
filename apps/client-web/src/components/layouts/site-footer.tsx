@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { activeNavMenus } from '@abies/domain/modules/content/nav.service';
+import { currentContentLanguage } from '@/lib/content-language';
 
 const COLUMNS = [
   { title: 'Care', location: 'PUBLIC_FOOTER_CARE' },
@@ -14,7 +15,10 @@ export async function SiteFooter() {
   // prerender pass would run the nav query at build time, where there is
   // no database.
   await connection();
-  const menus = await activeNavMenus(COLUMNS.map((c) => c.location));
+  const menus = await activeNavMenus(
+    COLUMNS.map((c) => c.location),
+    await currentContentLanguage(),
+  );
   return (
     <footer className="bg-[#211526] text-white">
       <div className="mx-auto max-w-6xl px-6 py-12">

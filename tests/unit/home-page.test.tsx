@@ -12,6 +12,11 @@ import HomePage from '../../apps/client-web/src/app/(public)/page';
 vi.mock('@abies/domain/modules/promotions/promotions.service', () => ({
   activePromotionsForPlacement: vi.fn(async () => []),
 }));
+// The CMS-content language comes from a request cookie, which doesn't exist
+// outside a request.
+vi.mock('@/lib/content-language', () => ({
+  currentContentLanguage: vi.fn(async () => 'en'),
+}));
 
 describe('HomePage', () => {
   it('renders the platform promise with live CTAs for what is real', async () => {

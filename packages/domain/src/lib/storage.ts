@@ -65,6 +65,30 @@ export async function getObjectBytes(key: string): Promise<{ body: Uint8Array; c
   return { body, contentType: res.ContentType };
 }
 
+export interface ObjectStream {
+  body: ReadableStream;
+  contentType: string | undefined;
+  contentLength: number | undefined;
+  // Set only when a range was requested, e.g. "bytes 0-1023/52428800".
+  contentRange: string | undefined;
+}
+
+// Streams an object (or one byte range of it) without buffering it in
+// memory — getObjectBytes is fine for a 2 MB catalogue image, not for a
+// video, and browsers (Safari in particular) refuse to play a <video>
+// whose source can't answer Range requests. Callers must restrict the key
+// themselves and pass only a syntactically valid single range.
+export async function getObjectStream(key: string, range?: string): Promise<ObjectStream> {
+  const env = getEnv();
+  const res = await s3().send(new GetObjectCommand({ Bucket: env.STORAGE_BUCKET, Key: key, Range: range }));
+  return {
+    body: res.Body!.transformToWebStream(),
+    contentType: res.ContentType,
+    contentLength: res.ContentLength,
+    contentRange: res.ContentRange,
+  };
+}
+
 export async function deleteObject(key: string): Promise<void> {
   const env = getEnv();
   await s3().send(new DeleteObjectCommand({ Bucket: env.STORAGE_BUCKET, Key: key }));
@@ -93,11 +117,18 @@ const DEFAULT_ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'im
 // SECURITY-GAP-ANALYSIS.md §3); add a signature here before adding a new
 // type to DEFAULT_ALLOWED_MIME_TYPES or any call site's own allow-list.
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const EBML_SIGNATURE = Buffer.from([0x1a, 0x45, 0xdf, 0xa3]);
 
 const MAGIC_BYTE_CHECKS: Record<string, (buf: Buffer) => boolean> = {
   'application/pdf': (buf) => buf.subarray(0, 5).toString('latin1') === '%PDF-',
   'image/jpeg': (buf) => buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff,
   'image/png': (buf) => buf.length >= 8 && buf.subarray(0, 8).equals(PNG_SIGNATURE),
+  'image/webp': (buf) =>
+    buf.length >= 12 && buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP',
+  // ISO-BMFF: every MP4 opens with a box whose type, at offset 4, is 'ftyp'.
+  'video/mp4': (buf) => buf.length >= 8 && buf.subarray(4, 8).toString('latin1') === 'ftyp',
+  // WebM is Matroska, which opens with the EBML header element ID.
+  'video/webm': (buf) => buf.length >= 4 && buf.subarray(0, 4).equals(EBML_SIGNATURE),
 };
 
 export function assertUploadAllowed(

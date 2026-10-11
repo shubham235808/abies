@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { translationLanguageSchema } from './languages';
 
 const baseFaqFields = {
   question: z.string().min(1).max(300),
@@ -14,4 +15,11 @@ export const updateFaqEntrySchema = z.object({
   answer: baseFaqFields.answer.optional(),
   priority: baseFaqFields.priority.optional(),
   active: z.boolean().optional(),
+});
+
+export const upsertFaqTranslationSchema = z.object({
+  language: translationLanguageSchema,
+  question: baseFaqFields.question,
+  answer: baseFaqFields.answer,
+  active: z.boolean().default(true),
 });

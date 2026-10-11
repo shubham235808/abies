@@ -15,6 +15,7 @@ import {
   type NavMenuLocationKey,
 } from '@abies/domain/modules/content/nav.schemas';
 import { publicPathForContentPage } from '@abies/domain/modules/content/pages.schemas';
+import { TranslationsControl, type TranslationField, type TranslationRow } from './translations-control';
 
 export interface NavItemRow {
   id: string;
@@ -25,7 +26,10 @@ export interface NavItemRow {
   contentPage: { id: string; slug: string; title: string; active: boolean } | null;
   priority: number;
   active: boolean;
+  translations: TranslationRow[];
 }
+
+const TRANSLATED_FIELDS: TranslationField[] = [{ key: 'label', label: 'Label' }];
 
 export interface NavPageOption {
   id: string;
@@ -167,6 +171,13 @@ export function NavManager({ initial, pages }: { initial: NavItemRow[]; pages: N
                             ? `Page: ${item.contentPage.title} (${publicPathForContentPage(item.contentPage.slug)})`
                             : item.href}
                         </p>
+                        <TranslationsControl
+                          endpoint={`/api/v1/admin/content/nav/${item.id}/translations`}
+                          source={item}
+                          fields={TRANSLATED_FIELDS}
+                          translations={item.translations}
+                          onChange={(translations) => upsertLocal({ ...item, translations })}
+                        />
                       </div>
                       <div className="flex shrink-0 gap-2">
                         <Button variant="ghost" size="sm" onClick={() => move(location, index, -1)} disabled={index === 0}>

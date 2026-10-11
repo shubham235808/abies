@@ -176,7 +176,7 @@ describe('Navigation menu items', () => {
 
   it('falls back to the built-in defaults only for a never-configured location', () => {
     expect(resolveNavItems('PUBLIC_HEADER', []).map((i) => i.href)).toEqual(DEFAULT_NAV_MENUS.PUBLIC_HEADER.map((l) => l.href));
-    const allHidden = [{ id: 'a', label: 'A', href: '/a', active: false, contentPage: null }];
+    const allHidden = [{ id: 'a', language: 'en', label: 'A', href: '/a', active: false, contentPage: null }];
     expect(resolveNavItems('PUBLIC_HEADER', allHidden)).toEqual([]);
   });
 });

@@ -13,6 +13,7 @@ import {
   DEDICATED_CONTENT_PAGE_PATHS,
   publicPathForContentPage,
 } from '@abies/domain/modules/content/pages.schemas';
+import { TranslationsControl, type TranslationField, type TranslationRow } from './translations-control';
 
 export interface ContentPageRow {
   id: string;
@@ -20,7 +21,13 @@ export interface ContentPageRow {
   title: string;
   body: string;
   active: boolean;
+  translations: TranslationRow[];
 }
+
+const TRANSLATED_FIELDS: TranslationField[] = [
+  { key: 'title', label: 'Title' },
+  { key: 'body', label: 'Body', kind: 'textarea', rows: 12, hint: 'Plain text. A blank line starts a new paragraph.' },
+];
 
 export function PagesManager({ initial }: { initial: ContentPageRow[] }) {
   const [pages, setPages] = useState(initial);
@@ -62,7 +69,8 @@ export function PagesManager({ initial }: { initial: ContentPageRow[] }) {
       <p className="mb-4 max-w-3xl text-sm text-brand-neutral-500">
         Every page is read live by the public site — no rebuild needed. <code>about-us</code>, <code>terms</code> and{' '}
         <code>privacy</code> replace the copy on /about, /terms and /privacy; any other slug is published at{' '}
-        <code>/pages/&lt;slug&gt;</code>. Removing a page also removes any navigation links pointing to it.
+        <code>/pages/&lt;slug&gt;</code>. A translation is served at the same URL to visitors who pick that language. Removing a
+        page also removes its translations and any navigation links pointing to it.
       </p>
 
       <div className="space-y-3">
@@ -77,6 +85,13 @@ export function PagesManager({ initial }: { initial: ContentPageRow[] }) {
                 <p className="mt-1 text-sm text-brand-neutral-500">
                   <code>{p.slug}</code> → {publicPathForContentPage(p.slug)}
                 </p>
+                <TranslationsControl
+                  endpoint={`/api/v1/admin/content/pages/${p.id}/translations`}
+                  source={p}
+                  fields={TRANSLATED_FIELDS}
+                  translations={p.translations}
+                  onChange={(translations) => setPages((prev) => prev.map((x) => (x.id === p.id ? { ...x, translations } : x)))}
+                />
               </div>
               <div className="flex shrink-0 gap-2">
                 <Button variant="ghost" size="sm" onClick={() => setModal({ edit: p })}>

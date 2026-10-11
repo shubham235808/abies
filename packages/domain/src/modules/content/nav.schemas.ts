@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { translationLanguageSchema } from './languages';
 
 export const NAV_MENU_LOCATIONS = [
   'PUBLIC_HEADER',
@@ -55,6 +56,7 @@ export const DEFAULT_NAV_MENUS: Record<NavMenuLocationKey, readonly NavLink[]> =
   ],
   PUBLIC_FOOTER_COMPANY: [
     { href: '/about', label: 'About' },
+    { href: '/blog', label: 'Blog' },
     { href: '/partners', label: 'Partner with ABIES' },
     { href: '/privacy', label: 'Privacy notice' },
     { href: '/terms', label: 'Terms of service' },
@@ -102,4 +104,12 @@ export const updateNavMenuItemSchema = z.object({
   contentPageId: z.string().min(1).nullable().optional(),
   priority: baseNavFields.priority.optional(),
   active: z.boolean().optional(),
+});
+
+// A translation only relabels its English item; the link target, location,
+// order and visibility all stay on the English item.
+export const upsertNavMenuItemTranslationSchema = z.object({
+  language: translationLanguageSchema,
+  label: baseNavFields.label,
+  active: z.boolean().default(true),
 });

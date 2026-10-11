@@ -2884,43 +2884,110 @@ model IdempotencyRecord {
 // so it gets its own model rather than being conflated into one page blob.
 // ---------------------------------------------------------------------------
 
+// CMS translations (ContentPage, FaqEntry, Testimonial, NavMenuItem,
+// PageSeoMetadata): a translation is another row of the same model with
+// `language` != "en" and `translationOfId` pointing at the English row it
+// translates. Only the translatable text columns of a translation row are
+// served; ordering, photo, rating, link target and publish state of the
+// item as a whole come from the English row. The FK cascades so removing
+// the English row removes its translations, and the unique index allows at
+// most one translation per language per row (English rows have a null
+// translationOfId, which Postgres never treats as a duplicate).
+
 model ContentPage {
-  id           String        @id @default(cuid())
-  slug         String        @unique
-  title        String
-  body         String
-  active       Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  navMenuItems NavMenuItem[]
+  id              String        @id @default(cuid())
+  slug            String
+  language        String        @default("en")
+  translationOfId String?
+  translationOf   ContentPage?  @relation("ContentPageTranslations", fields: [translationOfId], references: [id], onDelete: Cascade)
+  translations    ContentPage[] @relation("ContentPageTranslations")
+  title           String
+  body            String
+  active          Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  navMenuItems    NavMenuItem[]
+
+  @@unique([slug, language])
+  @@unique([translationOfId, language])
 }
 
 model FaqEntry {
-  id        String   @id @default(cuid())
-  question  String
-  answer    String
-  priority  Int      @default(0)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String     @id @default(cuid())
+  language        String     @default("en")
+  translationOfId String?
+  translationOf   FaqEntry?  @relation("FaqEntryTranslations", fields: [translationOfId], references: [id], onDelete: Cascade)
+  translations    FaqEntry[] @relation("FaqEntryTranslations")
+  question        String
+  answer          String
+  priority        Int        @default(0)
+  active          Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
+  @@unique([translationOfId, language])
   @@index([active, priority])
 }
 
 model Testimonial {
-  id              String   @id @default(cuid())
+  id              String        @id @default(cuid())
+  language        String        @default("en")
+  translationOfId String?
+  translationOf   Testimonial?  @relation("TestimonialTranslations", fields: [translationOfId], references: [id], onDelete: Cascade)
+  translations    Testimonial[] @relation("TestimonialTranslations")
   authorName      String
   authorRole      String?
   quote           String
   photoKey        String?
+  // A photo picked from the media library instead of uploaded with the
+  // testimonial. Separate from photoKey, which this row owns and deletes
+  // with itself: a library asset outlives, and may be shared by, the rows
+  // that reference it. At most one of photoKey/photoAssetId is set.
+  photoAssetId    String?
+  photoAsset      MediaAsset?   @relation("TestimonialPhotoAsset", fields: [photoAssetId], references: [id], onDelete: Restrict)
+  videoAssetId    String?
+  videoAsset      MediaAsset?   @relation("TestimonialVideoAsset", fields: [videoAssetId], references: [id], onDelete: Restrict)
   rating          Int?
-  priority        Int      @default(0)
-  active          Boolean  @default(true)
+  priority        Int           @default(0)
+  active          Boolean       @default(true)
   createdByUserId String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
+  @@unique([translationOfId, language])
   @@index([active, priority])
+  @@index([photoAssetId])
+  @@index([videoAssetId])
+}
+
+enum MediaKind {
+  IMAGE
+  VIDEO
+}
+
+// Admin media library: one row per object uploaded through
+// /api/v1/admin/media. Rows that reuse an asset reference it by id with
+// onDelete: Restrict, so an asset still in use can't be removed out from
+// under them. durationSeconds is best-effort (MP4 only, read from the
+// container header); width/height are images only.
+model MediaAsset {
+  id               String    @id @default(cuid())
+  storageKey       String    @unique
+  originalName     String
+  mimeType         String
+  kind             MediaKind
+  sizeBytes        Int
+  width            Int?
+  height           Int?
+  durationSeconds  Float?
+  uploadedByUserId String
+  createdAt        DateTime  @default(now())
+
+  testimonialPhotos Testimonial[] @relation("TestimonialPhotoAsset")
+  testimonialVideos Testimonial[] @relation("TestimonialVideoAsset")
+
+  @@index([kind, createdAt])
+  @@index([createdAt])
 }
 
 // Fixed set of nav slots the public site actually renders — one per place
@@ -2939,18 +3006,26 @@ enum NavMenuLocation {
 // than a copied "/pages/<slug>" string lets the public resolver hide the
 // link while its page is unpublished, and the cascade removes it with the
 // page instead of leaving a dead link in the header.
+// A translation row (see the CMS translations note above) carries only a
+// label: it has neither href nor contentPageId and copies its English row's
+// location.
 model NavMenuItem {
-  id            String          @id @default(cuid())
-  location      NavMenuLocation
-  label         String
-  href          String?
-  contentPageId String?
-  contentPage   ContentPage?    @relation(fields: [contentPageId], references: [id], onDelete: Cascade)
-  priority      Int             @default(0)
-  active        Boolean         @default(true)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id              String          @id @default(cuid())
+  location        NavMenuLocation
+  language        String          @default("en")
+  translationOfId String?
+  translationOf   NavMenuItem?    @relation("NavMenuItemTranslations", fields: [translationOfId], references: [id], onDelete: Cascade)
+  translations    NavMenuItem[]   @relation("NavMenuItemTranslations")
+  label           String
+  href            String?
+  contentPageId   String?
+  contentPage     ContentPage?    @relation(fields: [contentPageId], references: [id], onDelete: Cascade)
+  priority        Int             @default(0)
+  active          Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
+  @@unique([translationOfId, language])
   @@index([location, active, priority])
   @@index([contentPageId])
 }
@@ -2960,14 +3035,43 @@ model NavMenuItem {
 // at /pages/<slug>. A missing/inactive row means the page uses its built-in
 // default metadata — never blank.
 model PageSeoMetadata {
-  id              String   @id @default(cuid())
-  pageKey         String   @unique
+  id              String            @id @default(cuid())
+  pageKey         String
+  language        String            @default("en")
+  translationOfId String?
+  translationOf   PageSeoMetadata?  @relation("PageSeoMetadataTranslations", fields: [translationOfId], references: [id], onDelete: Cascade)
+  translations    PageSeoMetadata[] @relation("PageSeoMetadataTranslations")
   title           String
   description     String
-  keywords        String[] @default([])
+  keywords        String[]          @default([])
   ogImageKey      String?
-  active          Boolean  @default(true)
+  active          Boolean           @default(true)
   createdByUserId String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([pageKey, language])
+  @@unique([translationOfId, language])
+}
+
+// publishedAt null = draft. Kept separate from createdAt so a post can sit in
+// draft and go out later, and separate from `active` so hiding a post
+// doesn't lose its original publication date. authorName is the byline
+// shown publicly; createdByUserId (plain id, same as Testimonial) records
+// which admin account actually created it.
+model BlogPost {
+  id              String    @id @default(cuid())
+  slug            String    @unique
+  title           String
+  excerpt         String
+  body            String
+  coverImageKey   String?
+  authorName      String
+  publishedAt     DateTime?
+  active          Boolean   @default(true)
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([active, publishedAt])
 }

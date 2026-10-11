@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { translationLanguageSchema } from './languages';
 
 export const CONTENT_PAGE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -42,4 +43,13 @@ export const updateContentPageSchema = z.object({
   title: baseContentPageFields.title.optional(),
   body: baseContentPageFields.body.optional(),
   active: z.boolean().optional(),
+});
+
+// Keyed by the English page; the translation shares its slug, so it is
+// served at the same URL.
+export const upsertContentPageTranslationSchema = z.object({
+  language: translationLanguageSchema,
+  title: baseContentPageFields.title,
+  body: baseContentPageFields.body,
+  active: z.boolean().default(true),
 });

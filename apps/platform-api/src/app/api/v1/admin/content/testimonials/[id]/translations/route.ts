@@ -1,0 +1,35 @@
+import { NextResponse } from 'next/server';
+import { errorResponse } from '@abies/domain/lib/errors';
+import { translationLanguageSchema } from '@abies/domain/modules/content/languages';
+import { upsertTestimonialTranslationSchema } from '@abies/domain/modules/content/testimonials.schemas';
+import { removeTestimonialTranslation, upsertTestimonialTranslation } from '@abies/domain/modules/content/testimonials.service';
+import { applyRotatedCookie, requireAdminMfa, requirePermission, requireSession } from '@abies/domain/server/rbac';
+
+// Create-or-replace the translation of English row [id] in body.language.
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const ctx = await requireSession(req);
+    requireAdminMfa(ctx);
+    requirePermission(ctx, 'configuration.manage');
+    const { id } = await params;
+    const dto = upsertTestimonialTranslationSchema.parse(await req.json());
+    const translation = await upsertTestimonialTranslation(id, dto, ctx.session.userId, { userId: ctx.session.userId, ...ctx });
+    return applyRotatedCookie(NextResponse.json({ translation }), ctx);
+  } catch (error) {
+    return errorResponse(error, req);
+  }
+}
+
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const ctx = await requireSession(req);
+    requireAdminMfa(ctx);
+    requirePermission(ctx, 'configuration.manage');
+    const { id } = await params;
+    const language = translationLanguageSchema.parse(new URL(req.url).searchParams.get('language'));
+    await removeTestimonialTranslation(id, language, { userId: ctx.session.userId, ...ctx });
+    return applyRotatedCookie(NextResponse.json({ ok: true }), ctx);
+  } catch (error) {
+    return errorResponse(error, req);
+  }
+}

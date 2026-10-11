@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { translationLanguageSchema } from './languages';
 import { isValidSeoPageKey } from './seo.pages';
 
 const baseSeoFields = {
@@ -23,4 +24,14 @@ export const updatePageSeoSchema = z.object({
   keywords: baseSeoFields.keywords.optional(),
   active: z.boolean().optional(),
   clearOgImage: z.boolean().optional(),
+});
+
+// The OG image stays on the English row (an image isn't language-specific);
+// a translation carries only the text.
+export const upsertPageSeoTranslationSchema = z.object({
+  language: translationLanguageSchema,
+  title: baseSeoFields.title,
+  description: baseSeoFields.description,
+  keywords: baseSeoFields.keywords,
+  active: z.boolean().default(true),
 });

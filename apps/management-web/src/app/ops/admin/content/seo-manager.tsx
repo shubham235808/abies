@@ -11,6 +11,7 @@ import { Modal } from '@abies/design-system/components/ui/modal';
 import { api, ApiError } from '@abies/design-system/api-client';
 import { dedicatedPathForContentPage, publicPathForContentPage } from '@abies/domain/modules/content/pages.schemas';
 import { contentPageSeoFallback, SEO_PAGES, seoKeyForContentPage } from '@abies/domain/modules/content/seo.pages';
+import { TranslationsControl, type TranslationField, type TranslationRow } from './translations-control';
 
 export interface SeoRow {
   id: string;
@@ -20,7 +21,14 @@ export interface SeoRow {
   keywords: string[];
   ogImageKey: string | null;
   active: boolean;
+  translations: TranslationRow[];
 }
+
+const TRANSLATED_FIELDS: TranslationField[] = [
+  { key: 'title', label: 'Title' },
+  { key: 'description', label: 'Description', kind: 'textarea', rows: 3 },
+  { key: 'keywords', label: 'Keywords', kind: 'list', optional: true, hint: 'Comma-separated; blank keeps the English keywords.' },
+];
 
 export interface SeoContentPage {
   slug: string;
@@ -112,6 +120,17 @@ export function SeoManager({ initial, contentPages }: { initial: SeoRow[]; conte
                   </div>
                   <p className="mt-1 text-sm text-brand-neutral-700">{live?.title ?? t.defaultTitle}</p>
                   <p className="text-sm text-brand-neutral-500">{live?.description ?? t.defaultDescription}</p>
+                  {row ? (
+                    <TranslationsControl
+                      endpoint={`/api/v1/admin/content/seo/${row.id}/translations`}
+                      source={row}
+                      fields={TRANSLATED_FIELDS}
+                      translations={row.translations}
+                      onChange={(translations) => setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, translations } : r)))}
+                    />
+                  ) : (
+                    <p className="mt-2 text-xs text-brand-neutral-400">Customise this page to add translated metadata.</p>
+                  )}
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setEditing(t)}>

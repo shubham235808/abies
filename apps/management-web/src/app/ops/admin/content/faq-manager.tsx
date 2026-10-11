@@ -8,6 +8,7 @@ import { Card } from '@abies/design-system/components/ui/card';
 import { FieldError, Label, Textarea } from '@abies/design-system/components/ui/input';
 import { Modal } from '@abies/design-system/components/ui/modal';
 import { api, ApiError } from '@abies/design-system/api-client';
+import { TranslationsControl, type TranslationField, type TranslationRow } from './translations-control';
 
 export interface FaqRow {
   id: string;
@@ -15,7 +16,13 @@ export interface FaqRow {
   answer: string;
   priority: number;
   active: boolean;
+  translations: TranslationRow[];
 }
+
+const TRANSLATED_FIELDS: TranslationField[] = [
+  { key: 'question', label: 'Question', kind: 'textarea', rows: 2 },
+  { key: 'answer', label: 'Answer', kind: 'textarea', rows: 5 },
+];
 
 export function FaqManager({ initial }: { initial: FaqRow[] }) {
   const [faqs, setFaqs] = useState(initial);
@@ -87,6 +94,13 @@ export function FaqManager({ initial }: { initial: FaqRow[] }) {
                   <Badge tone={f.active ? 'success' : 'neutral'}>{f.active ? 'Active' : 'Inactive'}</Badge>
                 </div>
                 <p className="mt-1 text-sm text-brand-neutral-500">{f.answer}</p>
+                <TranslationsControl
+                  endpoint={`/api/v1/admin/content/faq/${f.id}/translations`}
+                  source={f}
+                  fields={TRANSLATED_FIELDS}
+                  translations={f.translations}
+                  onChange={(translations) => setFaqs((prev) => prev.map((x) => (x.id === f.id ? { ...x, translations } : x)))}
+                />
               </div>
               <div className="flex shrink-0 gap-2">
                 <Button variant="ghost" size="sm" onClick={() => move(index, -1)} disabled={index === 0}>

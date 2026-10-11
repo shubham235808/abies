@@ -11,12 +11,22 @@ export function TestimonialsSection({ testimonials }: { testimonials: ServedTest
       <h2 className="text-[clamp(30px,4vw,44px)] font-extrabold tracking-tight text-brand-neutral-900">What patients say</h2>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {testimonials.map((t) => (
-          <div key={t.id} className="flex flex-col rounded-card border border-brand-neutral-200 bg-white p-5">
+          <div key={t.id} lang={t.language} className="flex flex-col rounded-card border border-brand-neutral-200 bg-white p-5">
             {t.rating && (
               <p aria-label={`${t.rating} out of 5`} className="text-sm text-brand-orange-500">
                 {'★'.repeat(t.rating)}
                 {'☆'.repeat(5 - t.rating)}
               </p>
+            )}
+            {t.videoUrl && (
+              <video
+                src={t.videoUrl}
+                controls
+                preload="metadata"
+                playsInline
+                aria-label={`Video testimonial from ${t.authorName}`}
+                className="mt-3 aspect-video w-full rounded-card bg-brand-neutral-900"
+              />
             )}
             <p className="mt-2 flex-1 text-sm text-brand-neutral-600">&ldquo;{t.quote}&rdquo;</p>
             <div className="mt-4 flex items-center gap-3">

@@ -9,6 +9,7 @@ import { PromotionBanner } from '@/components/promotions/promotion-banner';
 import { TestimonialsSection } from '@/components/content/testimonials-section';
 import { activePromotionsForPlacement } from '@abies/domain/modules/promotions/promotions.service';
 import { activeTestimonials } from '@abies/domain/modules/content/testimonials.service';
+import { currentContentLanguage } from '@/lib/content-language';
 import { pageMetadata } from '@/lib/seo';
 
 export function generateMetadata() {
@@ -138,7 +139,7 @@ const CATEGORY_TILES: { title: string; href: string; accent: Accent }[] = [
 
 export default async function HomePage() {
   const [heroPromotion] = await activePromotionsForPlacement('PUBLIC_HOME_HERO', {}, 1);
-  const testimonials = await activeTestimonials();
+  const testimonials = await activeTestimonials(6, await currentContentLanguage());
 
   return (
     <main>

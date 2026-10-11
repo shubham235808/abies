@@ -60,6 +60,13 @@ export const SEO_PAGES: readonly SeoPageDefinition[] = [
     defaultDescription: 'Discover Panchakarma therapies at verified centres and book sessions coordinated with your practitioner.',
   },
   {
+    key: 'blog',
+    path: '/blog',
+    label: 'Blog',
+    defaultTitle: 'Blog — ABIES',
+    defaultDescription: 'Articles on Ayurveda, Panchakarma and everyday wellbeing from the ABIES team and its practitioners.',
+  },
+  {
     key: 'contact',
     path: '/contact',
     label: 'Contact',
