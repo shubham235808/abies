@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../shared/formatting.dart';
 import '../../../shared/widgets/loading_skeleton.dart';
@@ -9,6 +10,8 @@ import 'catalogue_controllers.dart';
 import 'widgets.dart';
 
 enum _RowAction { edit, toggle, remove }
+
+enum _TherapistAction { edit, documents, toggle, remove }
 
 Future<bool> _confirmRemove(BuildContext context, String name) async {
   final ok = await showDialog<bool>(
@@ -263,25 +266,28 @@ class TherapistsTab extends ConsumerWidget {
                             t.active ? 'Active' : 'Inactive',
                           ].join(' · ')),
                           onTap: () => _openForm(context, ref, existing: t),
-                          trailing: PopupMenuButton<_RowAction>(
+                          trailing: PopupMenuButton<_TherapistAction>(
                             onSelected: (action) async {
                               final controller = ref.read(therapistsControllerProvider.notifier);
                               switch (action) {
-                                case _RowAction.edit:
+                                case _TherapistAction.edit:
                                   await _openForm(context, ref, existing: t);
-                                case _RowAction.toggle:
+                                case _TherapistAction.documents:
+                                  await context.push('/therapists/${t.id}/documents', extra: t.name);
+                                case _TherapistAction.toggle:
                                   final error = await controller.setActive(t, !t.active);
                                   if (context.mounted) _report(context, error, t.active ? 'Therapist deactivated' : 'Therapist activated');
-                                case _RowAction.remove:
+                                case _TherapistAction.remove:
                                   if (!await _confirmRemove(context, t.name)) return;
                                   final error = await controller.remove(t.id);
                                   if (context.mounted) _report(context, error, 'Therapist removed');
                               }
                             },
                             itemBuilder: (_) => [
-                              const PopupMenuItem(value: _RowAction.edit, child: Text('Edit')),
-                              PopupMenuItem(value: _RowAction.toggle, child: Text(t.active ? 'Deactivate' : 'Activate')),
-                              const PopupMenuItem(value: _RowAction.remove, child: Text('Remove')),
+                              const PopupMenuItem(value: _TherapistAction.edit, child: Text('Edit')),
+                              const PopupMenuItem(value: _TherapistAction.documents, child: Text('Documents')),
+                              PopupMenuItem(value: _TherapistAction.toggle, child: Text(t.active ? 'Deactivate' : 'Activate')),
+                              const PopupMenuItem(value: _TherapistAction.remove, child: Text('Remove')),
                             ],
                           ),
                         ),

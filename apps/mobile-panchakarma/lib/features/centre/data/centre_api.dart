@@ -1,5 +1,8 @@
+import 'package:dio/dio.dart';
+
 import '../../../core/api/api_client.dart';
 import '../domain/centre_models.dart';
+import '../domain/therapist_document.dart';
 
 /// Every centre-side endpoint this app uses — all already exist and are
 /// what the partner web portal (apps/partner-web/src/app/partner/
@@ -18,6 +21,10 @@ import '../domain/centre_models.dart';
 /// | [cancelBooking]       | POST   /api/v1/panchakarma-bookings/[id]/cancel               |
 /// | [therapies] etc.      | GET/POST /api/v1/panchakarma-centres/me/therapies, PATCH/DELETE .../[id]  |
 /// | [therapists] etc.     | GET/POST /api/v1/panchakarma-centres/me/therapists, PATCH/DELETE .../[id] |
+/// | [therapistDocuments]  | GET    /api/v1/panchakarma-centres/me/therapists/[id]/documents |
+/// | [uploadTherapistDocument] | POST (multipart) .../therapists/[id]/documents          |
+/// | [deleteTherapistDocument] | DELETE .../therapists/[id]/documents/[documentId]       |
+/// | [therapistDocumentDownloadUrl] | GET .../therapists/[id]/documents/[documentId]/download |
 ///
 /// There is no separate "complete course" endpoint: bookings.service.ts
 /// `markSessionAttended` moves the booking to COMPLETED itself once the
@@ -45,6 +52,17 @@ abstract class CentreApi {
   Future<Therapist> createTherapist(TherapistInput input);
   Future<Therapist> updateTherapist(String therapistId, Map<String, dynamic> patch);
   Future<void> deleteTherapist(String therapistId);
+
+  /// Newest first (catalogue.service.ts `listTherapistDocuments`).
+  Future<List<TherapistDocument>> therapistDocuments(String therapistId);
+
+  /// Multipart: `type` (therapistDocumentTypeSchema) + `file`. 201 `{ document }`.
+  Future<TherapistDocument> uploadTherapistDocument(String therapistId, TherapistDocumentType type, TherapistDocumentUpload file);
+  Future<void> deleteTherapistDocument(String therapistId, String documentId);
+
+  /// `{ url }` — a storage.ts `getSignedDownloadUrl`, valid for 300 seconds,
+  /// so fetch it fresh right before opening, never cache it.
+  Future<String> therapistDocumentDownloadUrl(String therapistId, String documentId);
 }
 
 class CentreApiImpl implements CentreApi {
@@ -70,9 +88,7 @@ class CentreApiImpl implements CentreApi {
   Future<List<CentreBooking>> bookings() {
     return _client.get(
       '$_me/bookings',
-      decode: (json) => ((json as Map<String, dynamic>)['bookings'] as List<dynamic>)
-          .map((e) => CentreBooking.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      decode: (json) => ((json as Map<String, dynamic>)['bookings'] as List<dynamic>).map((e) => CentreBooking.fromJson(e as Map<String, dynamic>)).toList(),
     );
   }
 
@@ -124,8 +140,7 @@ class CentreApiImpl implements CentreApi {
   Future<List<Therapy>> therapies() {
     return _client.get(
       '$_me/therapies',
-      decode: (json) =>
-          ((json as Map<String, dynamic>)['therapies'] as List<dynamic>).map((e) => Therapy.fromJson(e as Map<String, dynamic>)).toList(),
+      decode: (json) => ((json as Map<String, dynamic>)['therapies'] as List<dynamic>).map((e) => Therapy.fromJson(e as Map<String, dynamic>)).toList(),
     );
   }
 
@@ -133,8 +148,7 @@ class CentreApiImpl implements CentreApi {
   Future<Therapy> createTherapy(TherapyInput input) => _client.post('$_me/therapies', body: input.toJson(), decode: _therapy);
 
   @override
-  Future<Therapy> updateTherapy(String therapyId, Map<String, dynamic> patch) =>
-      _client.patch('$_me/therapies/$therapyId', body: patch, decode: _therapy);
+  Future<Therapy> updateTherapy(String therapyId, Map<String, dynamic> patch) => _client.patch('$_me/therapies/$therapyId', body: patch, decode: _therapy);
 
   @override
   Future<void> deleteTherapy(String therapyId) => _client.delete<void>('$_me/therapies/$therapyId', decode: (_) {});
@@ -143,9 +157,7 @@ class CentreApiImpl implements CentreApi {
   Future<List<Therapist>> therapists() {
     return _client.get(
       '$_me/therapists',
-      decode: (json) => ((json as Map<String, dynamic>)['therapists'] as List<dynamic>)
-          .map((e) => Therapist.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      decode: (json) => ((json as Map<String, dynamic>)['therapists'] as List<dynamic>).map((e) => Therapist.fromJson(e as Map<String, dynamic>)).toList(),
     );
   }
 
@@ -158,4 +170,36 @@ class CentreApiImpl implements CentreApi {
 
   @override
   Future<void> deleteTherapist(String therapistId) => _client.delete<void>('$_me/therapists/$therapistId', decode: (_) {});
+
+  String _docs(String therapistId) => '$_me/therapists/$therapistId/documents';
+
+  @override
+  Future<List<TherapistDocument>> therapistDocuments(String therapistId) {
+    return _client.get(
+      _docs(therapistId),
+      decode: (json) =>
+          ((json as Map<String, dynamic>)['documents'] as List<dynamic>).map((e) => TherapistDocument.fromJson(e as Map<String, dynamic>)).toList(),
+    );
+  }
+
+  @override
+  Future<TherapistDocument> uploadTherapistDocument(String therapistId, TherapistDocumentType type, TherapistDocumentUpload file) async {
+    // Read the file before building the form so a missing file fails here,
+    // not mid-request. The explicit contentType matters: the route passes
+    // `file.type` straight to assertUploadAllowed's MIME allow-list, and
+    // Dio's default would be application/octet-stream.
+    final upload = await MultipartFile.fromFile(file.path, filename: file.filename, contentType: DioMediaType.parse(file.mimeType));
+    return _client.postMultipart(
+      _docs(therapistId),
+      buildForm: () => FormData.fromMap({'type': type.wire, 'file': upload}),
+      decode: (json) => TherapistDocument.fromJson((json as Map<String, dynamic>)['document'] as Map<String, dynamic>),
+    );
+  }
+
+  @override
+  Future<void> deleteTherapistDocument(String therapistId, String documentId) => _client.delete<void>('${_docs(therapistId)}/$documentId', decode: (_) {});
+
+  @override
+  Future<String> therapistDocumentDownloadUrl(String therapistId, String documentId) =>
+      _client.get('${_docs(therapistId)}/$documentId/download', decode: (json) => (json as Map<String, dynamic>)['url'] as String);
 }

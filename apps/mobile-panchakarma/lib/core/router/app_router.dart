@@ -9,6 +9,7 @@ import '../../features/auth/presentation/password_setup_screen.dart';
 import '../../features/auth/presentation/sign_in_screen.dart';
 import '../../features/centre/presentation/booking_detail_screen.dart';
 import '../../features/centre/presentation/home_screen.dart';
+import '../../features/centre/presentation/therapist_documents_screen.dart';
 
 /// Navigation — same go_router + Riverpod refresh pattern as
 /// apps/mobile/lib/core/router/app_router.dart, but simpler: unlike the
@@ -67,6 +68,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/bookings/:id',
         builder: (context, state) => BookingDetailScreen(bookingId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/therapists/:id/documents',
+        // The name is display-only (passed from the roster); the screen
+        // works without it, e.g. after a cold restore of the route.
+        builder: (context, state) =>
+            TherapistDocumentsScreen(therapistId: state.pathParameters['id']!, therapistName: state.extra as String?),
       ),
     ],
   );

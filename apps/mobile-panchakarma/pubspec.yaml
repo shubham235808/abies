@@ -5,8 +5,7 @@ version: 0.1.0+1
 
 # Same dependency set and version constraints as apps/mobile (the patient
 # app this one is structured after), minus the patient-only plugins this MVP
-# doesn't need yet (connectivity_plus, local_auth, path_provider,
-# url_launcher).
+# doesn't need yet (connectivity_plus, local_auth, path_provider).
 environment:
   sdk: ">=3.4.0 <4.0.0"
   flutter: ">=3.22.0"
@@ -30,6 +29,16 @@ dependencies:
   # Encrypted-at-rest storage for the persisted cookie jar
   # (docs/mobile/SECURITY-DESIGN.md §2) — Android Keystore / iOS Keychain.
   flutter_secure_storage: ^9.2.2
+
+  # Therapist documents: picks the PDF/JPG/PNG sent as the multipart `file`
+  # field of POST /api/v1/panchakarma-centres/me/therapists/[id]/documents.
+  # Same package + constraint as apps/mobile-diagnostics.
+  file_picker: ^8.1.2
+
+  # Opens a document's short-lived signed URL (GET .../documents/[documentId]/
+  # download) in the system browser/viewer — same package, constraint and
+  # LaunchMode.externalApplication pattern as apps/mobile.
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:

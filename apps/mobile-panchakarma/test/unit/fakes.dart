@@ -6,6 +6,7 @@ import 'package:abies_panchakarma/features/auth/domain/auth_result.dart';
 import 'package:abies_panchakarma/features/auth/domain/session_user.dart';
 import 'package:abies_panchakarma/features/centre/data/centre_api.dart';
 import 'package:abies_panchakarma/features/centre/domain/centre_models.dart';
+import 'package:abies_panchakarma/features/centre/domain/therapist_document.dart';
 
 const centreUser = SessionUser(id: 'u1', mobile: '+919876543210', email: 'centre@example.test', role: 'PANCHAKARMA_CENTRE');
 const patientUser = SessionUser(id: 'p1', mobile: '+919800000000', email: null, role: 'PATIENT');
@@ -131,6 +132,14 @@ class FakeCentreApi implements CentreApi {
     Therapist(id: 'th2', name: 'Old', qualifications: null, languages: [], active: false),
   ];
   List<Therapy> therapyList = [];
+
+  /// Therapist documents keyed by therapist id, newest first (as
+  /// catalogue.service.ts `listTherapistDocuments` orders them).
+  Map<String, List<Map<String, dynamic>>> documentsByTherapist = {};
+  Map<String, Object?>? lastUpload;
+  String downloadUrl = 'https://storage.example.test/therapist-documents/doc?X-Amz-Signature=abc';
+  int downloadUrlCalls = 0;
+  int _docSeq = 0;
   int bookingsCalls = 0;
   int bookingCalls = 0;
   Map<String, dynamic>? lastSchedule;
@@ -267,4 +276,70 @@ class FakeCentreApi implements CentreApi {
 
   @override
   Future<void> deleteTherapist(String therapistId) async => _maybeThrow();
+
+  /// Mirrors the route's real ownership check: a therapist that isn't this
+  /// centre's (catalogue.service.ts `ownedTherapist`) is a 404.
+  List<Map<String, dynamic>> _docsFor(String therapistId) {
+    if (!therapistList.any((t) => t.id == therapistId)) throw const ApiException(message: 'Therapist not found', statusCode: 404);
+    return documentsByTherapist.putIfAbsent(therapistId, () => []);
+  }
+
+  Map<String, dynamic> _docFor(String therapistId, String documentId) => _docsFor(therapistId).firstWhere((d) => d['id'] == documentId, orElse: () {
+        throw const ApiException(message: 'Document not found', statusCode: 404);
+      });
+
+  @override
+  Future<List<TherapistDocument>> therapistDocuments(String therapistId) async {
+    _maybeThrow();
+    return _docsFor(therapistId).map(TherapistDocument.fromJson).toList();
+  }
+
+  @override
+  Future<TherapistDocument> uploadTherapistDocument(String therapistId, TherapistDocumentType type, TherapistDocumentUpload file) async {
+    lastUpload = {'therapistId': therapistId, 'type': type.wire, 'filename': file.filename, 'mimeType': file.mimeType};
+    _maybeThrow();
+    final json = therapistDocumentJson(id: 'doc${++_docSeq}', therapistId: therapistId, type: type.wire, originalName: file.filename, mimeType: file.mimeType);
+    _docsFor(therapistId).insert(0, json);
+    return TherapistDocument.fromJson(json);
+  }
+
+  @override
+  Future<void> deleteTherapistDocument(String therapistId, String documentId) async {
+    _maybeThrow();
+    final doc = _docFor(therapistId, documentId);
+    _docsFor(therapistId).remove(doc);
+  }
+
+  @override
+  Future<String> therapistDocumentDownloadUrl(String therapistId, String documentId) async {
+    downloadUrlCalls += 1;
+    _maybeThrow();
+    _docFor(therapistId, documentId);
+    return downloadUrl;
+  }
 }
+
+Map<String, dynamic> therapistDocumentJson({
+  required String id,
+  String therapistId = 'th1',
+  String type = 'ID_PROOF',
+  String status = 'PENDING',
+  String originalName = 'aadhaar.pdf',
+  String mimeType = 'application/pdf',
+  String? reviewNote,
+}) =>
+    {
+      'id': id,
+      'therapistId': therapistId,
+      'type': type,
+      'status': status,
+      'originalName': originalName,
+      'storedName': 'uuid-$originalName',
+      'mimeType': mimeType,
+      'sizeBytes': 2048,
+      'storagePath': 'therapist-documents/$therapistId/uuid-$originalName',
+      'reviewNote': reviewNote,
+      'verifiedAt': status == 'VERIFIED' ? '2026-10-02T10:00:00.000Z' : null,
+      'createdAt': '2026-10-01T10:00:00.000Z',
+      'updatedAt': '2026-10-01T10:00:00.000Z',
+    };

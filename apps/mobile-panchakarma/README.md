@@ -11,5 +11,8 @@ Run: `flutter run --flavor dev --dart-define=ABIES_ENV=dev -t lib/main_dev.dart`
 - Overview dashboard, bookings list, booking fulfilment (schedule / mark attended / cancel; course
   completes automatically on the last attended session), therapy + therapist catalogue, centre
   profile + submit for verification.
-- Not yet: therapist document upload/download, earnings, notifications, iOS build verification.
+- Therapist documents (roster row menu → Documents): list with admin review status + reviewer note,
+  upload (PDF/JPG/PNG ≤ 10 MB via `file_picker`), remove, view (fresh 5-minute signed URL opened in
+  the system viewer via `url_launcher`).
+- Not yet: earnings, notifications, iOS build verification.
 - Verified by `flutter analyze` + `flutter test` only; not yet run on a device.
